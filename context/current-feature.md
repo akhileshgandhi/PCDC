@@ -6,59 +6,61 @@ Completed
 
 ## Feature
 
-SPEC_03 - Frontend Foundation Setup
+Dashboard UI Phase 1
 
 ## Spec File
 
-`context/features/SPEC_03_FRONT-SETUP.md`
+`context/features/dashboard_spec.md`
 
 ## Goals
 
-- Create the frontend foundation using React, TypeScript, Vite, and Tailwind CSS
-- Install and configure React Router DOM, Axios, and Lucide React
-- Create the required frontend folder structure
-- Add typed user/auth definitions
-- Add Axios instance with JWT header attachment
-- Add mock AuthContext without backend API integration
-- Add `/login` and `/register` routes with placeholder auth forms
-- Add AuthLayout and DashboardLayout placeholder layouts
+- Add a `/dashboard` route to the frontend
+- Build the main dashboard layout using the provided screenshot reference
+- Add required global styles for the dashboard foundation
+- Keep this phase limited to UI layout only
+- Do not implement business features, backend integrations, case studies, or real dashboard data
+
+## References
+
+- `context/screenshots/dashboard_final_with_specs.PNG`
+- `context/project-overview.md`
 
 ## Implementation Order
 
-1. Create branch `feature/frontend-foundation`
-2. Scaffold React + TypeScript + Vite inside the existing `frontend/` folder
-3. Install frontend dependencies
-4. Configure Tailwind CSS for Vite
-5. Create required `src/` folder structure
-6. Add type definitions
-7. Add Axios setup
-8. Add mock AuthContext
-9. Add layouts
-10. Add Login and Register pages
-11. Add routing and App entry wiring
-12. Run `npm install`
-13. Run `npm run dev`
-14. Run `npm run build`
-15. Fix all startup and TypeScript errors
+1. Read and follow `context/project-overview.md`
+2. Use `context/screenshots/dashboard_final_with_specs.PNG` as the visual source of truth
+3. Create a new dashboard route at `/dashboard`
+4. Build the main student dashboard layout shell
+5. Add static placeholder dashboard sections matching the screenshot structure
+6. Apply dashboard global styles with Tailwind CSS only
+7. Verify `/dashboard` renders successfully in the browser
+8. Run `npm run build`
+9. Fix all TypeScript, Vite, and layout startup errors
 
 ## Definition of Done
 
-- [x] React TypeScript app runs successfully
-- [x] Tailwind CSS works
-- [x] Router works
-- [x] `/login` page loads
-- [x] `/register` page loads
-- [x] Axios instance created
-- [x] AuthContext created
-- [x] AuthLayout created
-- [x] DashboardLayout created
-- [x] TypeScript build passes
-- [x] No browser console errors
-- [x] `npm run dev` starts successfully
+- [x] `/dashboard` route exists
+- [x] Dashboard layout matches the screenshot direction
+- [x] Sidebar placeholder/navigation area is present
+- [x] Header/search/user area is present
+- [x] Welcome/status panel is present
+- [x] Overall score card is present
+- [x] Capability matrix section is present
+- [x] Lower dashboard cards are present as static placeholders
+- [x] Tailwind-only styling is used
+- [x] No business features or API integrations are added
+- [x] `npm run build` passes
+- [x] Dashboard renders successfully in browser
 
 ---
 
 ## History
+
+- 2026-06-25: Dashboard UI Phase 1 completed on feature/dashboard-ui-phase-1.
+  Added /dashboard route with static student dashboard layout, sidebar,
+  header/search/user area, welcome panel, score card, capability matrix,
+  and lower dashboard placeholder cards. npm run build passed and
+  /dashboard returned 200 locally.
 
 - 2026-06-25: SPEC_03 frontend foundation completed on feature/frontend-foundation.
   React TypeScript Vite app created with Tailwind, React Router, Axios,
