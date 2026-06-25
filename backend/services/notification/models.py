@@ -1,0 +1,1 @@
+# Models for the Notification service go here
