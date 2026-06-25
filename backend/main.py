@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix="/api/v1")
-app.include_router(simulation_router, prefix="/simulation")
+app.include_router(simulation_router, prefix="/api/v1")
 app.include_router(capability_router, prefix="/capability")
 app.include_router(ai_router, prefix="/ai")
 app.include_router(mentor_router, prefix="/mentor")
