@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Settings</h1><p>Super-Admin configuration · Subjects, Capabilities and Marks Scheme.</p></div></div>
+<div class="seg" style="margin-bottom:22px"><button class="on" onclick="tab('sub',this)">Subjects</button><button onclick="tab('cap',this)">Capabilities</button><button onclick="tab('mk',this)">Marks Scheme</button></div>
+<div id="sub" class="tabp"><div class="card"><div class="bt flex" style="margin-bottom:6px"><h3 style="margin:0">Subjects</h3><a class="btn btn-gh btn-sm" href="{{ url_for('admin_subjects') }}">Manage subjects</a></div>
+{% for s in subjects %}<div class="row"><div class="gr"><b>{{ s['name'] }}</b></div><span class="chip c-green">{{ s['status'] }}</span></div>{% endfor %}</div></div>
+<div id="cap" class="tabp" style="display:none">
+{% for fam, lst in caps.items() %}<div class="card" style="margin-bottom:18px"><div class="bt flex" style="margin-bottom:12px"><h3 style="margin:0">{{ fam }} Capabilities</h3><button class="btn btn-gh btn-sm">+ Add</button></div><div class="chips">{% for c in lst %}<span class="sel on">{{ c }} <b style="margin-left:6px;opacity:.7">✕</b></span>{% endfor %}</div></div>{% endfor %}
+</div>
+<div id="mk" class="tabp" style="display:none"><div class="grid g3">
+  <div class="card"><h3>✓ Completed</h3><div class="markbig"><span class="v">10</span></div><div class="mt"><div class="mrow"><span>Q&amp;A</span><b>7</b></div><div class="mrow"><span>Rapid-Fire</span><b>3</b></div></div></div>
+  <div class="card"><h3>◑ Incomplete (≥70%)</h3><div class="markbig"><span class="v">7</span></div><div class="mt"><div class="mrow"><span>Q&amp;A</span><b>5</b></div><div class="mrow"><span>Rapid-Fire</span><b>2</b></div></div></div>
+  <div class="card"><h3>✕ Below 70%</h3><div class="chip c-red" style="margin-top:6px">Rejected</div><p class="muted mt" style="font-size:13px">"Try again later. Contact your faculty/admin." Faculty can assign another task.</p></div>
+</div></div>
+<script>function tab(t,b){['sub','cap','mk'].forEach(x=>document.getElementById(x).style.display=x===t?'block':'none');document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');}</script>
+{% endblock %}

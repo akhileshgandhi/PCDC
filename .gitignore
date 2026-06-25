@@ -1,0 +1,44 @@
+# ---- dependencies & build output ----
+node_modules/
+.next/
+out/
+dist/
+build/
+.vercel/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# ---- local database & secrets ----
+*.db
+pcdc.db
+.env
+.env.*
+!.env.example
+
+# ---- logs / temp ----
+*.log
+logs*.json
+*.tmp
+
+# ---- media & requirement-recovery artifacts (not application code) ----
+*.wav
+*.mp4
+prestige_audio.wav
+crops/
+ed/
+frames/
+scenes/
+seq/
+seq2/
+slides/
+slides2/
+
+# ---- editor / OS / local agent config ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.claude/

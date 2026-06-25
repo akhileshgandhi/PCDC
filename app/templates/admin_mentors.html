@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Mentors / Faculty</h1><p>Faculty and their assigned subjects.</p></div><a class="btn btn-pri" href="#">+ Invite mentor</a></div>
+<div class="card" style="padding:8px 12px"><table><thead><tr><th>Mentor</th><th>Department</th><th>Subject</th><th>Experience</th><th>Status</th></tr></thead><tbody>
+{% for m in mentors %}<tr><td><div class="u"><span class="a">{{ m['initials'] }}</span><div><b>{{ m['name'] }}</b><div class="muted" style="font-size:12px">{{ m['email'] }}</div></div></div></td><td>{{ m['department'] or '—' }}</td><td><span class="chip c-blue">{{ m['subject'] or '—' }}</span></td><td>{{ m['experience'] or '—' }}</td><td><span class="chip {{ 'c-green' if m['status']=='active' else 'c-amber' }}">{{ m['status']|capitalize }}</span></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

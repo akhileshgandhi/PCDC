@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PCDC — My Students</title><link rel="stylesheet" href="styles.css"></head><body>
+<header class="topbar"><div class="brand"><span class="logo">PC</span><div>PCDC<small>Capability Development Centre</small></div></div>
+  <div class="switcher"><a href="admin-dashboard.html" class=""><span class="dot"></span>Admin</a><a href="mentor-dashboard.html" class="active"><span class="dot"></span>Mentor</a><a href="student-dashboard.html" class=""><span class="dot"></span>Student</a></div><div class="spacer"></div>
+  <a class="linkbtn" href="login.html">⊞ Sign-in screens</a><span class="proto-tag">● Static Prototype</span>
+  <div class="userchip"><div class="avatar">SP</div><div class="who"><b>Dr. Sanjeev Patni</b><span>Mentor · Marketing</span></div></div></header>
+<div class="shell"><aside class="sidebar"><div class="nav-label">Mentor Portal</div><nav class="nav"><a href="mentor-dashboard.html" class=""><span class="ni">▤</span>Dashboard</a><a href="mentor-cases.html" class=""><span class="ni">◆</span>My Case Studies</a><a href="mentor-responses.html" class=""><span class="ni">◔</span>Responses</a><a href="mentor-students.html" class="active"><span class="ni">◍</span>My Students</a></nav><div class="help"><b>Design prototype</b><p>Use the sidebar to open each module. Switch roles in the top bar.</p></div></aside><main class="content">
+<div class="page-head"><div><h1>My Students</h1><p>Students in your assigned domains only.</p></div></div>
+<div class="card"><table><thead><tr><th>Student</th><th>Subject</th><th>Level</th><th>Avg. score</th><th>Status</th><th></th></tr></thead><tbody>
+<tr class="click" onclick="location.href='mentor-scorecard.html'"><td><div class="uname"><span class="av">SK</span><div><b>Sanjay Kumar</b></div></div></td><td>Marketing</td><td><span class="lv lv2">L2</span></td><td>78</td><td><span class="badge b-green">On track</span></td><td class="right">›</td></tr>
+<tr class="click" onclick="location.href='mentor-scorecard.html'"><td><div class="uname"><span class="av">AS</span><div><b>Amit Sharma</b></div></div></td><td>Marketing</td><td><span class="lv lv1">L1</span></td><td>31</td><td><span class="badge b-red">Locked</span></td><td class="right">›</td></tr>
+<tr class="click" onclick="location.href='mentor-scorecard.html'"><td><div class="uname"><span class="av">MJ</span><div><b>Manish Joshi</b></div></div></td><td>Entrepreneurship</td><td><span class="lv lv3">L3</span></td><td>85</td><td><span class="badge b-green">Top</span></td><td class="right">›</td></tr>
+</tbody></table></div>
+</main></div>
+<script>document.addEventListener('click',e=>{if(e.target.classList.contains('chip'))e.target.classList.toggle('on');if(e.target.parentElement&&e.target.parentElement.classList.contains('seg')&&e.target.tagName==='BUTTON'){[...e.target.parentElement.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');}});</script>
+</body></html>

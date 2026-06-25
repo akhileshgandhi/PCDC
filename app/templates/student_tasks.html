@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>My tasks</h1><p>Case studies assigned to you, with their time brackets.</p></div></div>
+<div class="card" style="padding:8px 12px"><table><thead><tr><th>Case study</th><th>Difficulty</th><th>Time bracket</th><th>Status</th><th></th></tr></thead><tbody>
+{% for c in tasks %}<tr>
+  <td><b>{{ c['title'] }}</b><div class="muted" style="font-size:12px">{{ c['subject'] }}</div></td>
+  <td><span class="lv">{{ c['difficulty'] }}</span></td>
+  <td>{{ c['t_from'] }}–{{ c['t_to'] }}</td>
+  {% set a = done.get(c['id']) %}
+  {% if a %}<td><span class="chip c-green">{{ a['mark'] }} / {{ a['total'] }} · Completed</span></td><td style="text-align:right"><span class="muted">Done</span></td>
+  {% else %}<td><span class="chip c-blue">Available</span></td><td style="text-align:right"><a class="btn btn-pri btn-sm" href="{{ url_for('student_assessment', cid=c['id']) }}">Start</a></td>{% endif %}
+</tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

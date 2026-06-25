@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PCDC — Login</title><link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"></head><body>
+<div style="display:flex;min-height:100vh">
+  <div style="flex:1;background:linear-gradient(135deg,var(--blue-d),var(--blue));color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:center">
+    <div style="width:54px;height:54px;border-radius:15px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:21px;margin-bottom:28px">PC</div>
+    <h1 style="font-size:36px;margin:0 0 14px;line-height:1.2">Prestige Capability<br>Development Centre</h1>
+    <p style="font-size:15px;opacity:.92;max-width:430px">An AI-powered learning platform that measures how you think — not just what you answer.</p>
+  </div>
+  <div style="width:460px;max-width:100%;padding:54px 50px;display:flex;flex-direction:column;justify-content:center">
+    <h1 style="font-size:25px;margin:0 0 6px">Welcome back</h1><p class="muted" style="margin:0 0 24px">Sign in to your PCDC account.</p>
+    {% if err %}<div class="chip c-red" style="margin-bottom:16px">{{ err }}</div>{% endif %}
+    <form method="post">
+      <div class="field"><label>Email</label><input name="email" value="admin@pcdc.in"></div>
+      <div class="field"><label>Password</label><input name="password" type="password" value="admin123"></div>
+      <button class="btn btn-pri" style="width:100%;justify-content:center">Sign in</button>
+    </form>
+    <div class="note" style="margin-top:22px">
+      <b>Demo logins</b><br>
+      Admin — admin@pcdc.in / admin123<br>
+      Mentor — mentor@pcdc.in / mentor123<br>
+      Student — student@pcdc.in / student123
+    </div>
+  </div>
+</div></body></html>

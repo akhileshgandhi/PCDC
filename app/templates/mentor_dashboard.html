@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Good morning, {{ user['name'].split(' ')[-1] }}</h1><p>Your subject: {{ subj }}. Here's what needs you.</p></div><a class="btn btn-pri" href="{{ url_for('mentor_case_new') }}">+ Create case study</a></div>
+<div class="note" style="margin-bottom:18px">You see only students, case studies and responses within your assigned subject.</div>
+<div class="grid g3">
+  <div class="card tile"><span class="ic">◆</span><div class="t">My case studies</div><div class="n">{{ mine }}</div></div>
+  <div class="card tile"><span class="ic">◆</span><div class="t">Live now</div><div class="n">{{ cases|length }}</div></div>
+  <div class="card tile"><span class="ic">✕</span><div class="t">Rejected</div><div class="n">{{ rejected }}</div><div class="s">assign another task</div></div>
+</div>
+<div class="card mt"><div class="bt flex" style="margin-bottom:6px"><h3 style="margin:0">My live case studies</h3><a class="chip c-blue" href="{{ url_for('mentor_cases') }}">All case studies</a></div>
+{% for c in cases %}<div class="row"><span class="ic">◆</span><div class="gr"><b>{{ c['title'] }}</b><small>{{ c['subject'] }} · {{ c['difficulty'] }} · {{ c['t_from'] }}–{{ c['t_to'] }}</small></div><a class="btn btn-gh btn-sm" href="{{ url_for('mentor_responses', cid=c['id']) }}">Responses</a></div>{% endfor %}
+</div>
+{% endblock %}

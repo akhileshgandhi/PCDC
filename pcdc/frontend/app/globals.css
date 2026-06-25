@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body { @apply bg-bg2 text-ink antialiased; font-family: 'Segoe UI', Inter, Roboto, -apple-system, Arial, sans-serif; }
+}
+
+@layer components {
+  .card { @apply bg-white border border-line rounded-xl2 p-6 shadow-soft; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold cursor-pointer transition; }
+  .btn-pri { @apply bg-brand-600 text-white shadow-soft hover:bg-brand-700; }
+  .btn-gh { @apply bg-white text-brand-700 border border-brand-200 hover:bg-brand-50; }
+  .field-label { @apply block text-[13px] font-bold text-slate2 mb-2; }
+  .field-input { @apply w-full border border-line rounded-xl px-4 py-3 text-[14.5px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50; }
+  .chip { @apply inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full; }
+  .sidelink { @apply flex items-center gap-3 px-3.5 py-3 rounded-xl text-slate2 font-semibold text-sm cursor-pointer hover:bg-brand-50 hover:text-brand-700; }
+  .sidelink-active { @apply bg-brand-600 text-white shadow-soft hover:bg-brand-600 hover:text-white; }
+}

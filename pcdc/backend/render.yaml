@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: pcdc-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pcdc-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ACCESS_MINUTES
+        value: "720"
+      # Set these two to your Vercel URL after the frontend is deployed:
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_URL
+        sync: false
+
+databases:
+  - name: pcdc-db
+    plan: free

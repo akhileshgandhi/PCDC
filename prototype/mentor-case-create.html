@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PCDC — Create Case Study</title><link rel="stylesheet" href="styles.css"></head><body>
+<header class="topbar"><div class="brand"><span class="logo">PC</span><div>PCDC<small>Capability Development Centre</small></div></div>
+  <div class="switcher"><a href="admin-dashboard.html" class=""><span class="dot"></span>Admin</a><a href="mentor-dashboard.html" class="active"><span class="dot"></span>Mentor</a><a href="student-dashboard.html" class=""><span class="dot"></span>Student</a></div><div class="spacer"></div>
+  <a class="linkbtn" href="login.html">⊞ Sign-in screens</a><span class="proto-tag">● Static Prototype</span>
+  <div class="userchip"><div class="avatar">SP</div><div class="who"><b>Dr. Sanjeev Patni</b><span>Mentor · Marketing</span></div></div></header>
+<div class="shell"><aside class="sidebar"><div class="nav-label">Mentor Portal</div><nav class="nav"><a href="mentor-dashboard.html" class=""><span class="ni">▤</span>Dashboard</a><a href="mentor-cases.html" class="active"><span class="ni">◆</span>My Case Studies</a><a href="mentor-responses.html" class=""><span class="ni">◔</span>Responses</a><a href="mentor-students.html" class=""><span class="ni">◍</span>My Students</a></nav><div class="help"><b>Design prototype</b><p>Use the sidebar to open each module. Switch roles in the top bar.</p></div></aside><main class="content">
+<div class="page-head"><div><h1>Create Case Study</h1><p>Build a case study, map it to the four parameters, add questions and assign it.</p></div></div>
+<span class="crumb" onclick="location.href='mentor-cases.html'">← My Case Studies</span>
+<div class="card"><h3>1 · Details &amp; content</h3>
+<div class="field"><label>Title</label><input placeholder="e.g. Market Entry Crisis"></div>
+<div class="field"><label>Case content</label><div class="seg" style="margin-bottom:12px"><button class="on" onclick="csMode('type')">✎ Type content</button><button onclick="csMode('upload')">⭳ Upload file</button></div>
+<div id="cs-type"><textarea class="answer" placeholder="Type the scenario: situation, background, data, characters, constraints, objective..."></textarea></div>
+<div id="cs-upload" style="display:none"><div class="dropzone"><div style="font-size:28px">⭳</div><b>Drop a file</b> or click to browse<div class="hint" style="margin-top:6px">PDF, DOCX or TXT · the case content will be parsed</div></div></div></div></div>
+
+<div class="card mt"><h3>2 · Mapping matrix</h3>
+<div class="field"><label>a. Capabilities <span class="muted" style="font-weight:400">(one or more)</span></label><div class="capgroup"><div class="gh">Cognitive Capabilities</div><div class="chips"><span class="chip ">Analytical Thinking</span><span class="chip on">Strategic Thinking</span><span class="chip on">Decision Making</span></div></div><div class="capgroup"><div class="gh">Leadership Capabilities</div><div class="chips"><span class="chip ">Communication</span><span class="chip ">Influence</span><span class="chip ">Negotiation</span><span class="chip ">Conflict Resolution</span><span class="chip ">Team Management</span></div></div><div class="capgroup"><div class="gh">Entrepreneurial Capabilities</div><div class="chips"><span class="chip ">Opportunity Recognition</span><span class="chip ">Innovation</span><span class="chip ">Business Model Thinking</span><span class="chip ">Risk Assessment</span><span class="chip ">Resourcefulness</span></div></div><div class="capgroup"><div class="gh">Professional Capabilities</div><div class="chips"><span class="chip ">Professional Judgment</span><span class="chip ">Business Acumen</span><span class="chip ">Execution Orientation</span><span class="chip ">Learning Agility</span><span class="chip ">Adaptability</span></div></div></div>
+<div class="form-grid">
+  <div class="field"><label>b. Subject <span class="muted" style="font-weight:400">(one or more)</span></label><div class="chips"><span class="chip ">Finance</span><span class="chip on">Marketing</span><span class="chip ">HR</span><span class="chip ">Operations</span></div><div class="hint">A student in any selected subject can see this case study.</div></div>
+  <div class="field"><label>c. Difficulty level</label><div class="seg"><button>1</button><button class="on">2</button><button>3</button><button>4</button></div></div>
+</div>
+<div class="field"><label>d. Bloom's Taxonomy <span class="muted" style="font-weight:400">(one or more)</span></label><div class="chips"><span class="chip ">Remember</span><span class="chip ">Understand</span><span class="chip on">Apply</span><span class="chip on">Analyse</span><span class="chip ">Evaluate</span><span class="chip ">Create</span></div></div></div>
+
+<div class="card mt"><h3>3 · Questions &amp; time-limit</h3>
+<div class="qitem"><div class="qh"><span>Question 1</span><b style="cursor:pointer;opacity:.6">✕</b></div><input class="qinput" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13.5px" placeholder="Type the question..." value="Diagnose the cause of the sales decline and recommend a recovery strategy."></div>
+<div class="qitem"><div class="qh"><span>Question 2</span><b style="cursor:pointer;opacity:.6">✕</b></div><input class="qinput" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13.5px" placeholder="Type the question..." value="What risks does your strategy carry and how would you mitigate them?"></div>
+<button class="btn btn-ghost btn-sm">+ Add question</button>
+<div class="field mt" style="max-width:220px"><label>Time-limit (minutes)</label><input value="45"></div>
+<div class="info">⚡ Rapid-Fire questions are generated by the AI automatically, based on each student's answers.</div></div>
+
+<div class="card mt"><h3>4 · Assign &amp; time bracket</h3>
+<div class="field"><label>Assign to students</label><div class="chips"><span class="chip on">All students in subject</span><span class="chip">Select students…</span></div></div>
+<div class="form-grid"><div class="field"><label>Available from</label><input type="date" value="2026-06-17"></div><div class="field"><label>Available to</label><input type="date" value="2026-06-19"></div></div>
+<div class="form-actions"><a class="btn btn-ghost" href="mentor-cases.html">Save Draft</a><a class="btn btn-primary" href="mentor-cases.html">Assign &amp; Publish</a></div></div>
+</main></div>
+<script>document.addEventListener('click',e=>{if(e.target.classList.contains('chip'))e.target.classList.toggle('on');if(e.target.parentElement&&e.target.parentElement.classList.contains('seg')&&e.target.tagName==='BUTTON'){[...e.target.parentElement.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');}});function csMode(m){document.getElementById('cs-type').style.display=m==='type'?'block':'none';document.getElementById('cs-upload').style.display=m==='upload'?'block':'none';}</script>
+</body></html>

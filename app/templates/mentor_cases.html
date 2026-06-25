@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Case studies</h1><p>Author case studies for your subject and assign them.</p></div><a class="btn btn-pri" href="{{ url_for('mentor_case_new') }}">+ Create case study</a></div>
+<div class="card" style="padding:8px 12px"><table><thead><tr><th>Title</th><th>Subject</th><th>Difficulty</th><th>Time bracket</th><th>Responses</th><th>Status</th></tr></thead><tbody>
+{% for c in cases %}<tr onclick="location.href='{{ url_for('mentor_responses', cid=c['id']) if c['status']!='Draft' else url_for('mentor_case_new') }}'" style="cursor:pointer"><td><b>{{ c['title'] }}</b></td><td>{{ c['subject'] }}</td><td><span class="lv">{{ c['difficulty'] }}</span></td><td>{{ (c['t_from'] ~ '–' ~ c['t_to']) if c['t_from'] else '—' }}</td><td>{{ c['resp'] if c['status']!='Draft' else '—' }}</td><td><span class="chip {{ 'c-blue' if c['status']=='Live' else ('c-slate' if c['status']=='Draft' else 'c-slate') }}">{{ c['status'] }}</span></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

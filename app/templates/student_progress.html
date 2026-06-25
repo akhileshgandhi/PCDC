@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>My progress</h1><p>Your capability growth over time — you compete against yourself.</p></div></div>
+<div class="grid g2">
+  <div class="card"><h3>Capability scores</h3>
+    <div class="barrow"><div class="nm">Problem Solving</div><div class="bar"><i style="width:80%"></i></div><div class="vl">80</div></div>
+    <div class="barrow"><div class="nm">Communication</div><div class="bar"><i style="width:74%"></i></div><div class="vl">74</div></div>
+    <div class="barrow"><div class="nm">Strategic Thinking</div><div class="bar"><i style="width:68%"></i></div><div class="vl">68</div></div>
+    <div class="barrow"><div class="nm">Decision Making</div><div class="bar"><i style="width:71%"></i></div><div class="vl">71</div></div>
+    <div class="barrow"><div class="nm">Innovation</div><div class="bar"><i style="width:61%"></i></div><div class="vl">61</div></div></div>
+  <div class="card"><h3>Mark trend</h3><svg viewBox="0 0 320 150" style="width:100%;height:auto"><polygon fill="#e4eefe" opacity=".6" points="10,120 60,108 110,92 160,88 210,70 260,58 305,46 305,140 10,140"/><polyline fill="none" stroke="#2563eb" stroke-width="3" points="10,120 60,108 110,92 160,88 210,70 260,58 305,46"/><circle cx="305" cy="46" r="4" fill="#1d4ed8"/></svg><p class="muted">Steady improvement across your last 7 case studies.</p>
+    <h3 style="margin:20px 0 12px">Recent marks</h3><div class="mrow"><span>Brand Revival · L1</span><b>8 / 10</b></div><div class="mrow"><span>Founder's Brief · L1</span><b>7 / 10</b></div></div>
+</div>
+{% endblock %}

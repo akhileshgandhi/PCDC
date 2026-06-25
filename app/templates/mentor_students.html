@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>My students</h1><p>Students within your assigned subject only.</p></div></div>
+<div class="card" style="padding:8px 12px"><table><thead><tr><th>Student</th><th>Subject</th><th>Level</th><th>Status</th></tr></thead><tbody>
+{% for s in students %}<tr><td><div class="u"><span class="a">{{ s['initials'] }}</span><div><b>{{ s['name'] }}</b><div class="muted" style="font-size:12px">{{ s['email'] }}</div></div></div></td><td>{{ s['subject'] }}</td><td><span class="lv">{{ s['level'] }}</span></td><td><span class="chip {{ 'c-green' if s['status']=='active' else 'c-amber' }}">{{ s['status']|capitalize }}</span></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>{{ c['title'] }}</h1><p>{{ c['faculty'] }} · {{ c['subject'] }} · {{ c['difficulty'] }} · {{ c['t_from'] }}–{{ c['t_to'] }}</p></div><a class="btn btn-gh" href="{{ url_for('admin_campaigns') }}">← Campaigns</a></div>
+<div class="grid g3">
+  <div class="card tile"><div class="t">Responses</div><div class="n">{{ attempts|length }}</div></div>
+  <div class="card tile"><div class="t">Completed</div><div class="n">{{ attempts|selectattr('status','equalto','completed')|list|length }}</div></div>
+  <div class="card tile"><div class="t">Rejected</div><div class="n">{{ attempts|selectattr('status','equalto','rejected')|list|length }}</div></div>
+</div>
+<div class="card mt" style="padding:8px 12px"><table><thead><tr><th>Student</th><th>Completion</th><th>Marks</th><th>Status</th></tr></thead><tbody>
+{% for a in attempts %}<tr onclick="location.href='{{ url_for('admin_scorecard', aid=a['id']) }}'" style="cursor:pointer">
+  <td><div class="u"><span class="a">{{ a['initials'] }}</span><b>{{ a['student'] }}</b></div></td>
+  <td>{{ a['completion'] }}%</td>
+  <td>{% if a['status']=='rejected' %}<span class="muted">—</span>{% else %}<b>{{ a['mark'] }} / {{ a['total'] }}</b> <span class="muted" style="font-size:12px">· QA {{ a['qa'] }} · RF {{ a['rf'] }}</span>{% endif %}</td>
+  <td>{% if a['status']=='completed' %}<span class="chip c-green">Completed</span>{% elif a['status']=='incomplete' %}<span class="chip c-amber">Incomplete</span>{% else %}<span class="chip c-red">Rejected</span>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PCDC — Marks Scheme</title><link rel="stylesheet" href="styles.css"></head><body>
+<header class="topbar"><div class="brand"><span class="logo">PC</span><div>PCDC<small>Capability Development Centre</small></div></div>
+  <div class="switcher"><a href="admin-dashboard.html" class="active"><span class="dot"></span>Admin</a><a href="mentor-dashboard.html" class=""><span class="dot"></span>Mentor</a><a href="student-dashboard.html" class=""><span class="dot"></span>Student</a></div><div class="spacer"></div>
+  <a class="linkbtn" href="login.html">⊞ Sign-in screens</a><span class="proto-tag">● Static Prototype</span>
+  <div class="userchip"><div class="avatar">AD</div><div class="who"><b>Anita Desai</b><span>Administrator</span></div></div></header>
+<div class="shell"><aside class="sidebar"><div class="nav-label">Admin Portal</div><nav class="nav"><a href="admin-dashboard.html" class=""><span class="ni">▤</span>Dashboard</a><a href="admin-subjects.html" class=""><span class="ni">▣</span>Subjects</a><a href="admin-capabilities.html" class=""><span class="ni">◈</span>Capabilities</a><a href="admin-marks.html" class="active"><span class="ni">▦</span>Marks Scheme</a><a href="admin-mentors.html" class=""><span class="ni">◑</span>Mentors / Faculty</a><a href="admin-students.html" class=""><span class="ni">◍</span>Students</a><a href="admin-campaigns.html" class=""><span class="ni">◆</span>Campaigns</a><a href="admin-analytics.html" class=""><span class="ni">◔</span>Analytics</a></nav><div class="help"><b>Design prototype</b><p>Use the sidebar to open each module. Switch roles in the top bar.</p></div></aside><main class="content">
+<div class="page-head"><div><h1>Marks Scheme</h1><p>How assignments are scored (configurable by Super Admin).</p></div></div>
+<div class="info" style="margin-bottom:16px">⚙ Super Admin configuration · AI evaluates answers against this scheme. Marks appear on both student and faculty interfaces.</div>
+<div class="grid cards-3">
+  <div class="card"><h3>✓ Completed assignment</h3><div class="markbig"><span class="v">10</span><span class="d">total</span></div>
+    <div class="mt"><div class="markrow"><span>Questions &amp; Answers</span><b>7</b></div><div class="markrow"><span>Rapid-Fire</span><b>3</b></div></div></div>
+  <div class="card"><h3>◑ Incomplete (≥ 70%)</h3><div class="markbig"><span class="v">7</span><span class="d">total</span></div>
+    <div class="mt"><div class="markrow"><span>Questions &amp; Answers</span><b>5</b></div><div class="markrow"><span>Rapid-Fire</span><b>2</b></div></div></div>
+  <div class="card"><h3>✕ Less than 70%</h3><div class="rejected mt" style="text-align:left">Rejected — “Try again later. Contact your faculty/admin.”</div>
+    <p class="muted mt" style="font-size:12.5px">Faculty can then assign another task to the student.</p></div>
+</div>
+<div class="card mt" style="max-width:560px"><h3>Configure thresholds</h3>
+  <div class="form-grid"><div class="field"><label>Completed — Q&amp;A marks</label><input value="7"></div><div class="field"><label>Completed — Rapid-Fire marks</label><input value="3"></div></div>
+  <div class="form-grid"><div class="field"><label>Incomplete — Q&amp;A marks</label><input value="5"></div><div class="field"><label>Incomplete — Rapid-Fire marks</label><input value="2"></div></div>
+  <div class="form-grid"><div class="field"><label>Incomplete threshold</label><input value="70%"></div><div class="field"><label>Rejection threshold (below)</label><input value="70%"></div></div>
+  <div class="form-actions"><button class="btn btn-primary">Save Scheme</button></div></div>
+</main></div>
+<script>document.addEventListener('click',e=>{if(e.target.classList.contains('chip'))e.target.classList.toggle('on');if(e.target.parentElement&&e.target.parentElement.classList.contains('seg')&&e.target.tagName==='BUTTON'){[...e.target.parentElement.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');}});</script>
+</body></html>

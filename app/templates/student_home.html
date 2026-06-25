@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Welcome back, {{ user['name'].split(' ')[0] }}</h1><p>{{ user['subject'] }} · Level {{ user['level'][1:] }}. Keep building your capabilities.</p></div></div>
+<div class="hero"><div><h2>Capability Score 72</h2><p>You're in the top third of your cohort — nice momentum.</p></div><div class="ring"><div class="n">72</div><div class="l">out of 100</div></div></div>
+<div class="card mt"><h3>Your progress</h3><div class="track">
+  <div class="st done"><div class="b">✓</div><div class="l">Level 1</div></div><div class="ln"></div>
+  <div class="st cur"><div class="b">2</div><div class="l">Level 2</div></div><div class="ln"></div>
+  <div class="st lock"><div class="b">🔒</div><div class="l">Level 3</div></div><div class="ln"></div>
+  <div class="st lock"><div class="b">🔒</div><div class="l">Level 4</div></div></div></div>
+<div class="grid g2 mt">
+  <div class="card"><h3>My tasks</h3>{% for c in tasks %}<div class="row"><span class="ic">◆</span><div class="gr"><b>{{ c['title'] }}</b><small>Assigned · {{ c['t_from'] }}–{{ c['t_to'] }} · {{ c['difficulty'] }}</small></div><a class="btn btn-pri btn-sm" href="{{ url_for('student_assessment', cid=c['id']) }}">Start</a></div>{% endfor %}</div>
+  <div class="card"><h3>Your capabilities</h3>
+    <div class="barrow"><div class="nm">Problem Solving</div><div class="bar"><i style="width:80%"></i></div><div class="vl">80</div></div>
+    <div class="barrow"><div class="nm">Communication</div><div class="bar"><i style="width:74%"></i></div><div class="vl">74</div></div>
+    <div class="barrow"><div class="nm">Strategic Thinking</div><div class="bar"><i style="width:68%"></i></div><div class="vl">68</div></div>
+    <div class="barrow"><div class="nm">Decision Making</div><div class="bar"><i style="width:71%"></i></div><div class="vl">71</div></div></div>
+</div>
+{% endblock %}

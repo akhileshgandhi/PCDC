@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>{{ c['title'] }} — responses</h1><p>{{ c['subject'] }} · {{ c['difficulty'] }} · {{ c['t_from'] }}–{{ c['t_to'] }} · {{ attempts|length }} submitted</p></div><a class="btn btn-gh" href="{{ url_for('mentor_cases') }}">← Case studies</a></div>
+<div class="card" style="padding:8px 12px"><table><thead><tr><th>Student</th><th>Completion</th><th>Marks</th><th>Status</th></tr></thead><tbody>
+{% for a in attempts %}<tr onclick="location.href='{{ url_for('mentor_scorecard', aid=a['id']) }}'" style="cursor:pointer">
+  <td><div class="u"><span class="a">{{ a['initials'] }}</span><b>{{ a['student'] }}</b></div></td>
+  <td>{{ a['completion'] }}%</td>
+  <td>{% if a['status']=='rejected' %}<span class="muted">—</span>{% else %}<b>{{ a['mark'] }} / {{ a['total'] }}</b>{% endif %}</td>
+  <td>{% if a['status']=='completed' %}<span class="chip c-green">Completed</span>{% elif a['status']=='incomplete' %}<span class="chip c-amber">Incomplete</span>{% else %}<span class="chip c-red">Rejected</span>{% endif %}</td>
+</tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

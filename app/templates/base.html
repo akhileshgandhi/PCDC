@@ -1,0 +1,18 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PCDC — {{ title or 'Portal' }}</title><link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"></head><body>
+<div class="topbar">
+  <div class="brand"><span class="logo">PC</span><div>PCDC<small>Capability Development Centre</small></div></div>
+  <div class="switcher">
+    {% for r in ['admin','mentor','student'] %}<a href="{{ url_for('switch', role=r) }}" class="{{ 'active' if r==role else '' }}"><span class="dot"></span>{{ r|capitalize }}</a>{% endfor %}
+  </div>
+  <div class="sp"></div>
+  <a class="bell" href="{{ url_for('student_home') if role=='student' else '#' }}">◔</a>
+  <div class="chip-user"><div class="av">{{ user['initials'] }}</div><div class="w"><b>{{ user['name'] }}</b><span>{{ user['role']|capitalize }}{% if user['subject'] %} · {{ user['subject'] }}{% endif %}</span></div></div>
+  <a class="btn btn-gh btn-sm" href="{{ url_for('logout') }}" style="margin-left:6px">Logout</a>
+</div>
+<div class="shell">
+  <aside class="side"><div class="lab">{{ role|capitalize }} Portal</div>
+    {% for n in NAV[role] %}<a href="{{ url_for(n[2]) }}" class="{{ 'active' if n[2]==active else '' }}"><span class="i">{{ n[1] }}</span>{{ n[0] }}</a>{% endfor %}
+  </aside>
+  <main class="main">{% block body %}{% endblock %}</main>
+</div></body></html>

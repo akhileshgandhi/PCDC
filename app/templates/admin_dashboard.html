@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Good morning, {{ user['name'].split(' ')[0] }}</h1><p>Here's what's happening across PCDC today.</p></div><a class="btn btn-pri" href="{{ url_for('admin_campaigns') }}">View campaigns</a></div>
+<div class="grid g3">
+  <div class="card tile"><span class="ic">◍</span><div class="t">Students</div><div class="n">{{ stats.students }}</div><div class="s">across {{ stats.subjects }} subjects</div></div>
+  <div class="card tile"><span class="ic">◑</span><div class="t">Faculty</div><div class="n">{{ stats.mentors }}</div><div class="s">mentors</div></div>
+  <div class="card tile"><span class="ic">◆</span><div class="t">Live campaigns</div><div class="n">{{ stats.live }}</div><div class="s">running now</div></div>
+</div>
+<div class="card mt"><div class="bt flex" style="margin-bottom:6px"><h3 style="margin:0">Recent campaigns</h3><a class="chip c-blue" href="{{ url_for('admin_campaigns') }}">View all</a></div>
+{% for c in cases %}<div class="row"><span class="ic">◆</span><div class="gr"><b>{{ c['title'] }}</b><small>{{ c['faculty'] }} · {{ c['subject'] }} · {{ c['t_from'] }}–{{ c['t_to'] }}</small></div><span class="chip {{ 'c-blue' if c['status']=='Live' else 'c-slate' }}">{{ c['status'] }}</span></div>{% endfor %}
+</div>
+{% endblock %}

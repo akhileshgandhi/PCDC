@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PCDC — Prototype</title>
+<style>
+  :root{
+    --blue-50:#eff6ff;--blue-100:#dbeafe;--blue-200:#bfdbfe;--blue-300:#93c5fd;
+    --blue-500:#3b82f6;--blue-600:#2563eb;--blue-700:#1d4ed8;--blue-800:#1e40af;
+    --ink:#0f172a;--slate:#475569;--muted:#94a3b8;--line:#e6edf6;--line2:#eef3fa;
+    --bg:#f3f7fe;--white:#fff;--green:#16a34a;--green-bg:#dcfce7;--amber:#b45309;
+    --amber-bg:#fef3c7;--red:#dc2626;--red-bg:#fee2e2;--slate-bg:#eef2f7;
+    --shadow:0 1px 2px rgba(15,23,42,.04),0 6px 20px rgba(37,99,235,.06);--radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Roboto,-apple-system,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.5;}
+  a{color:inherit;text-decoration:none;}
+  .topbar{height:62px;background:var(--white);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 22px;position:sticky;top:0;z-index:50;}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--blue-600),var(--blue-800));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;}
+  .brand small{display:block;font-weight:500;font-size:11px;color:var(--muted);margin-top:-2px;}
+  .switcher{margin-left:12px;display:flex;background:var(--blue-50);border:1px solid var(--line);border-radius:11px;padding:4px;gap:2px;}
+  .switcher button{border:0;background:transparent;color:var(--slate);font-weight:600;font-size:13px;padding:7px 15px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:7px;}
+  .switcher button .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+  .switcher button.active{background:var(--blue-600);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.3);}
+  .switcher button.active .dot{background:#fff;}
+  .topbar .spacer{flex:1;}
+  .proto-tag{font-size:11px;color:var(--blue-700);background:var(--blue-50);border:1px solid var(--blue-200);padding:5px 10px;border-radius:20px;font-weight:600;}
+  .linkbtn{font-size:12.5px;color:var(--blue-700);font-weight:700;cursor:pointer;border:1px solid var(--blue-200);background:#fff;border-radius:9px;padding:7px 12px;}
+  .userchip{display:flex;align-items:center;gap:10px;}
+  .avatar{width:36px;height:36px;border-radius:50%;background:var(--blue-100);color:var(--blue-700);display:flex;align-items:center;justify-content:center;font-weight:700;}
+  .userchip .who{font-size:12px;}.userchip .who b{display:block;font-size:13px;}.userchip .who span{color:var(--muted);}
+  .shell{display:flex;min-height:calc(100vh - 62px);}
+  .sidebar{width:240px;background:var(--white);border-right:1px solid var(--line);padding:18px 14px;}
+  .nav-label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;margin:6px 10px 12px;}
+  .nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;color:var(--slate);font-weight:600;font-size:13.5px;margin-bottom:3px;cursor:pointer;}
+  .nav a:hover{background:var(--blue-50);color:var(--blue-700);}
+  .nav a.active{background:var(--blue-600);color:#fff;box-shadow:var(--shadow);}
+  .nav a .ni{width:18px;display:inline-block;text-align:center;flex:none;}
+  .sidebar .help{margin-top:22px;background:linear-gradient(135deg,var(--blue-600),var(--blue-800));color:#fff;border-radius:var(--radius);padding:16px;font-size:12.5px;}
+  .sidebar .help b{font-size:13.5px;}.sidebar .help p{opacity:.85;margin:6px 0 0;}
+  .content{flex:1;padding:26px 30px;max-width:1180px;}
+  .page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+  .page-head h1{font-size:22px;margin:0;}.page-head p{margin:4px 0 0;color:var(--slate);font-size:13.5px;}
+  .crumb{font-size:12.5px;color:var(--blue-700);font-weight:700;cursor:pointer;margin-bottom:8px;display:inline-block;}
+  .role-view{display:none;}
+  body[data-role="admin"] .role-view[data-role="admin"],
+  body[data-role="mentor"] .role-view[data-role="mentor"],
+  body[data-role="student"] .role-view[data-role="student"]{display:block;}
+  .panel{display:none;}.panel.active{display:block;animation:fade .25s ease;}
+  .navblock{display:none;}
+  body[data-role="admin"] .navblock[data-role="admin"],
+  body[data-role="mentor"] .navblock[data-role="mentor"],
+  body[data-role="student"] .navblock[data-role="student"]{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+  .grid{display:grid;gap:16px;}.cards-4{grid-template-columns:repeat(4,1fr);}.cards-3{grid-template-columns:repeat(3,1fr);}.cards-2{grid-template-columns:repeat(2,1fr);}
+  .card{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);}
+  .stat .label{color:var(--slate);font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .stat .ic{width:34px;height:34px;border-radius:10px;background:var(--blue-50);color:var(--blue-600);display:flex;align-items:center;justify-content:center;}
+  .stat .num{font-size:30px;font-weight:800;margin-top:10px;letter-spacing:-.5px;}.stat .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+  .card h3{font-size:15px;margin:0 0 14px;}
+  table{width:100%;border-collapse:collapse;}
+  th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:11px 12px;border-bottom:1px solid var(--line);}
+  td{padding:13px 12px;border-bottom:1px solid var(--line2);font-size:13.5px;vertical-align:middle;}
+  tr:last-child td{border-bottom:0;}tbody tr:hover{background:var(--blue-50);}
+  tr.click{cursor:pointer;}
+  .uname{display:flex;align-items:center;gap:11px;}
+  .uname .av{width:32px;height:32px;border-radius:50%;background:var(--blue-100);color:var(--blue-700);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;}
+  .uname b{font-size:13.5px;}.uname span{color:var(--muted);font-size:12px;}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;}
+  .b-green{background:var(--green-bg);color:var(--green);}.b-amber{background:var(--amber-bg);color:var(--amber);}
+  .b-red{background:var(--red-bg);color:var(--red);}.b-slate{background:var(--slate-bg);color:var(--slate);}.b-blue{background:var(--blue-100);color:var(--blue-700);}
+  .lv{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;}
+  .lv1{background:var(--blue-50);color:var(--blue-600);}.lv2{background:var(--blue-200);color:var(--blue-800);}.lv3{background:var(--blue-700);color:#fff;}
+  .btn{border:0;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+  .btn-primary{background:var(--blue-600);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.25);}.btn-primary:hover{background:var(--blue-700);}
+  .btn-ghost{background:var(--white);color:var(--blue-700);border:1px solid var(--blue-200);}.btn-ghost:hover{background:var(--blue-50);}
+  .btn-danger{background:#fff;color:var(--red);border:1px solid #fecaca;}.btn-danger:hover{background:var(--red-bg);}
+  .btn-sm{padding:7px 12px;font-size:12px;border-radius:8px;}.btn[disabled]{opacity:.5;cursor:not-allowed;}
+  .bar{height:8px;background:var(--blue-50);border-radius:6px;overflow:hidden;}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--blue-500),var(--blue-700));border-radius:6px;}
+  .cap-row{display:flex;align-items:center;gap:12px;margin-bottom:13px;}
+  .cap-row .nm{width:150px;font-size:13px;font-weight:600;color:var(--slate);}.cap-row .bar{flex:1;}.cap-row .vl{width:38px;text-align:right;font-weight:700;font-size:13px;}
+  .activity{margin:0;padding:0;}
+  .activity li{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line2);list-style:none;align-items:center;}
+  .activity li:last-child{border-bottom:0;}
+  .activity .ai{width:32px;height:32px;border-radius:9px;background:var(--blue-50);color:var(--blue-600);display:flex;align-items:center;justify-content:center;flex:none;}
+  .activity small{color:var(--muted);}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .search{flex:1;max-width:300px;display:flex;align-items:center;gap:8px;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:9px 13px;color:var(--muted);font-size:13px;}
+  .search input{border:0;outline:0;font-size:13px;flex:1;background:transparent;}
+  .picker{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--slate);}
+  .picker select{border:0;outline:0;font-size:13px;font-weight:700;color:var(--blue-700);background:transparent;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12.5px;font-weight:700;color:var(--slate);margin-bottom:6px;}
+  .field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 13px;font-size:14px;font-family:inherit;outline:none;background:#fff;}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue-500);box-shadow:0 0 0 3px var(--blue-100);}
+  .field .hint{font-size:11.5px;color:var(--muted);margin-top:5px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{padding:7px 13px;border-radius:20px;border:1px solid var(--blue-200);background:#fff;color:var(--blue-700);font-size:12.5px;font-weight:600;cursor:pointer;}
+  .chip.on{background:var(--blue-600);color:#fff;border-color:var(--blue-600);}
+  .dropzone{border:2px dashed var(--blue-300);border-radius:14px;padding:30px;text-align:center;color:var(--slate);background:var(--blue-50);}
+  .dropzone b{color:var(--blue-700);}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .seg button{border:0;background:#fff;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer;color:var(--slate);}
+  .seg button.on{background:var(--blue-600);color:#fff;}
+  .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:6px;}
+  .switchbox{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--slate);}
+  .toggle{width:42px;height:24px;border-radius:20px;background:var(--blue-200);position:relative;cursor:pointer;}
+  .toggle.on{background:var(--blue-600);}
+  .toggle::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s;}
+  .toggle.on::after{left:21px;}
+  .info{background:var(--blue-50);border:1px solid var(--blue-100);color:var(--blue-800);border-radius:10px;padding:11px 14px;font-size:12.5px;font-weight:600;}
+  .hero{background:linear-gradient(120deg,var(--blue-700),var(--blue-500));color:#fff;border-radius:18px;padding:24px 26px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;box-shadow:0 10px 30px rgba(37,99,235,.25);}
+  .hero h2{margin:0 0 4px;font-size:22px;}.hero p{margin:0;opacity:.9;font-size:13.5px;}
+  .score-ring{text-align:center;}.score-ring .n{font-size:42px;font-weight:800;line-height:1;}.score-ring .l{font-size:12px;opacity:.85;}
+  .level-track{display:flex;align-items:center;margin:8px 0;}
+  .level-track .step{flex:1;text-align:center;}
+  .level-track .step .ball{width:34px;height:34px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-weight:700;background:var(--blue-50);color:var(--blue-600);border:2px solid var(--blue-200);font-size:13px;}
+  .level-track .step.done .ball{background:var(--green);color:#fff;border-color:var(--green);}
+  .level-track .step.current .ball{background:var(--blue-600);color:#fff;border-color:var(--blue-600);box-shadow:0 0 0 4px var(--blue-100);}
+  .level-track .step.locked .ball{background:#fff;color:var(--muted);border-style:dashed;}
+  .level-track .step .lab{font-size:12px;color:var(--slate);font-weight:600;}
+  .level-track .line{height:3px;width:40px;background:var(--blue-100);}
+  .case-card{display:flex;flex-direction:column;gap:10px;}
+  .case-card .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .case-card h4{margin:2px 0 0;font-size:15px;}.case-card p{margin:0;color:var(--slate);font-size:13px;}
+  .case-card.locked{opacity:.6;}
+  .timechip{font-size:11.5px;color:var(--slate);background:var(--slate-bg);padding:3px 9px;border-radius:6px;}
+  .warn{background:var(--red-bg);border:1px solid #fca5a5;color:#991b1b;border-radius:12px;padding:14px 16px;display:flex;gap:12px;align-items:center;font-size:13.5px;font-weight:600;}
+  .stepper{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .stepper .s{display:flex;align-items:center;gap:9px;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:12.5px;font-weight:600;color:var(--slate);cursor:pointer;}
+  .stepper .s .n{width:22px;height:22px;border-radius:50%;background:var(--blue-50);color:var(--blue-600);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+  .stepper .s.active{border-color:var(--blue-600);color:var(--blue-700);background:var(--blue-50);}.stepper .s.active .n{background:var(--blue-600);color:#fff;}
+  .astep{display:none;}.astep.active{display:block;}
+  textarea.answer{width:100%;min-height:170px;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px;font-family:inherit;resize:vertical;outline:none;}
+  textarea.answer:focus{border-color:var(--blue-500);box-shadow:0 0 0 3px var(--blue-100);}
+  .paste-note{font-size:12px;color:var(--amber);background:var(--amber-bg);padding:6px 10px;border-radius:8px;display:inline-flex;gap:7px;align-items:center;margin-top:10px;}
+  .qbox{background:var(--blue-50);border:1px solid var(--blue-100);border-radius:12px;padding:15px 16px;margin-bottom:12px;}
+  .qbox .q{font-weight:700;color:var(--blue-800);margin-bottom:8px;}
+  .qbox input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13.5px;outline:none;}
+  .ai-bubble{display:flex;gap:12px;background:var(--white);border:1px solid var(--line);border-left:4px solid var(--blue-500);border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+  .ai-bubble .ai{width:30px;height:30px;border-radius:8px;background:var(--blue-600);color:#fff;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;}
+  .scoreband{display:flex;align-items:center;justify-content:center;flex-direction:column;background:var(--green-bg);color:var(--green);border-radius:14px;padding:18px;font-weight:800;}
+  .scoreband.fail{background:var(--red-bg);color:var(--red);}
+  .scoreband .big{font-size:40px;line-height:1;}
+  .muted{color:var(--muted);}.right{text-align:right;}.mt{margin-top:18px;}.flex{display:flex;gap:16px;}.between{justify-content:space-between;align-items:center;}
+  .auth{position:fixed;inset:0;z-index:200;background:#fff;display:none;}
+  .auth.show{display:flex;}
+  .auth-brand{flex:1;background:linear-gradient(135deg,var(--blue-700),var(--blue-500));color:#fff;padding:54px;display:flex;flex-direction:column;justify-content:center;}
+  .auth-brand .logo{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;margin-bottom:26px;}
+  .auth-brand h1{font-size:34px;margin:0 0 14px;line-height:1.2;}.auth-brand p{font-size:15px;opacity:.9;max-width:420px;}
+  .auth-brand ul{margin:26px 0 0;padding:0;list-style:none;}.auth-brand li{display:flex;gap:10px;align-items:center;margin-bottom:12px;font-size:14px;opacity:.95;}
+  .auth-brand li .tick{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;}
+  .auth-form{width:460px;padding:50px 48px;display:flex;flex-direction:column;justify-content:center;position:relative;}
+  .auth-form .seg{margin-bottom:24px;align-self:flex-start;}
+  .auth-screen{display:none;}.auth-screen.on{display:block;}
+  .auth-form h2{font-size:24px;margin:0 0 6px;}.auth-form .sub{color:var(--slate);margin:0 0 22px;font-size:13.5px;}
+  .auth-close{position:absolute;top:20px;right:24px;cursor:pointer;color:var(--slate);font-size:13px;font-weight:700;background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px 13px;z-index:2;}
+  @media(max-width:980px){.cards-4{grid-template-columns:repeat(2,1fr);}.cards-3,.cards-2,.form-grid{grid-template-columns:1fr;}.sidebar{display:none;}.auth-brand{display:none;}.auth-form{width:100%;}}
+</style>
+</head>
+<body data-role="admin">
+
+<!-- AUTH -->
+<div class="auth" id="authOverlay">
+  <div class="auth-close" onclick="closeAuth()">✕ Back to portal</div>
+  <div class="auth-brand"><div class="logo">PC</div>
+    <h1>Prestige Capability<br>Development Centre</h1>
+    <p>An AI-powered learning platform that measures how you think — not just what you answer.</p>
+    <ul><li><span class="tick">✓</span> Real-world case studies, AI-evaluated</li>
+    <li><span class="tick">✓</span> Rapid-fire questioning that rewards understanding</li>
+    <li><span class="tick">✓</span> Capability growth across levels</li></ul></div>
+  <div class="auth-form">
+    <div class="seg"><button class="on" onclick="authView('login',this)">Login</button><button onclick="authView('setpw',this)">Set Password</button></div>
+    <div class="auth-screen on" id="auth-login"><h2>Welcome back</h2><p class="sub">Sign in to your PCDC account.</p>
+      <div class="field"><label>Email</label><input value="sanjay.k@pibm.in"></div>
+      <div class="field"><label>Password</label><input type="password" value="••••••••"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeAuth()">Sign in</button>
+      <p class="muted" style="font-size:12.5px;text-align:center;margin-top:16px">New users receive a temporary password by email.</p></div>
+    <div class="auth-screen" id="auth-setpw"><h2>Set your password</h2><p class="sub">First-time login — replace your temporary password.</p>
+      <div class="field"><label>Email</label><input value="sanjay.k@pibm.in" disabled></div>
+      <div class="field"><label>Temporary password</label><input type="password" placeholder="From your registration email"></div>
+      <div class="field"><label>New password</label><input type="password" placeholder="Create a new password"></div>
+      <div class="field"><label>Confirm new password</label><input type="password" placeholder="Re-enter new password"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeAuth()">Set password &amp; continue</button></div>
+  </div>
+</div>
+
+<header class="topbar">
+  <div class="brand"><span class="logo">PC</span><div>PCDC<small>Capability Development Centre</small></div></div>
+  <div class="switcher" id="switcher">
+    <button data-role="admin" class="active" onclick="setRole('admin')"><span class="dot"></span>Admin</button>
+    <button data-role="mentor" onclick="setRole('mentor')"><span class="dot"></span>Mentor</button>
+    <button data-role="student" onclick="setRole('student')"><span class="dot"></span>Student</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="linkbtn" onclick="openAuth()">⊞ Sign-in screens</button>
+  <span class="proto-tag">● Static Prototype</span>
+  <div class="userchip"><div class="avatar" id="topAv">AD</div><div class="who"><b id="topName">Anita Desai</b><span id="topRole">Administrator</span></div></div>
+</header>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="navblock" data-role="admin"><div class="nav-label">Admin Portal</div><nav class="nav">
+      <a class="active" data-view="dashboard" onclick="setView('admin','dashboard')"><span class="ni">▤</span>Dashboard</a>
+      <a data-view="domains" onclick="setView('admin','domains')"><span class="ni">▣</span>Domain Master</a>
+      <a data-view="mentors" onclick="setView('admin','mentors')"><span class="ni">◑</span>Mentors / Faculty</a>
+      <a data-view="students" onclick="setView('admin','students')"><span class="ni">◍</span>Students</a>
+      <a data-view="campaigns" onclick="setView('admin','campaigns')"><span class="ni">◆</span>Campaigns</a>
+      <a data-view="analytics" onclick="setView('admin','analytics')"><span class="ni">◔</span>Analytics</a>
+    </nav></div>
+    <div class="navblock" data-role="mentor"><div class="nav-label">Mentor Portal</div><nav class="nav">
+      <a class="active" data-view="dashboard" onclick="setView('mentor','dashboard')"><span class="ni">▤</span>Dashboard</a>
+      <a data-view="cases" onclick="setView('mentor','cases')"><span class="ni">◆</span>My Case Studies</a>
+      <a data-view="responses" onclick="setView('mentor','responses')"><span class="ni">◔</span>Responses</a>
+      <a data-view="students" onclick="setView('mentor','students')"><span class="ni">◍</span>My Students</a>
+    </nav></div>
+    <div class="navblock" data-role="student"><div class="nav-label">Student Portal</div><nav class="nav">
+      <a class="active" data-view="dashboard" onclick="setView('student','dashboard')"><span class="ni">▤</span>Dashboard</a>
+      <a data-view="cases" onclick="setView('student','cases')"><span class="ni">◆</span>My Case Studies</a>
+      <a data-view="assess" onclick="setView('student','assess')"><span class="ni">✦</span>Active Assessment</a>
+      <a data-view="profile" onclick="setView('student','profile')"><span class="ni">◍</span>Capability Profile</a>
+      <a data-view="notifications" onclick="setView('student','notifications')"><span class="ni">◔</span>Notifications</a>
+    </nav></div>
+    <div class="help"><b>Design prototype</b><p>Switch roles in the top bar. Click “Sign-in screens” for login &amp; onboarding.</p></div>
+  </aside>
+
+  <main class="content">
+
+  <!-- ========== ADMIN ========== -->
+  <section class="role-view" data-role="admin">
+    <div class="panel active" data-view="dashboard">
+      <div class="page-head"><div><h1>Dashboard</h1><p>Institution overview across all domains.</p></div>
+        <div class="flex"><button class="btn btn-ghost" onclick="setView('admin','mentor-form')">+ Invite Mentor</button><button class="btn btn-primary" onclick="setView('admin','student-form')">+ Invite Student</button></div></div>
+      <div class="grid cards-4">
+        <div class="card stat"><div class="label"><span class="ic">▣</span>Domains</div><div class="num">8</div><div class="sub">Active subject areas</div></div>
+        <div class="card stat"><div class="label"><span class="ic">◑</span>Mentors</div><div class="num">14</div><div class="sub">2 invited</div></div>
+        <div class="card stat"><div class="label"><span class="ic">◍</span>Students</div><div class="num">320</div><div class="sub">Across all domains</div></div>
+        <div class="card stat"><div class="label"><span class="ic">◆</span>Campaigns</div><div class="num">12</div><div class="sub">Live now</div></div>
+      </div>
+      <div class="grid cards-2 mt">
+        <div class="card"><h3>Average capability by domain</h3>
+          <div class="cap-row"><div class="nm">Marketing</div><div class="bar"><i style="width:74%"></i></div><div class="vl">74</div></div>
+          <div class="cap-row"><div class="nm">Finance</div><div class="bar"><i style="width:68%"></i></div><div class="vl">68</div></div>
+          <div class="cap-row"><div class="nm">Operations</div><div class="bar"><i style="width:71%"></i></div><div class="vl">71</div></div>
+          <div class="cap-row"><div class="nm">HR</div><div class="bar"><i style="width:63%"></i></div><div class="vl">63</div></div></div>
+        <div class="card"><h3>Recent activity</h3><ul class="activity">
+          <li><span class="ai">✦</span><div>Dr. S. Patni launched campaign <b>Market Entry Crisis</b><br><small>Marketing · 20 min ago</small></div></li>
+          <li><span class="ai">◍</span><div><b>60 students</b> imported (bulk)<br><small>Finance · 2 hours ago</small></div></li>
+          <li><span class="ai">◑</span><div>Mentor <b>R. Khan</b> accepted invitation<br><small>Operations · Yesterday</small></div></li></ul></div>
+      </div>
+    </div>
+
+    <!-- Domain Master -->
+    <div class="panel" data-view="domains">
+      <div class="page-head"><div><h1>Domain Master</h1><p>The master list of domains. Add or delete domains here.</p></div>
+        <button class="btn btn-primary" onclick="setView('admin','domain-form')">+ Add Domain</button></div>
+      <div class="card"><table><thead><tr><th>Domain</th><th>Mentors</th><th>Students</th><th>Case Studies</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr><td><b>Marketing</b></td><td>3</td><td>72</td><td>9</td><td><span class="badge b-green">Active</span></td><td class="right"><button class="btn btn-danger btn-sm">Delete</button></td></tr>
+        <tr><td><b>Finance</b></td><td>2</td><td>64</td><td>7</td><td><span class="badge b-green">Active</span></td><td class="right"><button class="btn btn-danger btn-sm">Delete</button></td></tr>
+        <tr><td><b>Operations</b></td><td>2</td><td>48</td><td>6</td><td><span class="badge b-green">Active</span></td><td class="right"><button class="btn btn-danger btn-sm">Delete</button></td></tr>
+        <tr><td><b>Human Resources</b></td><td>2</td><td>40</td><td>5</td><td><span class="badge b-green">Active</span></td><td class="right"><button class="btn btn-danger btn-sm">Delete</button></td></tr>
+        <tr><td><b>Entrepreneurship</b></td><td>3</td><td>52</td><td>8</td><td><span class="badge b-green">Active</span></td><td class="right"><button class="btn btn-danger btn-sm">Delete</button></td></tr>
+        <tr><td><b>Business Analytics</b></td><td>2</td><td>44</td><td>4</td><td><span class="badge b-amber">Draft</span></td><td class="right"><button class="btn btn-danger btn-sm">Delete</button></td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="panel" data-view="domain-form">
+      <span class="crumb" onclick="setView('admin','domains')">← Domain Master</span>
+      <div class="page-head"><div><h1>Add Domain</h1><p>Create a domain that anchors case studies and students.</p></div></div>
+      <div class="card" style="max-width:620px">
+        <div class="field"><label>Domain name</label><input placeholder="e.g. Marketing"></div>
+        <div class="field"><label>Description</label><textarea rows="3" placeholder="Short description..."></textarea></div>
+        <div class="field"><label>Status</label><div class="seg"><button class="on">Active</button><button>Draft</button></div></div>
+        <div class="form-actions"><button class="btn btn-ghost" onclick="setView('admin','domains')">Cancel</button><button class="btn btn-primary" onclick="setView('admin','domains')">Save Domain</button></div>
+      </div>
+    </div>
+
+    <!-- Mentors -->
+    <div class="panel" data-view="mentors">
+      <div class="page-head"><div><h1>Mentors / Faculty</h1><p>Invite faculty and assign their department, domains and experience.</p></div>
+        <button class="btn btn-primary" onclick="setView('admin','mentor-form')">+ Invite Mentor</button></div>
+      <div class="toolbar"><div class="search">⌕ <input placeholder="Search mentors..."></div></div>
+      <div class="card"><table><thead><tr><th>Mentor</th><th>Department</th><th>Domains</th><th>Experience</th><th>Status</th></tr></thead><tbody>
+        <tr><td><div class="uname"><span class="av">SP</span><div><b>Dr. Sanjeev Patni</b><span>s.patni@pibm.in</span></div></div></td><td>Marketing</td><td><span class="badge b-blue">Marketing</span> <span class="badge b-blue">Entrepreneurship</span></td><td>14 yrs</td><td><span class="badge b-green">Active</span></td></tr>
+        <tr><td><div class="uname"><span class="av">AM</span><div><b>Aarti Menon</b><span>a.menon@pibm.in</span></div></div></td><td>Finance</td><td><span class="badge b-blue">Finance</span></td><td>9 yrs</td><td><span class="badge b-green">Active</span></td></tr>
+        <tr><td><div class="uname"><span class="av">VN</span><div><b>Vikram Nair</b><span>v.nair@pibm.in</span></div></div></td><td>HR</td><td><span class="badge b-blue">Human Resources</span></td><td>6 yrs</td><td><span class="badge b-amber">Invited</span></td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="panel" data-view="mentor-form">
+      <span class="crumb" onclick="setView('admin','mentors')">← Mentors</span>
+      <div class="page-head"><div><h1>Invite Mentor / Faculty</h1><p>They receive an email with a temporary password and set a new one on first login.</p></div></div>
+      <div class="card" style="max-width:700px">
+        <div class="form-grid"><div class="field"><label>Full name</label><input placeholder="e.g. Dr. Sanjeev Patni"></div><div class="field"><label>Email</label><input placeholder="name@pibm.in"></div></div>
+        <div class="form-grid">
+          <div class="field"><label>Department</label><select><option>Marketing</option><option>Finance</option><option>Operations</option><option>Human Resources</option><option>Entrepreneurship</option></select></div>
+          <div class="field"><label>Experience</label><select><option>0–3 years</option><option>3–6 years</option><option selected>6–10 years</option><option>10+ years</option></select></div>
+        </div>
+        <div class="field"><label>Assign domains (multi-select)</label>
+          <div class="chips"><span class="chip on">Marketing</span><span class="chip">Finance</span><span class="chip">Operations</span><span class="chip on">Entrepreneurship</span><span class="chip">Human Resources</span></div>
+          <div class="hint">The mentor can author case studies and see responses only for these domains.</div></div>
+        <div class="form-actions"><button class="btn btn-ghost" onclick="setView('admin','mentors')">Cancel</button><button class="btn btn-primary" onclick="setView('admin','mentors')">Send Invitation</button></div>
+      </div>
+    </div>
+
+    <!-- Students -->
+    <div class="panel" data-view="students">
+      <div class="page-head"><div><h1>Students</h1><p>Invite students individually or bulk-import. Each is mapped to a domain at Level 1.</p></div>
+        <div class="flex"><button class="btn btn-ghost" onclick="setView('admin','student-import')">⭳ Bulk Import</button><button class="btn btn-primary" onclick="setView('admin','student-form')">+ Invite Student</button></div></div>
+      <div class="toolbar"><div class="search">⌕ <input placeholder="Search students..."></div></div>
+      <div class="card"><table><thead><tr><th>Student</th><th>Domain</th><th>Level</th><th>Status</th></tr></thead><tbody>
+        <tr><td><div class="uname"><span class="av">SK</span><div><b>Sanjay Kumar</b><span>sanjay.k@pibm.in</span></div></div></td><td>Marketing</td><td><span class="lv lv2">L2 Intermediate</span></td><td><span class="badge b-green">Active</span></td></tr>
+        <tr><td><div class="uname"><span class="av">PM</span><div><b>Priya Mehta</b><span>priya.m@pibm.in</span></div></div></td><td>Finance</td><td><span class="lv lv3">L3 Hard</span></td><td><span class="badge b-green">Active</span></td></tr>
+        <tr><td><div class="uname"><span class="av">AS</span><div><b>Amit Sharma</b><span>amit.s@pibm.in</span></div></div></td><td>Marketing</td><td><span class="lv lv1">L1 Beginner</span></td><td><span class="badge b-red">Locked</span></td></tr>
+        <tr><td><div class="uname"><span class="av">TD</span><div><b>Tara Das</b><span>tara.d@pibm.in</span></div></div></td><td>HR</td><td><span class="lv lv1">L1 Beginner</span></td><td><span class="badge b-amber">Invited</span></td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="panel" data-view="student-form">
+      <span class="crumb" onclick="setView('admin','students')">← Students</span>
+      <div class="page-head"><div><h1>Invite Student</h1><p>Send a single invitation. The student gets an email with a temporary password.</p></div></div>
+      <div class="card" style="max-width:640px">
+        <div class="form-grid"><div class="field"><label>Full name</label><input placeholder="e.g. Sanjay Kumar"></div><div class="field"><label>Email</label><input placeholder="name@pibm.in"></div></div>
+        <div class="form-grid"><div class="field"><label>College ID</label><input placeholder="PIBM-XXXX"></div>
+          <div class="field"><label>Domain</label><select><option>Marketing</option><option>Finance</option><option>Operations</option><option>Human Resources</option><option>Entrepreneurship</option><option>Business Analytics</option></select><div class="hint">Student is mapped to this domain at Level 1.</div></div></div>
+        <div class="form-actions"><button class="btn btn-ghost" onclick="setView('admin','students')">Cancel</button><button class="btn btn-primary" onclick="setView('admin','students')">Send Invitation</button></div>
+        <div class="info mt">Need to add many at once? Use <b style="cursor:pointer;text-decoration:underline" onclick="setView('admin','student-import')">Bulk Import</b>.</div>
+      </div>
+    </div>
+    <div class="panel" data-view="student-import">
+      <span class="crumb" onclick="setView('admin','students')">← Students</span>
+      <div class="page-head"><div><h1>Bulk Import Students</h1><p>Upload a CSV from college data. Each row is mapped to a domain and starts at Level 1.</p></div></div>
+      <div class="card" style="max-width:760px">
+        <div class="dropzone"><div style="font-size:30px">⭳</div><b>Drop your CSV here</b> or click to browse<div class="hint" style="margin-top:6px">Required columns: name, email, college_id, domain</div></div>
+        <h3 style="margin-top:22px">Preview (first 3 rows)</h3>
+        <table><thead><tr><th>Name</th><th>Email</th><th>College ID</th><th>Domain</th></tr></thead><tbody>
+          <tr><td>Sanjay Kumar</td><td>sanjay.k@pibm.in</td><td>PIBM-2401</td><td>Marketing</td></tr>
+          <tr><td>Priya Mehta</td><td>priya.m@pibm.in</td><td>PIBM-2402</td><td>Finance</td></tr>
+          <tr><td>Neha Rao</td><td>neha.r@pibm.in</td><td>PIBM-2403</td><td>Operations</td></tr></tbody></table>
+        <div class="form-actions" style="margin-top:18px"><button class="btn btn-ghost" onclick="setView('admin','students')">Cancel</button><button class="btn btn-primary" onclick="setView('admin','students')">Import 60 students</button></div>
+      </div>
+    </div>
+
+    <!-- Campaigns -->
+    <div class="panel" data-view="campaigns">
+      <div class="page-head"><div><h1>Campaigns</h1><p>All case-study campaigns generated by faculty. Filter by faculty, open a campaign to see responses.</p></div></div>
+      <div class="toolbar">
+        <div class="picker">Faculty: <select><option>All faculty</option><option selected>Dr. Sanjeev Patni</option><option>Aarti Menon</option><option>Vikram Nair</option></select></div>
+        <div class="picker">Domain: <select><option>All domains</option><option>Marketing</option><option>Entrepreneurship</option></select></div>
+      </div>
+      <div class="card"><table><thead><tr><th>Campaign (Case Study)</th><th>Faculty</th><th>Domain</th><th>Level</th><th>Responses</th><th>Status</th></tr></thead><tbody>
+        <tr class="click" onclick="setView('admin','campaign-detail')"><td><b>Market Entry Crisis</b></td><td>Dr. S. Patni</td><td>Marketing</td><td><span class="lv lv2">L2</span></td><td>23 / 32</td><td><span class="badge b-blue">Live</span></td></tr>
+        <tr class="click" onclick="setView('admin','campaign-detail')"><td><b>Brand Revival</b></td><td>Dr. S. Patni</td><td>Marketing</td><td><span class="lv lv1">L1</span></td><td>40 / 52</td><td><span class="badge b-blue">Live</span></td></tr>
+        <tr class="click" onclick="setView('admin','campaign-detail')"><td><b>Startup Pivot</b></td><td>Dr. S. Patni</td><td>Entrepreneurship</td><td><span class="lv lv3">L3</span></td><td>8 / 18</td><td><span class="badge b-blue">Live</span></td></tr>
+        <tr class="click" onclick="setView('admin','campaign-detail')"><td><b>Founder's Dilemma</b></td><td>Dr. S. Patni</td><td>Entrepreneurship</td><td><span class="lv lv1">L1</span></td><td>61 / 61</td><td><span class="badge b-slate">Closed</span></td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="panel" data-view="campaign-detail">
+      <span class="crumb" onclick="setView('admin','campaigns')">← Campaigns</span>
+      <div class="page-head"><div><h1>Market Entry Crisis</h1><p>By Dr. Sanjeev Patni · Marketing · L2 · Live. Click a student to view their scorecard.</p></div></div>
+      <div class="grid cards-4">
+        <div class="card stat"><div class="label">Responses</div><div class="num">23</div></div>
+        <div class="card stat"><div class="label">Avg. score</div><div class="num">76</div></div>
+        <div class="card stat"><div class="label">Passed (≥75%)</div><div class="num">17</div></div>
+        <div class="card stat"><div class="label">Locked</div><div class="num">2</div></div>
+      </div>
+      <div class="card mt"><table><thead><tr><th>Student</th><th>Attempts</th><th>Score</th><th>Outcome</th><th></th></tr></thead><tbody>
+        <tr class="click" onclick="setView('admin','scorecard')"><td><div class="uname"><span class="av">SK</span><div><b>Sanjay Kumar</b></div></div></td><td>1</td><td>82%</td><td><span class="badge b-green">Passed</span></td><td class="right">›</td></tr>
+        <tr class="click" onclick="setView('admin','scorecard')"><td><div class="uname"><span class="av">NR</span><div><b>Neha Rao</b></div></div></td><td>2</td><td>71%</td><td><span class="badge b-amber">Retry</span></td><td class="right">›</td></tr>
+        <tr class="click" onclick="setView('admin','scorecard')"><td><div class="uname"><span class="av">AS</span><div><b>Amit Sharma</b></div></div></td><td>4</td><td>31%</td><td><span class="badge b-red">Locked</span></td><td class="right">›</td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="panel" data-view="scorecard">
+      <span class="crumb" onclick="setView('admin','campaign-detail')">← Market Entry Crisis</span>
+      <div class="page-head"><div><h1>Scorecard — Sanjay Kumar</h1><p>Market Entry Crisis · Marketing · L2 · Attempt 1</p></div><span class="badge b-green" style="font-size:14px">82% · Passed</span></div>
+      <div class="grid cards-2">
+        <div class="card"><h3>Submitted answer</h3>
+          <p class="muted" style="font-size:13px">"I'd segment the market and re-enter with a value-tier product while protecting the premium line. Pair with targeted retention offers for at-risk customers, and a phased rollout to limit risk..."</p>
+          <h3 style="margin-top:18px">Rapid-fire Q&amp;A</h3>
+          <div class="ai-bubble"><div class="ai">AI</div><div><b>Why this strategy over a price cut?</b><br><span class="muted">"Protects brand equity and margins while still competing." — <i>strong rationale.</i></span></div></div>
+          <div class="ai-bubble"><div class="ai">AI</div><div><b>How would the competitor respond?</b><br><span class="muted">"Likely match the value tier; I'd pre-empt with loyalty lock-ins." — <i>good foresight.</i></span></div></div></div>
+        <div class="card"><h3>AI score breakdown</h3>
+          <div class="cap-row"><div class="nm">Thinking Depth</div><div class="bar"><i style="width:84%"></i></div><div class="vl">84</div></div>
+          <div class="cap-row"><div class="nm">Logic</div><div class="bar"><i style="width:82%"></i></div><div class="vl">82</div></div>
+          <div class="cap-row"><div class="nm">Creativity</div><div class="bar"><i style="width:78%"></i></div><div class="vl">78</div></div>
+          <div class="cap-row"><div class="nm">Practicality</div><div class="bar"><i style="width:80%"></i></div><div class="vl">80</div></div>
+          <div class="cap-row"><div class="nm">Risk Awareness</div><div class="bar"><i style="width:76%"></i></div><div class="vl">76</div></div>
+          <div class="cap-row"><div class="nm">Reflection</div><div class="bar"><i style="width:88%"></i></div><div class="vl">88</div></div>
+          <div class="flex between mt"><b>Final score</b><span class="badge b-green" style="font-size:14px">82% · Passed</span></div></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="analytics">
+      <div class="page-head"><div><h1>Analytics</h1><p>Cross-domain rollup of completion and performance.</p></div></div>
+      <div class="grid cards-3">
+        <div class="card stat"><div class="label">Avg. capability score</div><div class="num">68</div></div>
+        <div class="card stat"><div class="label">Completion rate</div><div class="num">72%</div></div>
+        <div class="card stat"><div class="label">Students at risk</div><div class="num">17</div></div>
+      </div>
+      <div class="card mt"><h3>Domain performance</h3><table><thead><tr><th>Domain</th><th>Avg. score</th><th>Completion</th><th>Pass rate</th></tr></thead><tbody>
+        <tr><td>Marketing</td><td>74</td><td>81%</td><td>76%</td></tr><tr><td>Finance</td><td>68</td><td>74%</td><td>69%</td></tr>
+        <tr><td>Operations</td><td>71</td><td>70%</td><td>72%</td></tr></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ========== MENTOR ========== -->
+  <section class="role-view" data-role="mentor">
+    <div class="panel active" data-view="dashboard">
+      <div class="page-head"><div><h1>Mentor Dashboard</h1><p>Scoped to your domains only: Marketing &amp; Entrepreneurship.</p></div>
+        <button class="btn btn-primary" onclick="setView('mentor','case-form')">+ Create Case Study</button></div>
+      <div class="info" style="margin-bottom:16px">You only see students, case studies and responses within your assigned domains.</div>
+      <div class="grid cards-4">
+        <div class="card stat"><div class="label"><span class="ic">◆</span>My case studies</div><div class="num">11</div><div class="sub">3 live</div></div>
+        <div class="card stat"><div class="label"><span class="ic">◍</span>My students</div><div class="num">124</div><div class="sub">2 domains</div></div>
+        <div class="card stat"><div class="label"><span class="ic">⧖</span>Awaiting review</div><div class="num">9</div><div class="sub">Responses</div></div>
+        <div class="card stat"><div class="label"><span class="ic">⚑</span>Locked students</div><div class="num">4</div><div class="sub">Need unlock</div></div>
+      </div>
+      <div class="grid cards-2 mt">
+        <div class="card"><h3>Needs attention</h3><ul class="activity">
+          <li><span class="ai" style="background:var(--red-bg);color:var(--red)">⚑</span><div><b>Amit Sharma</b> locked at L1 (4 attempts)<br><small>Marketing</small></div><div style="margin-left:auto"><button class="btn btn-ghost btn-sm" onclick="setView('mentor','report')">Review</button></div></li>
+          <li><span class="ai" style="background:var(--amber-bg);color:var(--amber)">⧖</span><div><b>Market Entry Crisis</b> closes in 1 day<br><small>9 of 32 not started</small></div></li></ul></div>
+        <div class="card"><h3>My live case studies</h3><table><tbody>
+          <tr class="click" onclick="setView('mentor','responses')"><td><b>Market Entry Crisis</b><br><span class="muted">Marketing · L2</span></td><td class="right"><span class="muted">23/32</span> ›</td></tr>
+          <tr class="click" onclick="setView('mentor','responses')"><td><b>Brand Revival</b><br><span class="muted">Marketing · L1</span></td><td class="right"><span class="muted">40/52</span> ›</td></tr>
+          <tr class="click" onclick="setView('mentor','responses')"><td><b>Startup Pivot</b><br><span class="muted">Entrepreneurship · L3</span></td><td class="right"><span class="muted">8/18</span> ›</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="cases">
+      <div class="page-head"><div><h1>My Case Studies</h1><p>Author case studies for your domains and launch them.</p></div>
+        <button class="btn btn-primary" onclick="setView('mentor','case-form')">+ Create Case Study</button></div>
+      <div class="card"><table><thead><tr><th>Title</th><th>Domain(s)</th><th>Level</th><th>Responses</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr><td><b>Market Entry Crisis</b></td><td>Marketing</td><td><span class="lv lv2">L2</span></td><td>23 / 32</td><td><span class="badge b-blue">Live</span></td><td class="right"><button class="btn btn-ghost btn-sm" onclick="setView('mentor','responses')">Responses</button></td></tr>
+        <tr><td><b>Brand Revival</b></td><td>Marketing</td><td><span class="lv lv1">L1</span></td><td>40 / 52</td><td><span class="badge b-blue">Live</span></td><td class="right"><button class="btn btn-ghost btn-sm" onclick="setView('mentor','responses')">Responses</button></td></tr>
+        <tr><td><b>Growth Levers</b></td><td>Marketing, Entrepreneurship</td><td><span class="lv lv2">L2</span></td><td>—</td><td><span class="badge b-slate">Draft</span></td><td class="right"><button class="btn btn-ghost btn-sm" onclick="setView('mentor','case-form')">Edit</button></td></tr>
+      </tbody></table></div>
+    </div>
+
+    <div class="panel" data-view="case-form">
+      <span class="crumb" onclick="setView('mentor','cases')">← My Case Studies</span>
+      <div class="page-head"><div><h1>Create Case Study</h1><p>Choose the domain(s) first — a case study can target multiple domains.</p></div></div>
+      <div class="card">
+        <div class="field"><label>Target domains (multi-select)</label>
+          <div class="chips"><span class="chip on">Marketing</span><span class="chip on">Entrepreneurship</span></div>
+          <div class="info mt">A case study can belong to multiple domains. Any student in <b>at least one</b> selected domain will see it.</div></div>
+        <div class="form-grid">
+          <div class="field"><label>Title</label><input placeholder="e.g. Market Entry Crisis"></div>
+          <div class="field"><label>Difficulty level</label><div class="seg"><button>Beginner</button><button class="on">Intermediate</button><button>Hard</button></div></div>
+        </div>
+        <div class="field"><label>Capabilities developed</label><div class="chips"><span class="chip on">Strategic Thinking</span><span class="chip on">Decision Making</span><span class="chip">Risk Awareness</span><span class="chip">Communication</span></div></div>
+        <div class="field"><label>Case content</label>
+          <div class="seg" style="margin-bottom:12px"><button class="on" onclick="csMode('type')">✎ Type content</button><button onclick="csMode('upload')">⭳ Upload file</button></div>
+          <div id="cs-type"><textarea class="answer" placeholder="Type the scenario: situation, background, data, characters, constraints, objective..."></textarea></div>
+          <div id="cs-upload" style="display:none"><div class="dropzone"><div style="font-size:28px">⭳</div><b>Drop a file</b> or click to browse<div class="hint" style="margin-top:6px">PDF, DOCX or TXT · the case content will be parsed</div></div></div>
+        </div>
+      </div>
+      <div class="card mt"><h3>Launch &amp; time window</h3>
+        <div class="form-grid"><div class="field"><label>Opens</label><input type="datetime-local"></div><div class="field"><label>Closes</label><input type="datetime-local"></div></div>
+        <div class="flex" style="align-items:center;gap:14px;margin-bottom:8px"><span class="toggle on" onclick="this.classList.toggle('on')"></span><div class="switchbox" style="margin:0">Per-attempt countdown timer</div></div>
+        <div class="field" style="max-width:200px"><label>Duration (minutes)</label><input value="45"></div>
+        <div class="form-actions"><button class="btn btn-ghost" onclick="setView('mentor','cases')">Save Draft</button><button class="btn btn-primary" onclick="setView('mentor','cases')">Publish &amp; Launch</button></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="responses">
+      <span class="crumb" onclick="setView('mentor','cases')">← My Case Studies</span>
+      <div class="page-head"><div><h1>Responses — Market Entry Crisis</h1><p>Marketing · L2 · 23 of 32 submitted. Click a student for their scorecard.</p></div></div>
+      <div class="card"><table><thead><tr><th>Student</th><th>Attempts</th><th>Score</th><th>Outcome</th><th></th></tr></thead><tbody>
+        <tr class="click" onclick="setView('mentor','report')"><td><div class="uname"><span class="av">SK</span><div><b>Sanjay Kumar</b></div></div></td><td>1</td><td>82%</td><td><span class="badge b-green">Passed</span></td><td class="right">›</td></tr>
+        <tr class="click" onclick="setView('mentor','report')"><td><div class="uname"><span class="av">NR</span><div><b>Neha Rao</b></div></div></td><td>2</td><td>71%</td><td><span class="badge b-amber">Retry</span></td><td class="right">›</td></tr>
+        <tr class="click" onclick="setView('mentor','report')"><td><div class="uname"><span class="av">AS</span><div><b>Amit Sharma</b></div></div></td><td>4</td><td>31%</td><td><span class="badge b-red">Locked</span></td><td class="right">›</td></tr>
+      </tbody></table></div>
+    </div>
+
+    <div class="panel" data-view="report">
+      <span class="crumb" onclick="setView('mentor','responses')">← Responses</span>
+      <div class="page-head"><div><h1>Scorecard — Amit Sharma</h1><p>Marketing · Market Entry Crisis (L2) · Attempt 4 of 4</p></div><button class="btn btn-primary">🔓 Unlock student</button></div>
+      <div class="warn" style="margin-bottom:18px;">⚑ This student is <b style="margin:0 4px">locked</b> after 4 attempts below 75%. Unlock to allow a fresh attempt.</div>
+      <div class="grid cards-2">
+        <div class="card"><h3>Submitted answer</h3>
+          <p class="muted" style="font-size:13px">"I would reposition the brand toward younger buyers and cut prices to regain share..."</p>
+          <h3 style="margin-top:18px">Rapid-fire Q&amp;A</h3>
+          <div class="ai-bubble"><div class="ai">AI</div><div><b>What risks exist in cutting prices?</b><br><span class="muted">"It may reduce margins" — <i>shallow; no margin analysis.</i></span></div></div>
+          <div class="ai-bubble"><div class="ai">AI</div><div><b>How would a competitor respond?</b><br><span class="muted">"They might also cut prices" — <i>no scenario depth.</i></span></div></div></div>
+        <div class="card"><h3>AI score breakdown</h3>
+          <div class="cap-row"><div class="nm">Thinking Depth</div><div class="bar"><i style="width:28%"></i></div><div class="vl">28</div></div>
+          <div class="cap-row"><div class="nm">Logic</div><div class="bar"><i style="width:40%"></i></div><div class="vl">40</div></div>
+          <div class="cap-row"><div class="nm">Creativity</div><div class="bar"><i style="width:55%"></i></div><div class="vl">55</div></div>
+          <div class="cap-row"><div class="nm">Practicality</div><div class="bar"><i style="width:35%"></i></div><div class="vl">35</div></div>
+          <div class="cap-row"><div class="nm">Risk Awareness</div><div class="bar"><i style="width:20%"></i></div><div class="vl">20</div></div>
+          <div class="cap-row"><div class="nm">Reflection</div><div class="bar"><i style="width:30%"></i></div><div class="vl">30</div></div>
+          <div class="flex between mt"><b>Final score</b><span class="badge b-red" style="font-size:14px">31% · Below pass</span></div>
+          <h3 style="margin-top:18px">Mentor feedback</h3>
+          <textarea class="answer" style="min-height:80px">Focus on risk analysis and margin impact before recommending price cuts.</textarea>
+          <div class="form-actions"><button class="btn btn-primary btn-sm">Save feedback</button></div></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="students">
+      <div class="page-head"><div><h1>My Students</h1><p>Students in your assigned domains only.</p></div></div>
+      <div class="card"><table><thead><tr><th>Student</th><th>Domain</th><th>Level</th><th>Avg. score</th><th>Status</th><th></th></tr></thead><tbody>
+        <tr class="click" onclick="setView('mentor','report')"><td><div class="uname"><span class="av">SK</span><div><b>Sanjay Kumar</b></div></div></td><td>Marketing</td><td><span class="lv lv2">L2</span></td><td>78</td><td><span class="badge b-green">On track</span></td><td class="right">›</td></tr>
+        <tr class="click" onclick="setView('mentor','report')"><td><div class="uname"><span class="av">AS</span><div><b>Amit Sharma</b></div></div></td><td>Marketing</td><td><span class="lv lv1">L1</span></td><td>31</td><td><span class="badge b-red">Locked</span></td><td class="right">›</td></tr>
+        <tr class="click" onclick="setView('mentor','report')"><td><div class="uname"><span class="av">MJ</span><div><b>Manish Joshi</b></div></div></td><td>Entrepreneurship</td><td><span class="lv lv3">L3</span></td><td>85</td><td><span class="badge b-green">Top</span></td><td class="right">›</td></tr>
+      </tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ========== STUDENT ========== -->
+  <section class="role-view" data-role="student">
+    <div class="panel active" data-view="dashboard">
+      <div class="hero"><div><h2>Welcome back, Sanjay 👋</h2><p>Marketing track · Level 2 — Intermediate.</p></div><div class="score-ring"><div class="n">72</div><div class="l">Capability Score</div></div></div>
+      <div class="card mt"><h3>Your progress</h3><div class="level-track">
+        <div class="step done"><div class="ball">✓</div><div class="lab">L1 Beginner</div></div><div class="line"></div>
+        <div class="step current"><div class="ball">2</div><div class="lab">L2 Intermediate</div></div><div class="line"></div>
+        <div class="step locked"><div class="ball">🔒</div><div class="lab">L3 Hard</div></div></div></div>
+      <div class="grid cards-2 mt">
+        <div class="card"><h3>Today's tasks</h3><ul class="activity">
+          <li><span class="ai">◆</span><div><b>Market Entry Crisis</b> — L2<br><small>45 min · closes tomorrow</small></div><div style="margin-left:auto"><button class="btn btn-primary btn-sm" onclick="setView('student','assess')">Start</button></div></li>
+          <li><span class="ai">◆</span><div><b>Customer Retention</b> — L2<br><small>40 min · available</small></div><div style="margin-left:auto"><button class="btn btn-ghost btn-sm" onclick="setView('student','assess')">Start</button></div></li></ul></div>
+        <div class="card"><h3>Your capabilities</h3>
+          <div class="cap-row"><div class="nm">Problem Solving</div><div class="bar"><i style="width:80%"></i></div><div class="vl">80</div></div>
+          <div class="cap-row"><div class="nm">Communication</div><div class="bar"><i style="width:74%"></i></div><div class="vl">74</div></div>
+          <div class="cap-row"><div class="nm">Strategic Thinking</div><div class="bar"><i style="width:68%"></i></div><div class="vl">68</div></div>
+          <div class="cap-row"><div class="nm">Decision Making</div><div class="bar"><i style="width:71%"></i></div><div class="vl">71</div></div></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="cases">
+      <div class="page-head"><div><h1>My Case Studies</h1><p>Marketing · Level 2. Pass each level to unlock the next.</p></div></div>
+      <div class="grid cards-3">
+        <div class="card case-card"><div class="meta"><span class="lv lv2">L2</span><span class="timechip">⧖ 45 min</span></div><h4>Market Entry Crisis</h4><p>Recommend a market-entry strategy for a struggling brand.</p><button class="btn btn-primary btn-sm" onclick="setView('student','assess')">Start assessment</button></div>
+        <div class="card case-card"><div class="meta"><span class="lv lv2">L2</span><span class="timechip">⧖ 40 min</span></div><h4>Customer Retention</h4><p>Diagnose churn and design a retention plan.</p><button class="btn btn-primary btn-sm" onclick="setView('student','assess')">Start assessment</button></div>
+        <div class="card case-card locked"><div class="meta"><span class="lv lv3">L3</span><span class="badge b-slate">🔒 Locked</span></div><h4>Global Expansion</h4><p>Unlocks after you pass Level 2.</p><button class="btn btn-ghost btn-sm" disabled>Locked</button></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="assess">
+      <div class="page-head"><div><h1>Market Entry Crisis</h1><p>Marketing · Level 2 · ⧖ 45:00 remaining</p></div></div>
+      <div class="stepper" id="astepper">
+        <div class="s active" data-step="0"><span class="n">1</span>Briefing</div>
+        <div class="s" data-step="1"><span class="n">2</span>Your Answer</div>
+        <div class="s" data-step="2"><span class="n">3</span>Rapid-Fire</div>
+        <div class="s" data-step="3"><span class="n">4</span>Suggestions</div>
+        <div class="s" data-step="4"><span class="n">5</span>Score</div></div>
+      <div class="astep active" data-step="0"><div class="card"><h3>Scenario</h3>
+        <p><b>Role:</b> Marketing Head, ABC Electronics &nbsp; <b>Time:</b> 45 minutes</p>
+        <p><b>Situation:</b> Sales dropped 20% over two quarters; a new competitor entered with aggressive pricing. Customer reviews, competitor data and sales trends are provided.</p>
+        <p><b>Objective:</b> Recommend a recovery strategy with reasoning, risks and an implementation plan.</p>
+        <button class="btn btn-primary mt" onclick="goStep(1)">Start — I'm ready</button></div></div>
+      <div class="astep" data-step="1"><div class="card"><h3>Your answer</h3>
+        <p class="muted" style="font-size:13px;margin-top:-6px">Think first and write in your own words. The AI engages only after you submit.</p>
+        <textarea class="answer" placeholder="Type your solution and reasoning..."></textarea>
+        <div class="paste-note">⛔ Copy-paste is disabled for this field</div>
+        <div class="mt"><button class="btn btn-primary" onclick="goStep(2)">Submit answer →</button></div></div></div>
+      <div class="astep" data-step="2"><div class="card"><h3>Rapid-Fire Round</h3>
+        <p class="muted" style="font-size:13px;margin-top:-6px">The AI asks about your submission to test genuine understanding.</p>
+        <div class="qbox"><div class="q">1. Why did you choose this strategy over alternatives?</div><input placeholder="Your answer..."></div>
+        <div class="qbox"><div class="q">2. What are the biggest risks in your approach?</div><input placeholder="Your answer..."></div>
+        <div class="qbox"><div class="q">3. How would the competitor likely respond?</div><input placeholder="Your answer..."></div>
+        <div class="mt"><button class="btn btn-primary" onclick="goStep(3)">Submit responses →</button></div></div></div>
+      <div class="astep" data-step="3"><div class="card"><h3>AI Suggestions</h3>
+        <div class="ai-bubble"><div class="ai">AI</div><div><b>Strengths</b><br><span class="muted">Clear positioning idea and a practical campaign plan.</span></div></div>
+        <div class="ai-bubble"><div class="ai">AI</div><div><b>What's missing</b><br><span class="muted">Add a margin/profitability analysis and a fallback if the competitor matches your move.</span></div></div>
+        <p class="muted" style="font-size:13px">Revise your answer once based on this feedback — this is your final submission.</p>
+        <textarea class="answer" style="min-height:110px" placeholder="Revise your answer (final submission)..."></textarea>
+        <div class="mt"><button class="btn btn-primary" onclick="goStep(4)">Submit final answer →</button></div></div></div>
+      <div class="astep" data-step="4"><div class="grid cards-2">
+        <div class="card"><h3>Your result</h3><div class="scoreband"><div class="big">82%</div><div>Passed — Level 3 unlocked 🎉</div></div>
+          <p class="muted mt" style="font-size:13px">Score ≥ 75% — you've advanced. Your capability scores have been updated.</p>
+          <button class="btn btn-primary" onclick="setView('student','dashboard')">Back to dashboard</button></div>
+        <div class="card"><h3>Score breakdown</h3>
+          <div class="cap-row"><div class="nm">Thinking Depth</div><div class="bar"><i style="width:84%"></i></div><div class="vl">84</div></div>
+          <div class="cap-row"><div class="nm">Logic</div><div class="bar"><i style="width:82%"></i></div><div class="vl">82</div></div>
+          <div class="cap-row"><div class="nm">Creativity</div><div class="bar"><i style="width:78%"></i></div><div class="vl">78</div></div>
+          <div class="cap-row"><div class="nm">Practicality</div><div class="bar"><i style="width:80%"></i></div><div class="vl">80</div></div>
+          <div class="cap-row"><div class="nm">Risk Awareness</div><div class="bar"><i style="width:76%"></i></div><div class="vl">76</div></div>
+          <div class="cap-row"><div class="nm">Reflection</div><div class="bar"><i style="width:88%"></i></div><div class="vl">88</div></div></div>
+      </div></div>
+    </div>
+
+    <div class="panel" data-view="profile">
+      <div class="page-head"><div><h1>Capability Profile</h1><p>Your growth over time — you compete against yourself.</p></div></div>
+      <div class="grid cards-2">
+        <div class="card"><h3>Capability scores</h3>
+          <div class="cap-row"><div class="nm">Problem Solving</div><div class="bar"><i style="width:80%"></i></div><div class="vl">80</div></div>
+          <div class="cap-row"><div class="nm">Communication</div><div class="bar"><i style="width:74%"></i></div><div class="vl">74</div></div>
+          <div class="cap-row"><div class="nm">Strategic Thinking</div><div class="bar"><i style="width:68%"></i></div><div class="vl">68</div></div>
+          <div class="cap-row"><div class="nm">Decision Making</div><div class="bar"><i style="width:71%"></i></div><div class="vl">71</div></div>
+          <div class="cap-row"><div class="nm">Innovation</div><div class="bar"><i style="width:61%"></i></div><div class="vl">61</div></div></div>
+        <div class="card"><h3>Score trend</h3>
+          <svg viewBox="0 0 320 160" style="width:100%;height:auto"><polygon fill="#dbeafe" opacity=".5" points="10,130 60,118 110,100 160,96 210,78 260,64 305,50 305,150 10,150"/><polyline fill="none" stroke="#2563eb" stroke-width="3" points="10,130 60,118 110,100 160,96 210,78 260,64 305,50"/><circle cx="305" cy="50" r="4" fill="#1d4ed8"/></svg>
+          <p class="muted" style="font-size:13px">Steady improvement across your last 7 assessments.</p>
+          <h3 style="margin-top:14px">Mentor feedback</h3>
+          <div class="ai-bubble"><div class="ai">M</div><div><b>Dr. S. Patni</b><br><span class="muted">Strong analysis — quantify risk further next time.</span></div></div></div>
+      </div>
+    </div>
+
+    <div class="panel" data-view="notifications">
+      <div class="page-head"><div><h1>Notifications</h1><p>Updates on your assessments and progress.</p></div></div>
+      <div class="card"><ul class="activity">
+        <li><span class="ai" style="background:var(--green-bg);color:var(--green)">✓</span><div><b>Level 3 unlocked!</b> You passed Market Entry Crisis with 82%.<br><small>Just now</small></div></li>
+        <li><span class="ai">◆</span><div>New case study: <b>Customer Retention</b> (L2)<br><small>2 hours ago</small></div></li>
+        <li><span class="ai" style="background:var(--amber-bg);color:var(--amber)">⧖</span><div><b>Market Entry Crisis</b> closes tomorrow 5:00 PM<br><small>Yesterday</small></div></li>
+        <li><span class="ai">✦</span><div>Mentor <b>Dr. S. Patni</b> left feedback<br><small>2 days ago</small></div></li>
+      </ul></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<script>
+  const USER={admin:['Anita Desai','Administrator','AD'],mentor:['Dr. Sanjeev Patni','Mentor · Marketing','SP'],student:['Sanjay Kumar','Student · Marketing','SK']};
+  function setRole(role){ setView(role,'dashboard'); }
+  function setView(role,view){
+    document.body.dataset.role=role;
+    document.querySelectorAll('#switcher button').forEach(b=>b.classList.toggle('active',b.dataset.role===role));
+    const u=USER[role];
+    document.getElementById('topName').textContent=u[0];
+    document.getElementById('topRole').textContent=u[1];
+    document.getElementById('topAv').textContent=u[2];
+    const scope=document.querySelector('.role-view[data-role="'+role+'"]');
+    scope.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.dataset.view===view));
+    const navb=document.querySelector('.navblock[data-role="'+role+'"]');
+    navb.querySelectorAll('a').forEach(a=>a.classList.toggle('active',a.dataset.view===view));
+    if(view==='assess')goStep(0);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function goStep(n){
+    document.querySelectorAll('#astepper .s').forEach(s=>s.classList.toggle('active',+s.dataset.step===n));
+    document.querySelectorAll('.astep').forEach(s=>s.classList.toggle('active',+s.dataset.step===n));
+  }
+  function csMode(m){
+    document.getElementById('cs-type').style.display=m==='type'?'block':'none';
+    document.getElementById('cs-upload').style.display=m==='upload'?'block':'none';
+  }
+  function openAuth(){document.getElementById('authOverlay').classList.add('show');}
+  function closeAuth(){document.getElementById('authOverlay').classList.remove('show');}
+  function authView(v,btn){
+    document.querySelectorAll('.auth-form .seg button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+    document.getElementById('auth-login').classList.toggle('on',v==='login');
+    document.getElementById('auth-setpw').classList.toggle('on',v==='setpw');
+  }
+  document.addEventListener('click',e=>{
+    if(e.target.classList.contains('chip'))e.target.classList.toggle('on');
+    if(e.target.parentElement&&e.target.parentElement.classList.contains('seg')&&e.target.tagName==='BUTTON'){
+      [...e.target.parentElement.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');}
+  });
+</script>
+</body>
+</html>

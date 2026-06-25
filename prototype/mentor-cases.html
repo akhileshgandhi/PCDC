@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PCDC — My Case Studies</title><link rel="stylesheet" href="styles.css"></head><body>
+<header class="topbar"><div class="brand"><span class="logo">PC</span><div>PCDC<small>Capability Development Centre</small></div></div>
+  <div class="switcher"><a href="admin-dashboard.html" class=""><span class="dot"></span>Admin</a><a href="mentor-dashboard.html" class="active"><span class="dot"></span>Mentor</a><a href="student-dashboard.html" class=""><span class="dot"></span>Student</a></div><div class="spacer"></div>
+  <a class="linkbtn" href="login.html">⊞ Sign-in screens</a><span class="proto-tag">● Static Prototype</span>
+  <div class="userchip"><div class="avatar">SP</div><div class="who"><b>Dr. Sanjeev Patni</b><span>Mentor · Marketing</span></div></div></header>
+<div class="shell"><aside class="sidebar"><div class="nav-label">Mentor Portal</div><nav class="nav"><a href="mentor-dashboard.html" class=""><span class="ni">▤</span>Dashboard</a><a href="mentor-cases.html" class="active"><span class="ni">◆</span>My Case Studies</a><a href="mentor-responses.html" class=""><span class="ni">◔</span>Responses</a><a href="mentor-students.html" class=""><span class="ni">◍</span>My Students</a></nav><div class="help"><b>Design prototype</b><p>Use the sidebar to open each module. Switch roles in the top bar.</p></div></aside><main class="content">
+<div class="page-head"><div><h1>My Case Studies</h1><p>Author case studies for your domains and launch them.</p></div><a class="btn btn-primary" href="mentor-case-create.html">+ Create Case Study</a></div>
+<div class="card"><table><thead><tr><th>Title</th><th>Subject(s)</th><th>Difficulty</th><th>Time bracket</th><th>Responses</th><th>Status</th><th></th></tr></thead><tbody>
+<tr><td><b>Market Entry Crisis</b></td><td>Marketing</td><td><span class="lv lv2">L2</span></td><td>17–19 Jun</td><td>23 / 32</td><td><span class="badge b-blue">Live</span></td><td class="right"><a class="btn btn-ghost btn-sm" href="mentor-responses.html">Responses</a></td></tr>
+<tr><td><b>Brand Revival</b></td><td>Marketing</td><td><span class="lv lv1">L1</span></td><td>15–18 Jun</td><td>40 / 52</td><td><span class="badge b-blue">Live</span></td><td class="right"><a class="btn btn-ghost btn-sm" href="mentor-responses.html">Responses</a></td></tr>
+<tr><td><b>Growth Levers</b></td><td>Marketing, Operations</td><td><span class="lv lv3">L3</span></td><td>—</td><td>—</td><td><span class="badge b-slate">Draft</span></td><td class="right"><a class="btn btn-ghost btn-sm" href="mentor-case-create.html">Edit</a></td></tr>
+</tbody></table></div>
+</main></div>
+<script>document.addEventListener('click',e=>{if(e.target.classList.contains('chip'))e.target.classList.toggle('on');if(e.target.parentElement&&e.target.parentElement.classList.contains('seg')&&e.target.tagName==='BUTTON'){[...e.target.parentElement.children].forEach(b=>b.classList.remove('on'));e.target.classList.add('on');}});</script>
+</body></html>

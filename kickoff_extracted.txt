@@ -1,0 +1,712 @@
+PCDC Project Kick-off Meeting-20260622_150340-Meeting Recording
+June 22, 2026, 9:33AM
+36m 31s
+Dhwani Sharma started transcription
+Himanshu Pandey   0:04
+One thing I have shared some kickoff points, like, and we incorporate all the inputs on the work proposal, one day finalize agreement, but just a quick update, already discussion, he's going to send you proposal by tomorrow.
+Dr. Sanjeev Patni   0:04
+Okay.
+Yeah.
+Hello.
+Sharma.
+Himanshu Pandey   0:22
+So, welcome you, Jha.
+Dr. Sanjeev Patni   0:26
+Yeah, tomorrow, the 28th of July.
+Himanshu Pandey   0:29
+Mhm.
+Mm.
+Dr. Sanjeev Patni   0:34
+It's the chairman's birthday.
+Himanshu Pandey   0:37
+Okay.
+Dr. Sanjeev Patni   0:39
+And I want it to be announced in on that forum.
+Himanshu Pandey   0:39
+Mm-hmm.
+Dr. Sanjeev Patni   0:44
+So, Bob, those are in agreement.
+Himanshu Pandey   0:48
+The agreement to some completed the final legal sign off. I will immediately send you the agreement. Ajay.
+Dr. Sanjeev Patni   1:02
+Hey Cortana.
+Himanshu Pandey   1:03
+No, no, no, sir. Started, sir. I just take formal activities behind the scenes discussion. Dhwani Dhwani is going to lead this as a project manager and along with.
+Dr. Sanjeev Patni   1:11
+Mm.
+Ohh.
+I.
+Himanshu Pandey   1:23
+Sorry, along with Dhwani Amanpreet, and what the name of that girl, Dhudeep?
+Dhwani Sharma   1:30
+Actually, those for something.
+Himanshu Pandey   1:31
+Ocean. OK, so Ocean and Amanpreet is going to work on this project, and Dhwani will going to lead all the communication from your your side and with team communication, so 20 points pointers, it is required for call.
+Dr. Sanjeev Patni   1:48
+How about you, Dhami?
+Okay.
+Dhwani Sharma   1:53
+Okay, so I'll start.
+Dr. Sanjeev Patni   1:56
+The.
+Call Suraj Abhilasha, please.
+Dhwani Sharma   2:00
+Am I audible? OK, so when I started, I've shared you certain queries, I got the answers, so first team parts of my questions, the very first questions I would have would be regarding scoring, parameters, finalize.
+Dr. Sanjeev Patni   2:02
+Mm.
+I.
+Dhwani Sharma   2:22
+Then, I'll demonstrate you many brief UI type UI changes, improvise, that is something that I will be talking about, and the third thing is about the LLM costing, AI costing, that is what we need to decide.
+Himanshu Pandey   2:32
+S.
+Dr. Sanjeev Patni   2:34
+And.
+Okay.
+Dhwani Sharma   2:42
+Yeah, so I'll quickly start with certain questions. So, very first, last discussion, we identified that specific domains generate questions or particular student whose particular domain questions.
+Yes, sir, case studies.
+Dr. Sanjeev Patni   3:06
+Since this thing you want to.
+Mhm.
+Dhwani Sharma   3:11
+Yeah, so I mean a question here, keep me the case studies parameters, bases AI weightage of scoring generate, right? So, I just wanted to know those parameters, those fixed parameters, dynamic banana.
+Dr. Sanjeev Patni   3:12
+Okay.
+Yeah.
+Dhwani Sharma   3:31
+No, no, no, no, just a second.
+Dr. Sanjeev Patni   3:32
+Marking scheme to saini.
+Oh, parameter.
+Hmm.
+Dhwani Sharma   3:44
+OK, basically kind of brief UI when I just improvise based on your color branding and color correct job which you provide currently. OK, so...
+Yes, you speak. Mentor, one second, my mentor to profile me, Jha, case study, create, so many questions are there, Jha, many particular 4 parameters, one is your cognitive.
+Cognitive capabilities, just can the analytical thinking and strategic thinking and decision making. Leadership capabilities, just can the communication and influence, influence and negotiation and conflict resolution and team management. Then, my pass K category and subcategories are here many predefined AI through analyze.
+Dr. Sanjeev Patni   4:32
+Yeah.
+Dhwani Sharma   4:38
+Is ke alawa ye any parameters ke bases a meta AI scoring generate karega, so ye parameters ako freeze ragne dynamic ragne.
+Dr. Sanjeev Patni   4:39
+Yes.
+Yeah.
+And.
+Dhwani Sharma   4:54
+OK, so ye parameters rahenge.
+Dr. Sanjeev Patni   4:58
+Thank you.
+Ohh.
+Yeah.
+Dhwani Sharma   5:07
+Map quick user journey Sanyukta with an example lake.
+Dr. Sanjeev Patni   5:11
+If you got to level one up to five per digit score.
+Dhwani Sharma   5:14
+Very Kinga.
+Dr. Sanjeev Patni   5:17
+Difficulty level one to five.
+Dhwani Sharma   5:19
+One to five, Khan. OK.
+Dr. Sanjeev Patni   5:21
+I mean.
+Dhwani Sharma   5:25
+One to five, okay. Now, out of 100, my AI would score for individual person report card in parameters for calculation.
+Dr. Sanjeev Patni   5:26
+I.
+Dhwani Sharma   5:48
+Uh, backend pay weightage link to ki 20% is ka, 30 is ka, 20 is ka, 30 is ka.
+Dr. Sanjeev Patni   5:56
+Hey, please.
+Dhwani Sharma   5:58
+Yeah.
+Dr. Sanjeev Patni   6:27
+Hr.
+Dhwani Sharma   6:32
+So, my question to you was that, as a mentor, may pass option manually case study file upload case study. Next, mappings.
+Dr. Sanjeev Patni   6:34
+Yeah.
+Yeah.
+Dhwani Sharma   6:49
+Mappings capabilities with that case study based on 4 parameters document and sub parameters scoring for the user or subject choose case study to have a finance Hr operation.
+Dr. Sanjeev Patni   6:51
+Thank you.
+Dhwani Sharma   7:10
+So, I choose difficulty where I will choose a case study relevant questions. Now, my question to you is, scorecard user student scorecard percentage over Mac cognitive 20% out of 20 score out of 30 score total.
+Dr. Sanjeev Patni   7:21
+Who?
+Dhwani Sharma   7:35
+It is would be 100 to yeh jumeri percentage ay aap statically chaatu kyam code me likhe ya fera misko teacher yo pachhur de ki as a mentor you decide.
+Dr. Sanjeev Patni   7:43
+Yes.
+Yes.
+Dhwani Sharma   7:46
+Yeah.
+Dr. Sanjeev Patni   7:48
+Soni, there's been some error in understanding.
+Each case study will have just about one or more than one.
+Capability.
+Dhwani Sharma   8:07
+One or more than one? OK, so Jessie, cognitive capability here to make a case study, analytic strategic thinking, analyze, is that what you're trying to say?
+Dr. Sanjeev Patni   8:08
+Hello!
+No.
+Yeah.
+Yes.
+Dhwani Sharma   8:22
+Okay, and it...
+Dr. Sanjeev Patni   8:22
+Analytical thing.
+Dhwani Sharma   8:25
+Mm.
+Dr. Sanjeev Patni   8:27
+So, let us think.
+Cognitive leadership, entrepreneurial or professional.
+Dhwani Sharma   8:40
+Refreshment.
+Mm.
+Out of them, in Misekoi Ek Gregor, Ruski subcategory ko me selector sector.
+Dr. Sanjeev Patni   8:47
+Yes.
+Okay, subcategory may have more than one class to choose.
+Dhwani Sharma   8:54
+Sheikh, again, my question is: Choose to subcategory basis scoring, right?
+Dr. Sanjeev Patni   8:57
+Okay.
+Huh, I can.
+Calling to answer the basis for you know, kidna student answer.
+Dhwani Sharma   9:17
+OK, so yeah, the capabilities are here, scorecard.
+Dr. Sanjeev Patni   9:23
+Name.
+Dhwani Sharma   9:25
+You need dinner?
+Dr. Sanjeev Patni   9:25
+Answer: it is enormous.
+Dhwani Sharma   9:27
+Answer. OK, I'll put that as a point.
+Dr. Sanjeev Patni   9:38
+Hmm.
+Dhwani Sharma   9:47
+But I mean, answer me each is check, analytical thinking, strategic thinking, decision making, map capabilities, just a question.
+Dr. Sanjeev Patni   9:48
+The.
+Oh
+Yeah, yeah, yeah, question question answer check from the standpoint of, let us say, leadership capability.
+from the capability metrics of influence and negotiation.
+Dhwani Sharma   10:30
+Okay.
+Yeah, got the point.
+Okay.
+Dr. Sanjeev Patni   10:36
+I forgot.
+Dhwani Sharma   10:38
+OK, so, Amanpreet, do you have few more queries apart from this, from the AI perspective and the calculation perspective?
+Amanpreet Dutta   10:51
+No, I don't have any question regarding this. This was the only thing that I...
+Dhwani Sharma   10:57
+Check, so, sir, may I put a user journey, baheti to how we have thought of ki kaise rahega, subject to yeh admin panel rahega, joki harik organization, la bapke college ke admin ke pass rahega, skip as option hoga a dashboard technical kit the number of students and.
+Amanpreet Dutta   10:57
+Close it, click being like that.
+Dr. Sanjeev Patni   11:04
+Yes.
+Go.
+Dhwani Sharma   11:17
+Kitty Faculties live campaign campaign, if I would say that is your live assessment job share here.
+Dr. Sanjeev Patni   11:25
+Hmm.
+Dhwani Sharma   11:26
+On the top, top most recent campaign, this dashboard is completely based on the discussion, once my UI gets completed, but dashboard.
+Dr. Sanjeev Patni   11:29
+Okay.
+Okay.
+Sorry, how do you define campaign?
+Dhwani Sharma   11:43
+So campaign is more like 10 faculties. Out of those 10 faculties, there were five to six assessments launched by each.
+Either in a week or a month, two campaigns to launch and done that will be shown here with the faculty name, like Market End Crisis, one of the case study was launched, and Doctor Patni was one duration, 32 students were the one out of which twenty-three response.
+Dr. Sanjeev Patni   11:59
+Mm.
+Dhwani Sharma   12:19
+Soni.
+Dr. Sanjeev Patni   12:20
+Hmm.
+Dhwani Sharma   12:21
+Yeah, so you kind of overview for each and every assessments run.
+Dr. Sanjeev Patni   12:22
+The.
+Madam, you both complicated, both simple, expectation.
+There is a bank of case studies on one side. OK, all case studies tagged here for a particular kind of capabilities.
+Tagged. Now I, as a faculty, I reach out my dashboard and choose the students either one or more than one or all. Can you be middle number of students?
+Kinko Mujhe case study deny.
+And I choose the type of case study for one, more than one, or all.
+Or, will you assign?
+Dhwani Sharma   13:22
+Flow here here. It says a dashboard overview monthly. That is just for the reporting purpose. I'll show you the case study. User onboarding.
+Dr. Sanjeev Patni   13:22
+Yeah.
+Yeah.
+Tigger.
+Dhwani Sharma   13:41
+So, we have a bulk import pickers up to.
+Bulk import, if I would say, it would be like this: Ki aapka Jobi college ka data suite reh ka Excel ka aapko se vaasi map Khan na ki conscious subject me mo hai, college ID kya, email kya, ko automatically mail jala Jha ka. Those saree users are mari system kya under Ajay ke. Avagan a mentor ki site Pajati.
+Dr. Sanjeev Patni   13:46
+Sure.
+Dhwani Sharma   14:05
+Option here, case study, create title, sorry details, upload case study, make questions, automatic upload, manual.
+Dr. Sanjeev Patni   14:13
+Yeah.
+Dhwani Sharma   14:25
+The mapping discussed case study capability type upload mentioned file capability to automatically map validate time duration time duration two ways first entire case study launch.
+So, like, one hour exam, two hours exam, three exams, or next time period particular case study duration open, open link, open, pass option to select.
+User particular domain like the marketing students rang it, yeah, of course, specific student select specific student drop down Ajay, and you can assign and publish this case study to them.
+Um...
+Dr. Sanjeev Patni   15:25
+Hey Cortana.
+Dhwani Sharma   15:28
+Basically, it is just discussion design.
+Dr. Sanjeev Patni   15:37
+Ah, Jha, Jha.
+Himanshu Pandey   15:38
+Yeah, just a prototype which you are seeing right now, so...
+Dhwani Sharma   15:41
+Prototype version 8 first.
+Dr. Sanjeev Patni   15:41
+Thank you.
+Dhwani Sharma   15:44
+Yeah, then student key dashboard pay total capability scores and stuff.
+Then, task case study launch.
+What did Gandhi happen?
+Yeah, JC assessment go start kartyo aapke bus total timing Ajay Jha Jo scenario aajayega pispe click karoge ek answer box enable Ajay gaap answer kar sekte but copy paste ni kar sekte just sir for the UAT perspective jabam test kar yung is pore flow ko taktak kiya missa copy paste ko enable rakhenge takyam test.
+Dr. Sanjeev Patni   16:24
+Timer Khan.
+Dhwani Sharma   16:27
+Timer top forty-five minutes, timer, but the baheti is added here, my final designs, we can meet two days after.
+Dr. Sanjeev Patni   16:36
+I am a reverse progressive.
+Dhwani Sharma   16:39
+Ohh, reverse timer.
+Dr. Sanjeev Patni   16:40
+Yeah.
+Dhwani Sharma   16:43
+You can manage time, P duration, lock team can take assessment reverse pulling up.
+Dr. Sanjeev Patni   16:43
+Huh.
+Okay, and one important thing, which probably I forgot, he...
+Himanshu.
+Himanshu Pandey   16:59
+Yes, sir.
+Dr. Sanjeev Patni   16:59
+Case study assign student call read specified time. Neha Jha, let us say 5 minutes to read.
+Himanshu Pandey   17:06
+Mhm.
+Mm.
+Dr. Sanjeev Patni   17:14
+Or questions.
+Himanshu Pandey   17:15
+Okay.
+And was your duration over, uh, then it will start, not before that.
+Dr. Sanjeev Patni   17:24
+Question.
+Himanshu Pandey   17:24
+Vote, vote.
+Dhwani Sharma   17:26
+Sir, uske re hamne hichi skiya ki chapta why I am ready pe click ni kare ka spo ya sari se is a dig jayangi mu padisakte chapta kusku click ni karega taptak time and we start.
+Himanshu Pandey   17:26
+So, one thing.
+No, like in me, yeah, yeah, time dinner, Patidar.
+Dr. Sanjeev Patni   17:36
+No, no, no, questions for now.
+No, any questions need not your scope. Copy correct or chat is answering your ready.
+Okay.
+Himanshu Pandey   17:52
+And it limited time immediately start with this October. If a student wants, I don't want it to wait more here, so a student can immediately start.
+Dr. Sanjeev Patni   18:01
+Ha ha, ha ha, the reverse timer to this movie.
+Himanshu Pandey   18:06
+Mhm.
+Dhwani Sharma   18:08
+OK, which is a mind to say configure case study banar, you know, 45 minutes open the reading time.
+Himanshu Pandey   18:19
+Reading time, correct, correct, reading time, and attempt time, Bafna Neha.
+Dr. Sanjeev Patni   18:20
+Ha ha ha.
+Dhwani Sharma   18:20
+Today, I see.
+Yeah.
+Dr. Sanjeev Patni   18:24
+Huh.
+Dhwani Sharma   18:24
+Ohh.
+Jessie student, reading time, and then get started.
+Dr. Sanjeev Patni   18:36
+Ohh.
+Dhwani Sharma   18:39
+The first cut of answers were submit rapid fire question and generated.
+Dr. Sanjeev Patni   18:49
+Hmm.
+Dhwani Sharma   18:50
+Based on those answers, A.I.K. suggestions, answers and final submit to use the report to result, out of three rapid fire questions and this, this is his final submission.
+Dr. Sanjeev Patni   19:01
+Sarim.
+Himanshu Pandey   19:06
+Right, and so do we want key score download Vikram?
+Dr. Sanjeev Patni   19:06
+Ajay, condition.
+Dhwani Sharma   19:10
+Yeah.
+Dr. Sanjeev Patni   19:10
+Condition specified time 70% of.
+Towo disqualify Ajay.
+Dhwani Sharma   19:29
+3 hours test hai, 70% complete nahi, 2 hours forty-five minutes, auto disqualified.
+Dr. Sanjeev Patni   19:37
+Yeah.
+Ajay. Ajay.
+Dhwani Sharma   19:41
+To iska threshold bhi ame mentor mehi configurable dena padega ya aapko disqualification ki time limit kyaar at Neha.
+Dr. Sanjeev Patni   19:49
+Mm.
+Dhwani Sharma   19:50
+Sheikh.
+My question order, sir, assessment case study multiple.
+Dr. Sanjeev Patni   20:02
+Sheikh.
+Dhwani Sharma   20:04
+Eki rahi, take care, always case study ka suppose my first level bhutu as a chain of case study jalsakte eki baheti ke assessment me ki level one case study.
+Dr. Sanjeev Patni   20:13
+Ha ha ha, feel good.
+Dhwani Sharma   20:15
+Tu Jaisi mein summit kar dutu mein level 2 ka case study solves kar na shuru kar sekteyo.
+Dr. Sanjeev Patni   20:20
+How to choose?
+Himanshu Pandey   20:28
+Mm.
+Dr. Sanjeev Patni   20:29
+Yes.
+Himanshu Pandey   20:29
+Until a teacher is not assigned to you, study is higher level key, so you can't.
+Dr. Sanjeev Patni   20:37
+Hmm?
+Dhwani Sharma   20:38
+Sheikh Sir Jha mein a student ya pe submit kar de ga to ek to uske pass list to ki ki a teacher ka portala as a mentor mein specific student ke sare case study ke jho recent when it is ke answers dekh Sakyo.
+Dr. Sanjeev Patni   20:59
+What do you mean?
+Dhwani Sharma   21:01
+Second.
+Yeah.
+Dr. Sanjeev Patni   21:04
+Can bullet check.
+Dhwani Sharma   21:06
+Be.
+Next, case study case particular case study, student Ajay.
+Dr. Sanjeev Patni   21:13
+Ek, Ek, Ek, Lante, Goyal.
+How did Madam Dutta?
+Madam, can I call you back, please?
+Thanks.
+Okay.
+Ohh, sorry.
+Dhwani Sharma   21:35
+Case study as a mentor when in launch career ma un ke and the key details be exact. What I need to go my case study be guide kiti case studies when a bit a career with a difficulty level yan di khaya. Just a second.
+Hey Cortana, students are saying go case study details with answers.
+Dr. Sanjeev Patni   22:02
+Now, see, now we have to also get into the analytics part of it.
+Key student Ka concept factor is stronger concept factor is weaker. So, whether on the basis of graph or whether on the basis of some kind of analytical metrics.
+Dhwani Sharma   22:24
+The.
+Dr. Sanjeev Patni   22:29
+The student is progressing well, capability, strength.
+So, your your graph say represent Kanodia.
+Dhwani Sharma   22:46
+Chhi Keshar E Maiya Ekadungi graphical view.
+Dr. Sanjeev Patni   22:51
+Hi.
+Dhwani Sharma   22:58
+OK, Sir, a question was a last my answers to teacher, last submission of answer answers first level suggestion or rapid fire answers.
+Dr. Sanjeev Patni   23:14
+I mean, when you like it?
+Dhwani Sharma   23:16
+So, basically, as a student case study, then I have an option to answer those, then my AI gives me suggestion based on my rapid-fire answers.
+Dr. Sanjeev Patni   23:35
+Last time we can go there.
+Dhwani Sharma   23:37
+Just made a suggestion: Ajay, I get through to me for swap is option and answer to modify.
+Dr. Sanjeev Patni   23:44
+Let us say, case study, student, chat question.
+Dhwani Sharma   23:55
+Is Neha hai answers ni ke.
+Submit Kiya, Merpas Rapid Fire Ki Answer Say based on those answers.
+Dr. Sanjeev Patni   23:58
+Huh? Huh?
+Question, submit question, answer submit.
+Dhwani Sharma   24:09
+Haan, the suggestion ke baan, ek option aur ke mek up na final submission revise karna to meho kar saktu.
+Dr. Sanjeev Patni   24:17
+How you gonna gonna go?
+Dhwani Sharma   24:18
+You need any option?
+Dr. Sanjeev Patni   24:23
+I don't think.
+Himanshu Pandey   24:23
+SK Flow meta suggestion.
+Dr. Sanjeev Patni   24:31
+Mhm.
+Dhwani Sharma   24:32
+Madam G.H. is mujhe bilagat ke student ko 9 milnaji ku ki student for AI ke suggestion kitu or improvised.
+Think back to Sarim, close submission came back as an AI suggestion to improve or to answer change.
+Dr. Sanjeev Patni   24:53
+How about to take a bus?
+Wrong answer, right answer.
+Dhwani Sharma   25:10
+No.
+So, basically, Rapid 5K immediately, but we will have a complete result and scorecard for the student, suggestions.
+Dr. Sanjeev Patni   25:19
+Mhm.
+Along with the review remarks of AI.
+Dhwani Sharma   25:32
+Okay.
+Himanshu Pandey   25:36
+It is process.
+Dr. Sanjeev Patni   25:37
+Yes.
+Dhwani Sharma   25:41
+Sir, what? Uh huh. Sir, it is here.
+Himanshu Pandey   25:48
+Mm.
+Dr. Sanjeev Patni   25:48
+Mm.
+Dhwani Sharma   25:48
+To main us ke baad rapid fire ke baad ye disable kartungi, they cannot edit their response.
+Dr. Sanjeev Patni   25:53
+Ah, ah, obviously, obviously.
+Himanshu Pandey   25:54
+Yeah.
+Dhwani Sharma   25:55
+Yeah.
+Sir, after LLC calls come over.
+Dr. Sanjeev Patni   26:04
+That.
+Himanshu Pandey   26:06
+Yes, wait, I mean.
+Dr. Sanjeev Patni   26:09
+Okay.
+Dhwani Sharma   26:09
+Okay, so rapid fire questions, a mere question case study suppose a student to make student to a rapid fire question, same students.
+Himanshu Pandey   26:25
+Answer.
+Dr. Sanjeev Patni   26:26
+Many models to discuss the basis, question answered, questions running.
+Himanshu Pandey   26:29
+Yeah.
+Ohh, no, I'm so skilled for anything.
+Otherwise, common questions are in.
+Dhwani Sharma   26:42
+Okay, sir.
+Dr. Sanjeev Patni   26:43
+Just say, for example, it is a good option, and because the interest rates are reasonable, therefore raising the working capital is advisable.
+Now, the AI gets into the picture for the rapid fire. So, the AI asks, what about if the interest rates are revised to 12%?
+Is there is is is your answer still the same or it will change?
+Dhwani Sharma   27:23
+OK, Sir, for testing for the better output of rapid fire, AI automate manual flow through a case study, a student perspective answer or rapid fire question, expect AI to put on based on that.
+Dr. Sanjeev Patni   27:24
+Mhm.
+Dhwani Sharma   27:43
+So, so I can instruct them in a more prompt way.
+Dr. Sanjeev Patni   27:55
+Case studies banali, or answers banana, or basis for rapid fire banana.
+Dhwani Sharma   27:58
+Just one example.
+But the Abhiyam char GPT's answer nikalwale ke ke stirika aur rapid fire ke step ke dere maku.
+Dr. Sanjeev Patni   28:11
+I will generate, let us say, 30 case studies.
+Thirty case studies answers rapid fire learning background.
+Dhwani Sharma   28:28
+Yeah, exactly.
+Himanshu Pandey   28:28
+That will be more helpful.
+Dhwani Sharma   28:31
+Yeah, yeah, Ko, I mean, in a Patidar, sir, is Skype ET of this at to get Kapta Deepavi?
+Dr. Sanjeev Patni   28:38
+You can go.
+Dhwani Sharma   28:39
+Like, expected time, Kapta Deepauga up here.
+Dr. Sanjeev Patni   28:44
+Ask that one.
+Dhwani Sharma   28:48
+So, may Friday go for the Akhilesh Gandhi Jha.
+Dr. Sanjeev Patni   28:53
+Ohh, I'm doing the thing up for.
+Dhwani Sharma   28:54
+Okay.
+OK, uh, to my progressive students, uh, sorry, last year, the students, capability score or improvement.
+Dr. Sanjeev Patni   28:57
+You.
+Hr.
+Need to order the map for?
+Dhwani Sharma   29:08
+Yes, students, I face for my mentors, I will be the graph.
+Dr. Sanjeev Patni   29:12
+Mm.
+Dhwani Sharma   29:13
+Chicken.
+UI and UX perspective may question there requirement to complete clear here. Kikiya hai Khani bases. Pureko final UI may convert so branding color up according select it's fine for you.
+Dr. Sanjeev Patni   29:23
+Yeah.
+I think I remember, I'm branding clear logo over the Zoom app.
+Dhwani Sharma   29:38
+Can we meet on Wednesday or Thursday?
+Dr. Sanjeev Patni   29:44
+For what? For what?
+Dhwani Sharma   29:46
+A final UI UX map.
+Dr. Sanjeev Patni   29:51
+For the time, we have to fill up basic.
+Dhwani Sharma   29:56
+To map reference a screenshot video, Facebook.
+Dr. Sanjeev Patni   30:00
+Ohh, that's good enough.
+Dhwani Sharma   30:04
+Check, OK, so sir, this was all about the flow.
+Dr. Sanjeev Patni   30:10
+Pandey.
+No, no, I'm fine.
+Dhwani Sharma   30:16
+Sir, LLM's cost estimation, fallbacks, testing free token token, free API token generate problem statement.
+Mere a campaign baja students be kar sakte hai saw student be kar sakte a case study ko solves to Mary her student pay LLM call ghora hai do baar up to spare token utilization bhoa jada hai bamusko use kare niya optimize that kesa we have research.
+Dr. Sanjeev Patni   30:42
+Hmm.
+Dhwani Sharma   30:56
+Low level, pick up and kill you.
+Dr. Sanjeev Patni   30:59
+Internally hosted at the tokenization.
+Dhwani Sharma   31:04
+Internal host.
+Dr. Sanjeev Patni   31:07
+Mm.
+Dhwani Sharma   31:10
+Matha Fitum Lokal Pi Jha Shashikant.
+Dr. Sanjeev Patni   31:13
+How do you do baheti?
+Dhwani Sharma   31:14
+We bought him a ticket.
+Tickets are made by SPB research coaches give uska to the processing time slow.
+Dr. Sanjeev Patni   31:22
+Then, Himanshu, and Himanshu, are you there?
+Himanshu Pandey   31:26
+Asif, yes.
+Dr. Sanjeev Patni   31:27
+Internally host.
+Himanshu Pandey   31:30
+So, internally host and resources, so we are requirement, so VM just for MVP or immediate delivery, I am planning.
+Dr. Sanjeev Patni   31:31
+Yeah.
+Himanshu Pandey   31:49
+Mm.
+So, spec details, sir, working.
+OK, so, Soni, make sure more resources is required to.
+Dhwani Sharma   32:09
+I think my is pure research, Kali, too.
+Dr. Sanjeev Patni   32:20
+Mm.
+Lama and.
+Megan.
+Dhwani Sharma   32:27
+Gemini free model Gemini use.
+Dr. Sanjeev Patni   32:33
+Gemma.
+Dhwani Sharma   32:34
+Gemini Flash.
+Dr. Sanjeev Patni   32:36
+Flash, okay.
+Dhwani Sharma   32:42
+Seventy billion token data have a free Gemini, 50 billion, 15 or 50 good, but model here local, Amanpreet, what was the name of that model we have used?
+Dr. Sanjeev Patni   32:53
+Okay, good.
+Dhwani Sharma   33:02
+For vertex.
+Amanpreet Dutta   33:04
+When, when three, when three.
+Dr. Sanjeev Patni   33:04
+Ulama?
+Dhwani Sharma   33:07
+When 3 was something to local people, Jha, uh, response.
+Amanpreet Dutta   33:12
+O lama ke tu usko hum use kar satte local hospe.
+Dr. Sanjeev Patni   33:15
+Mm mm.
+Dhwani Sharma   33:18
+Sheikh, OK, so.
+Dr. Sanjeev Patni   33:19
+Well, you can use Olama and Gemma, I think, but I'll leave it up to you.
+Dhwani Sharma   33:23
+Yeah.
+Okay, okay, sure. Take care. User side failed marks 38 time slot against 70% completely automatically I will disqualified.
+Or, two, you can learn to mentor up. Suppose when a submission kartiya, submission kartiya, 10 percentile of 15, kya ausko vapi se on the same level K questions saini hai.
+Dr. Sanjeev Patni   33:47
+Mm.
+Yeah.
+Excellent.
+Hello?
+Yes.
+Ma'am, I'm on another call. Can I call him up, please?
+Thanks.
+Thank you.
+Sorry, what was the one over there?
+Dhwani Sharma   34:21
+Suppose I have seven questions and three rapid 5 questions based on all many questions can answer. K.A.I. name which is score D.R. 10% or 10 out of 100, which is a fail for me. So particular user same.
+Dr. Sanjeev Patni   34:21
+No.
+Mmh.
+Dhwani Sharma   34:40
+Or it will be like your next he's a fame.
+Okay.
+Okay, sir, I have cleared all my doubts. Based on our discussion, so that we can initiate with the front end and the back end development of it, and also, by Thursday, is a new UI detail either as in video.
+Dr. Sanjeev Patni   34:54
+Hr.
+Dhwani Sharma   35:08
+So, you can see that on mouse for host UI prototyping, yeah.
+Dr. Sanjeev Patni   35:13
+One to one.
+Soni, you are wonderful. Thanks, Himanshu.
+Dhwani Sharma   35:18
+Thank you.
+Himanshu Pandey   35:21
+Yes, sir.
+Dr. Sanjeev Patni   35:28
+Hello!
+Himanshu Pandey   35:29
+28th you are saying? 28th.
+Dr. Sanjeev Patni   35:31
+20th July, Ozinvo Machado launched.
+Himanshu Pandey   35:33
+Twenty-eighth July, yeah, yeah, yeah, before that, we will do this, sir. Twenty-eighth July itself, what time is this?
+Dr. Sanjeev Patni   35:40
+Ha, no one.
+The.
+Himanshu Pandey   35:48
+No, sir, uh, don't worry, we will get.
+Nanos are you can be 100 percent; you can say I'm look deliver.
+Dhwani Sharma   35:58
+Singh.
+Dr. Sanjeev Patni   36:02
+Thank you.
+Himanshu Pandey   36:04
+OK, thanks, sir, for Joe Maravi incubation. So, by this Friday, I will give you some working screens incubation, and so we have to share. OK, thank you. Honey Amanpreet, any other questions or any points you are having?
+Dr. Sanjeev Patni   36:05
+Thank you.
+Haha.
+Yeah, yeah, sure.
+Dhwani Sharma   36:21
+No more show, very good.
+Amanpreet Dutta   36:23
+No, sir.
+Himanshu Pandey   36:24
+Okay, thank you. Thank you guys. Thank you very much, sir, for your time.
+Dr. Sanjeev Patni   36:25
+Wonderful. Thank you.
+Dhwani Sharma   36:26
+Thank you so much, sir. Bye. Have a good day.
+Amanpreet Dutta   36:26
+Thank you, sir.
+Dr. Sanjeev Patni   36:28
+Thank you.
+Dhwani Sharma stopped transcription

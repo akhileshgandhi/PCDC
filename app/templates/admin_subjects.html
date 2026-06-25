@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><div><h1>Subjects</h1><p>Super-Admin configuration · add or delete subjects.</p></div></div>
+<a class="crumb" href="{{ url_for('admin_settings') }}">← Settings</a>
+<div class="card">
+  <form method="post" class="flex" style="margin-bottom:18px;align-items:flex-end">
+    <div class="field" style="margin:0;flex:1"><label>New subject</label><input name="name" placeholder="e.g. Strategy"></div>
+    <button class="btn btn-pri">+ Add subject</button>
+  </form>
+  {% for s in subjects %}<div class="row"><div class="gr"><b>{{ s['name'] }}</b></div><span class="chip c-green">{{ s['status'] }}</span><a class="btn btn-gh btn-sm" style="color:var(--red);border-color:#f3c4c4;margin-left:10px" href="{{ url_for('admin_subject_delete', sid=s['id']) }}">Delete</a></div>{% endfor %}
+</div>
+{% endblock %}
