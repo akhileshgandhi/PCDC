@@ -98,7 +98,7 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
             {evaluation.next_case.estimated_minutes} min
           </p>
           <Link
-            to={`/dashboard/case-studies/${evaluation.next_case.id}`}
+            to={`/case-studies/${evaluation.next_case.id}`}
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
           >
             View Case
@@ -109,7 +109,7 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Link
-          to="/dashboard/case-studies"
+          to="/case-studies"
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-[#0B1D3A] px-5 py-3 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#0B1D3A] hover:text-white"
         >
           <MessageSquare size={16} aria-hidden="true" />

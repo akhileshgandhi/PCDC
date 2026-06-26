@@ -14,7 +14,7 @@ SPEC_07 - Case Attempt Flow
 
 ## Goals
 
-- Add a `/dashboard/case-studies/:id/attempt` route for students
+- Add a `/case-studies/:id/attempt` route for students
 - Build the mock-only six-screen case attempt flow
 - Render one sequential screen at a time with no backward navigation
 - Add a persistent progress bar and elapsed-time counter
@@ -33,7 +33,7 @@ SPEC_07 - Case Attempt Flow
 2. Read `context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
 3. Inspect the existing attempt placeholder route and case page components
 4. Create the CaseAttempt page and attempt flow components
-5. Add the `/dashboard/case-studies/:id/attempt` route to render `CaseAttempt`
+5. Add the `/case-studies/:id/attempt` route to render `CaseAttempt`
 6. Implement state management for current screen, timer, analysis, chat, solution, and defense answers
 7. Implement Screen 1 briefing and Screen 2 analysis with the 200-word gate
 8. Implement Screen 3 mock AI chat with cycling responses
@@ -63,23 +63,23 @@ SPEC_07 - Case Attempt Flow
 ## History
 
 - 2026-06-26: SPEC_07 Case Attempt Flow completed on feature/case-attempt-flow.
-  Added /dashboard/case-studies/:id/attempt with six sequential mock screens,
+  Added /case-studies/:id/attempt with six sequential mock screens,
   persistent progress bar, elapsed timer, 200-word analysis gate, mock AI chat,
   solution validation, one-question-at-a-time defense, radar evaluation, and
   case study return link. npm run build passed and
-  /dashboard/case-studies/1/attempt returned 200 locally.
+  /case-studies/1/attempt returned 200 locally.
 
 - 2026-06-26: SPEC_06 Case Detail Page completed on feature/case-detail-page.
-  Added /dashboard/case-studies/:id pre-flight detail page with exact mock data,
+  Added /case-studies/:id pre-flight detail page with exact mock data,
   case context sections, learning outcomes, reflection preview, sticky attempt
   sidebar, capabilities/career tags, and attempt navigation. npm run build
-  passed and /dashboard/case-studies/1 returned 200 locally.
+  passed and /case-studies/1 returned 200 locally.
 
 - 2026-06-26: SPEC_05 My Case Studies Page completed on feature/my-case-studies.
-  Added /dashboard/case-studies with exact mock case study data, client-side
+  Added /case-studies with exact mock case study data, client-side
   domain/difficulty/status/search filters, responsive case cards, sidebar
   navigation active state, and route links for start/continue/results actions.
-  npm run build passed and /dashboard/case-studies returned 200 locally.
+  npm run build passed and /case-studies returned 200 locally.
 
 - 2026-06-25: Dashboard UI Phase 1 completed on feature/dashboard-ui-phase-1.
   Added /dashboard route with static student dashboard layout, sidebar,
@@ -106,3 +106,4 @@ SPEC_07 - Case Attempt Flow
   Context files created: project-overview, ai-interaction,
   coding-standards, current-feature. Feature specs moved to
   context/features/ folder.
+

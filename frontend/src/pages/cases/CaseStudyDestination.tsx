@@ -18,7 +18,7 @@ export default function CaseStudyDestination() {
     <DashboardLayout>
       <section className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
         <Link
-          to="/dashboard/case-studies"
+          to="/case-studies"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A]"
         >
           <ArrowLeft size={16} aria-hidden="true" />

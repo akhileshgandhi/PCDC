@@ -23,11 +23,11 @@ interface DashboardLayoutProps {
 
 const navigationItems = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard", end: true },
-  { label: "My Case Studies", icon: BookOpen, to: "/dashboard/case-studies" },
-  { label: "Active Attempt", icon: ClipboardList, to: "/dashboard/case-studies/1/attempt" },
-  { label: "Capability Profile", icon: BarChart3, to: "/dashboard/capability-profile" },
-  { label: "Achievements", icon: Trophy, to: "/dashboard/achievements" },
-  { label: "Career Pathway", icon: ShieldCheck, to: "/dashboard/career-pathway" },
+  { label: "My Case Studies", icon: BookOpen, to: "/case-studies" },
+  { label: "Active Attempt", icon: ClipboardList, to: "/case-studies/1/attempt" },
+  { label: "Capability Profile", icon: BarChart3, to: "/capability-profile" },
+  { label: "Achievements", icon: Trophy, to: "/achievements" },
+  { label: "Career Pathway", icon: ShieldCheck, to: "/career-pathway" },
 ]
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
