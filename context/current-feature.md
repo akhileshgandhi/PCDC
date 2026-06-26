@@ -6,54 +6,68 @@ Completed
 
 ## Feature
 
-SPEC_06 - Case Detail Page
+SPEC_07 - Case Attempt Flow
 
 ## Spec File
 
-`context/features/SPEC_06_CASE_DETAIL.md`
+`context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
 
 ## Goals
 
-- Add a `/dashboard/case-studies/:id` route for students
-- Build the mock-only case detail pre-flight page
-- Reuse the existing dashboard layout and case badge components
-- Show the full case header, situation, learning outcomes, and reflection preview
-- Add the sticky right-column attempt info, capabilities, and career tracks cards
-- Route start/continue actions to `/dashboard/case-studies/:id/attempt`
-- Do not connect this page to backend APIs yet
+- Add a `/dashboard/case-studies/:id/attempt` route for students
+- Build the mock-only six-screen case attempt flow
+- Render one sequential screen at a time with no backward navigation
+- Add a persistent progress bar and elapsed-time counter
+- Implement briefing, initial analysis, AI discussion, solution, defense, and evaluation screens
+- Use mock AI responses and mock evaluation data
+- Do not connect this flow to backend APIs yet
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_06_CASE_DETAIL.md`
+- `context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_06_CASE_DETAIL.md`
-3. Inspect the existing case studies route, placeholder detail route, and shared case components
-4. Create the case detail page using the exact mock data from the spec
-5. Replace the placeholder detail route with `CaseDetail`
-6. Implement the back link to `/dashboard/case-studies`
-7. Render the left column header, situation, outcomes, and reflection question preview
-8. Render the sticky right column with attempt state, capabilities, career tracks, and action button
-9. Wire start/continue actions to `/dashboard/case-studies/:id/attempt`
-10. Verify `/dashboard/case-studies/1` renders successfully in the browser
-11. Run `npm run build`
-12. Fix all TypeScript, Vite, and layout startup errors
+2. Read `context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
+3. Inspect the existing attempt placeholder route and case page components
+4. Create the CaseAttempt page and attempt flow components
+5. Add the `/dashboard/case-studies/:id/attempt` route to render `CaseAttempt`
+6. Implement state management for current screen, timer, analysis, chat, solution, and defense answers
+7. Implement Screen 1 briefing and Screen 2 analysis with the 200-word gate
+8. Implement Screen 3 mock AI chat with cycling responses
+9. Implement Screen 4 solution form requiring all four sections
+10. Implement Screen 5 defense flow with one question at a time
+11. Implement Screen 6 evaluation results with mock scores and radar chart
+12. Verify the route and all screen transitions
+13. Run `npm run build`
+14. Fix all TypeScript, Vite, and layout startup errors
 
 ## Definition of Done
 
-- [x] Page renders at `/dashboard/case-studies/1`
-- [x] Back link works
-- [x] All sections render: header, situation, outcomes, reflection preview
-- [x] Right column shows correct state for available / in_progress / completed
-- [x] Start or continue button navigates to attempt flow
-- [x] Sticky right column works on desktop scroll
+- [x] All 6 screens render without errors
+- [x] Progress bar shows correct stage on each screen
+- [x] Timer counts up from 0:00
+- [x] Screen 2 word counter works and enables button at 200 words
+- [x] Screen 3 mock AI chat sends and receives messages
+- [x] Screen 4 requires all 4 sections before enabling submit
+- [x] Screen 5 shows one question at a time
+- [x] Screen 6 radar chart renders with mock scores
+- [x] Screen 6 score label matches score range
+- [x] "Back to My Case Studies" link works
+- [x] Cannot navigate backwards between screens
 
 ---
 
 ## History
+
+- 2026-06-26: SPEC_07 Case Attempt Flow completed on feature/case-attempt-flow.
+  Added /dashboard/case-studies/:id/attempt with six sequential mock screens,
+  persistent progress bar, elapsed timer, 200-word analysis gate, mock AI chat,
+  solution validation, one-question-at-a-time defense, radar evaluation, and
+  case study return link. npm run build passed and
+  /dashboard/case-studies/1/attempt returned 200 locally.
 
 - 2026-06-26: SPEC_06 Case Detail Page completed on feature/case-detail-page.
   Added /dashboard/case-studies/:id pre-flight detail page with exact mock data,
