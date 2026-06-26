@@ -5,14 +5,15 @@ import {
   CalendarDays,
   ChevronRight,
   CircleHelp,
+  Compass,
   ClipboardList,
   LayoutDashboard,
   MessageSquare,
   Search,
   Settings,
-  ShieldCheck,
   TrendingUp,
   Trophy,
+  UserCheck,
   UserCircle,
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
@@ -28,7 +29,8 @@ const navigationItems = [
   { label: "Capability Profile", icon: TrendingUp, to: "/capability-profile" },
   { label: "AI Coaches", icon: MessageSquare, to: "/ai-coach" },
   { label: "Achievements", icon: Trophy, to: "/achievements" },
-  { label: "Career Pathway", icon: ShieldCheck, to: "/career-pathway" },
+  { label: "Career Pathway", icon: Compass, to: "/career-pathway" },
+  { label: "Mentor Support", icon: UserCheck, to: "/mentor-support" },
 ]
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -69,13 +71,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         <div className="absolute bottom-5 left-5 right-5 space-y-5">
-          <button
-            type="button"
+          <NavLink
+            to="/mentor-support"
             className="flex w-full items-center justify-between rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#081d3a] shadow-md"
           >
             <span>Schedule Mentor</span>
             <ChevronRight size={17} aria-hidden="true" />
-          </button>
+          </NavLink>
 
           <div className="space-y-3 border-t border-white/10 pt-5">
             <button type="button" className="flex items-center gap-3 text-sm text-white/80">

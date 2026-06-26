@@ -8,7 +8,10 @@ import CaseAttempt from "../pages/cases/CaseAttempt"
 import CaseDetail from "../pages/cases/CaseDetail"
 import CaseStudyDestination from "../pages/cases/CaseStudyDestination"
 import MyCaseStudies from "../pages/cases/MyCaseStudies"
+import Achievements from "../pages/achievements/Achievements"
+import CareerPathway from "../pages/career/CareerPathway"
 import AICoach from "../pages/coach/AICoach"
+import MentorSupport from "../pages/mentor/MentorSupport"
 import Dashboard from "../pages/student/Dashboard"
 
 export default function AppRouter() {
@@ -21,6 +24,9 @@ export default function AppRouter() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/capability-profile" element={<CapabilityProfile />} />
           <Route path="/ai-coach" element={<AICoach />} />
+          <Route path="/career-pathway" element={<CareerPathway />} />
+          <Route path="/achievements" element={<Achievements />} />
+          <Route path="/mentor-support" element={<MentorSupport />} />
           <Route path="/case-studies" element={<MyCaseStudies />} />
           <Route path="/case-studies/:id" element={<CaseDetail />} />
           <Route path="/case-studies/:id/attempt" element={<CaseAttempt />} />

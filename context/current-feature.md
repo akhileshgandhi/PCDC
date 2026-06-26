@@ -6,62 +6,75 @@ Completed
 
 ## Feature
 
-SPEC_09 - AI Coach Page
+SPEC_10_11_12 - Career, Achievements, and Mentor Support
 
 ## Spec File
 
-`context/features/SPEC_09_AI_COACH.md`
+`context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
 
 ## Goals
 
-- Add an `/ai-coach` route for students
-- Build the AI Coaches page with mock coach selection data
+- Add `/career-pathway`, `/achievements`, and `/mentor-support` routes for students
+- Build the Career Pathway page with mock data
+- Build the Achievements page with mock badges, milestones, stats, and leaderboard
+- Build the Mentor Support page with mock mentor details, notes, interventions, and scheduling form
 - Reuse the existing dashboard shell and independent sidebar navigation model
-- Render the page header and 6 coach selection cards
-- Show active coach selection state with gold border styling
-- Render the active chat panel with automatic opening message
-- Support student message sending and mock AI response fallback
-- Add start-new-session behavior and mock previous session history
-- Do not require a real Claude API integration for this phase
+- Add sidebar links for Career Pathway, Achievements, and Mentor Support
+- Do not connect these pages to backend APIs yet
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_09_AI_COACH.md`
+- `context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_09_AI_COACH.md`
-3. Inspect the existing dashboard layout, sidebar links, and chat-style components
-4. Create the AI Coach page and supporting coach components
-5. Add the `/ai-coach` route to render `AICoach`
-6. Add the AI Coaches sidebar link using `MessageSquare`
-7. Implement the exact coach mock data and opening messages from the spec
-8. Implement coach card selection and active state
-9. Implement the active chat panel with message input and send behavior
-10. Implement mock AI response rotation for coach replies
-11. Implement start-new-session behavior and mock session history list
-12. Verify `/ai-coach` renders successfully in the browser
-13. Run `npm run build`
-14. Fix all TypeScript, Vite, and layout startup errors
+2. Read `context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
+3. Inspect the existing dashboard layout, sidebar links, and any partial career files
+4. Create or complete the Career Pathway page and supporting career components
+5. Create the Achievements page and supporting achievements components
+6. Create the Mentor Support page and supporting mentor components
+7. Add routes for `/career-pathway`, `/achievements`, and `/mentor-support`
+8. Update sidebar navigation links and active states for all three pages
+9. Implement the exact mock data from the spec for all three pages
+10. Verify all three routes render successfully in the browser
+11. Run `npm run build`
+12. Fix all TypeScript, Vite, and layout startup errors
 
 ## Definition of Done
 
-- [x] Page renders at `/ai-coach`
-- [x] 6 coach cards render with correct icons and descriptions
-- [x] Clicking a coach card opens the chat panel below
-- [x] Selected coach card shows active state with gold border
-- [x] Opening message appears automatically on coach select
-- [x] Student can type and send messages
-- [x] AI responds with mock fallback responses
-- [x] Chat scrolls to latest message
-- [x] New session clears the chat
-- [x] Session history section renders with 3 mock entries
+- [x] Career Pathway page renders at `/career-pathway`
+- [x] Career Pathway shows navy pathway banner
+- [x] Career timeline shows 5 milestones with correct states
+- [x] Career page renders 3 recommended activity cards
+- [x] Career page renders 10 career track cards with match percentages
+- [x] Current career pathway is highlighted
+- [x] Achievements page renders at `/achievements`
+- [x] Achievements stats bar renders with 4 metrics
+- [x] Earned badges grid renders all 6 badges
+- [x] Locked badges show greyed out with lock icon
+- [x] Milestones timeline shows correct done and pending states
+- [x] Leaderboard shows 10 rows with student row highlighted
+- [x] Mentor Support page renders at `/mentor-support`
+- [x] Mentor profile card renders with all details
+- [x] Upcoming session card renders with agenda
+- [x] 3 mentor note cards render with correct border colours
+- [x] Intervention history table renders
+- [x] Schedule session form renders
+- [x] Form submit shows success toast
+- [x] Placeholder alert actions work for Send Message and Join Session
 
 ---
 
 ## History
+
+- 2026-06-26: SPEC_10_11_12 Career, Achievements, and Mentor Support completed
+  on feature/career_achievement_mentor. Added independent /career-pathway,
+  /achievements, and /mentor-support routes with mock career readiness,
+  achievement badge, leaderboard, mentor profile, upcoming session, notes,
+  intervention, and session request flows. npm run build passed and all three
+  routes returned 200 locally.
 
 - 2026-06-26: SPEC_09 AI Coach Page completed on feature/ai-coach-page.
   Added /ai-coach with six coach cards, active coach selection, automatic

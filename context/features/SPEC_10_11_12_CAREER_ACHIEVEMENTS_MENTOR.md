@@ -2,7 +2,7 @@
 
 ## Meta
 - Role: Student
-- Route: /dashboard/career-pathway
+- Route: /career-pathway
 - Priority: 6 of 8
 - Data: Mock only
 
@@ -133,7 +133,7 @@ frontend/src/components/career/ProgressTimeline.jsx
 frontend/src/components/career/CareerTrackCard.jsx
 ```
 
-Add route: `/dashboard/career-pathway`
+Add route: `/career-pathway`
 Sidebar: Icon=Compass, Label="Career Pathway"
 
 ---
@@ -155,7 +155,7 @@ Sidebar: Icon=Compass, Label="Career Pathway"
 
 ## Meta
 - Role: Student
-- Route: /dashboard/achievements
+- Route: /achievements
 - Priority: 7 of 8
 - Data: Mock only
 
@@ -273,7 +273,7 @@ frontend/src/components/achievements/MilestoneTimeline.jsx
 frontend/src/components/achievements/Leaderboard.jsx
 ```
 
-Add route: `/dashboard/achievements`
+Add route: `/achievements`
 Sidebar: Icon=Trophy, Label="Achievements"
 
 ---
@@ -296,7 +296,7 @@ Sidebar: Icon=Trophy, Label="Achievements"
 
 ## Meta
 - Role: Student
-- Route: /dashboard/mentor-support
+- Route: /mentor-support
 - Priority: 8 of 8
 - Data: Mock only
 
@@ -445,7 +445,7 @@ frontend/src/components/mentor/MentorNoteCard.jsx
 frontend/src/components/mentor/ScheduleSession.jsx
 ```
 
-Add route: `/dashboard/mentor-support`
+Add route: `/mentor-support`
 Sidebar: Icon=UserCheck, Label="Mentor Support"
 
 ---
