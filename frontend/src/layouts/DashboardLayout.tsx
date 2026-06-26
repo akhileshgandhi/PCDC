@@ -1,6 +1,5 @@
 import type { ReactNode } from "react"
 import {
-  BarChart3,
   Bell,
   BookOpen,
   CalendarDays,
@@ -12,6 +11,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  TrendingUp,
   Trophy,
   UserCircle,
 } from "lucide-react"
@@ -25,7 +25,7 @@ const navigationItems = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard", end: true },
   { label: "My Case Studies", icon: BookOpen, to: "/case-studies" },
   { label: "Active Attempt", icon: ClipboardList, to: "/case-studies/1/attempt" },
-  { label: "Capability Profile", icon: BarChart3, to: "/capability-profile" },
+  { label: "Capability Profile", icon: TrendingUp, to: "/capability-profile" },
   { label: "Achievements", icon: Trophy, to: "/achievements" },
   { label: "Career Pathway", icon: ShieldCheck, to: "/career-pathway" },
 ]

@@ -6,61 +6,66 @@ Completed
 
 ## Feature
 
-SPEC_07 - Case Attempt Flow
+SPEC_08 - Capability Profile Page
 
 ## Spec File
 
-`context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
+`context/features/SPEC_08_CAPABILITY_PROFILE.md`
 
 ## Goals
 
-- Add a `/case-studies/:id/attempt` route for students
-- Build the mock-only six-screen case attempt flow
-- Render one sequential screen at a time with no backward navigation
-- Add a persistent progress bar and elapsed-time counter
-- Implement briefing, initial analysis, AI discussion, solution, defense, and evaluation screens
-- Use mock AI responses and mock evaluation data
-- Do not connect this flow to backend APIs yet
+- Add a `/capability-profile` route for students
+- Build the mock-only Capability Profile page
+- Reuse the existing dashboard shell and independent sidebar navigation model
+- Render the page header with last-updated and case-count metadata
+- Show a radar chart with all 8 capabilities and current vs previous-month datasets
+- Render 8 capability score cards with progress bars and trend indicators
+- Add the recent case-study performance history table
+- Add 3 recommended next-step action cards
+- Do not connect this page to backend APIs yet
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
+- `context/features/SPEC_08_CAPABILITY_PROFILE.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_07_CASE_ATTEMPT_FLOW.md`
-3. Inspect the existing attempt placeholder route and case page components
-4. Create the CaseAttempt page and attempt flow components
-5. Add the `/case-studies/:id/attempt` route to render `CaseAttempt`
-6. Implement state management for current screen, timer, analysis, chat, solution, and defense answers
-7. Implement Screen 1 briefing and Screen 2 analysis with the 200-word gate
-8. Implement Screen 3 mock AI chat with cycling responses
-9. Implement Screen 4 solution form requiring all four sections
-10. Implement Screen 5 defense flow with one question at a time
-11. Implement Screen 6 evaluation results with mock scores and radar chart
-12. Verify the route and all screen transitions
+2. Read `context/features/SPEC_08_CAPABILITY_PROFILE.md`
+3. Inspect the existing dashboard layout, sidebar link, and dashboard capability matrix patterns
+4. Create the capability profile page and supporting capability components
+5. Add the `/capability-profile` route to render `CapabilityProfile`
+6. Update the sidebar Capability Profile link to `/capability-profile` with the requested icon
+7. Implement the exact mock capability profile data from the spec
+8. Implement the radar chart with current and previous-month datasets
+9. Implement the 8 score cards with correct trend colours
+10. Implement the recent case-study performance history table
+11. Implement the 3 recommended action cards
+12. Verify `/capability-profile` renders successfully in the browser
 13. Run `npm run build`
 14. Fix all TypeScript, Vite, and layout startup errors
 
 ## Definition of Done
 
-- [x] All 6 screens render without errors
-- [x] Progress bar shows correct stage on each screen
-- [x] Timer counts up from 0:00
-- [x] Screen 2 word counter works and enables button at 200 words
-- [x] Screen 3 mock AI chat sends and receives messages
-- [x] Screen 4 requires all 4 sections before enabling submit
-- [x] Screen 5 shows one question at a time
-- [x] Screen 6 radar chart renders with mock scores
-- [x] Screen 6 score label matches score range
-- [x] "Back to My Case Studies" link works
-- [x] Cannot navigate backwards between screens
+- [x] Page renders at `/capability-profile`
+- [x] Radar chart shows all 8 capabilities with mock data
+- [x] Two datasets, current and previous month, are visible on radar
+- [x] 8 capability cards render with score, bar, and trend
+- [x] Trend colours are correct: green up, red down, grey stable
+- [x] History table renders with 3 rows
+- [x] 3 recommended action cards render
+- [x] Overall score and level are shown correctly
 
 ---
 
 ## History
+
+- 2026-06-26: SPEC_08 Capability Profile Page completed on feature/capability-profile.
+  Added /capability-profile with Recharts radar chart, current vs previous-month
+  capability datasets, 8 score cards, recent case-study performance table,
+  recommended next-step cards, and independent sidebar navigation. npm run build
+  passed and /capability-profile returned 200 locally.
 
 - 2026-06-26: SPEC_07 Case Attempt Flow completed on feature/case-attempt-flow.
   Added /case-studies/:id/attempt with six sequential mock screens,
