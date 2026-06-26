@@ -26,6 +26,7 @@ const navigationItems = [
   { label: "My Case Studies", icon: BookOpen, to: "/case-studies" },
   { label: "Active Attempt", icon: ClipboardList, to: "/case-studies/1/attempt" },
   { label: "Capability Profile", icon: TrendingUp, to: "/capability-profile" },
+  { label: "AI Coaches", icon: MessageSquare, to: "/ai-coach" },
   { label: "Achievements", icon: Trophy, to: "/achievements" },
   { label: "Career Pathway", icon: ShieldCheck, to: "/career-pathway" },
 ]

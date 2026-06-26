@@ -6,60 +6,67 @@ Completed
 
 ## Feature
 
-SPEC_08 - Capability Profile Page
+SPEC_09 - AI Coach Page
 
 ## Spec File
 
-`context/features/SPEC_08_CAPABILITY_PROFILE.md`
+`context/features/SPEC_09_AI_COACH.md`
 
 ## Goals
 
-- Add a `/capability-profile` route for students
-- Build the mock-only Capability Profile page
+- Add an `/ai-coach` route for students
+- Build the AI Coaches page with mock coach selection data
 - Reuse the existing dashboard shell and independent sidebar navigation model
-- Render the page header with last-updated and case-count metadata
-- Show a radar chart with all 8 capabilities and current vs previous-month datasets
-- Render 8 capability score cards with progress bars and trend indicators
-- Add the recent case-study performance history table
-- Add 3 recommended next-step action cards
-- Do not connect this page to backend APIs yet
+- Render the page header and 6 coach selection cards
+- Show active coach selection state with gold border styling
+- Render the active chat panel with automatic opening message
+- Support student message sending and mock AI response fallback
+- Add start-new-session behavior and mock previous session history
+- Do not require a real Claude API integration for this phase
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_08_CAPABILITY_PROFILE.md`
+- `context/features/SPEC_09_AI_COACH.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_08_CAPABILITY_PROFILE.md`
-3. Inspect the existing dashboard layout, sidebar link, and dashboard capability matrix patterns
-4. Create the capability profile page and supporting capability components
-5. Add the `/capability-profile` route to render `CapabilityProfile`
-6. Update the sidebar Capability Profile link to `/capability-profile` with the requested icon
-7. Implement the exact mock capability profile data from the spec
-8. Implement the radar chart with current and previous-month datasets
-9. Implement the 8 score cards with correct trend colours
-10. Implement the recent case-study performance history table
-11. Implement the 3 recommended action cards
-12. Verify `/capability-profile` renders successfully in the browser
+2. Read `context/features/SPEC_09_AI_COACH.md`
+3. Inspect the existing dashboard layout, sidebar links, and chat-style components
+4. Create the AI Coach page and supporting coach components
+5. Add the `/ai-coach` route to render `AICoach`
+6. Add the AI Coaches sidebar link using `MessageSquare`
+7. Implement the exact coach mock data and opening messages from the spec
+8. Implement coach card selection and active state
+9. Implement the active chat panel with message input and send behavior
+10. Implement mock AI response rotation for coach replies
+11. Implement start-new-session behavior and mock session history list
+12. Verify `/ai-coach` renders successfully in the browser
 13. Run `npm run build`
 14. Fix all TypeScript, Vite, and layout startup errors
 
 ## Definition of Done
 
-- [x] Page renders at `/capability-profile`
-- [x] Radar chart shows all 8 capabilities with mock data
-- [x] Two datasets, current and previous month, are visible on radar
-- [x] 8 capability cards render with score, bar, and trend
-- [x] Trend colours are correct: green up, red down, grey stable
-- [x] History table renders with 3 rows
-- [x] 3 recommended action cards render
-- [x] Overall score and level are shown correctly
+- [x] Page renders at `/ai-coach`
+- [x] 6 coach cards render with correct icons and descriptions
+- [x] Clicking a coach card opens the chat panel below
+- [x] Selected coach card shows active state with gold border
+- [x] Opening message appears automatically on coach select
+- [x] Student can type and send messages
+- [x] AI responds with mock fallback responses
+- [x] Chat scrolls to latest message
+- [x] New session clears the chat
+- [x] Session history section renders with 3 mock entries
 
 ---
 
 ## History
+
+- 2026-06-26: SPEC_09 AI Coach Page completed on feature/ai-coach-page.
+  Added /ai-coach with six coach cards, active coach selection, automatic
+  opening messages, mock AI chat responses, new session reset, and mock session
+  history. npm run build passed and /ai-coach returned 200 locally.
 
 - 2026-06-26: SPEC_08 Capability Profile Page completed on feature/capability-profile.
   Added /capability-profile with Recharts radar chart, current vs previous-month

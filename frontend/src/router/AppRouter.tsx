@@ -8,6 +8,7 @@ import CaseAttempt from "../pages/cases/CaseAttempt"
 import CaseDetail from "../pages/cases/CaseDetail"
 import CaseStudyDestination from "../pages/cases/CaseStudyDestination"
 import MyCaseStudies from "../pages/cases/MyCaseStudies"
+import AICoach from "../pages/coach/AICoach"
 import Dashboard from "../pages/student/Dashboard"
 
 export default function AppRouter() {
@@ -19,6 +20,7 @@ export default function AppRouter() {
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/capability-profile" element={<CapabilityProfile />} />
+          <Route path="/ai-coach" element={<AICoach />} />
           <Route path="/case-studies" element={<MyCaseStudies />} />
           <Route path="/case-studies/:id" element={<CaseDetail />} />
           <Route path="/case-studies/:id/attempt" element={<CaseAttempt />} />

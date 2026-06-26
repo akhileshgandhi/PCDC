@@ -2,7 +2,7 @@
 
 ## Meta
 - Role: Student
-- Route: /dashboard/ai-coach
+- Route: /ai-coach
 - Priority: 5 of 8
 - Data: Mock for coach list; real Claude API for chat (optional)
 
