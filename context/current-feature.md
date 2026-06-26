@@ -6,55 +6,65 @@ Completed
 
 ## Feature
 
-Dashboard UI Phase 1
+SPEC_05 - My Case Studies Page
 
 ## Spec File
 
-`context/features/dashboard_spec.md`
+`context/features/SPEC_05_MY_CASE_STUDIES.md`
 
 ## Goals
 
-- Add a `/dashboard` route to the frontend
-- Build the main dashboard layout using the provided screenshot reference
-- Add required global styles for the dashboard foundation
-- Keep this phase limited to UI layout only
-- Do not implement business features, backend integrations, case studies, or real dashboard data
+- Add a `/dashboard/case-studies` route for students
+- Build the My Case Studies page using mock data only
+- Reuse the existing dashboard sidebar/layout foundation
+- Add filter controls for domain, difficulty, status, and search
+- Render responsive case study cards with domain, difficulty, status, metadata, tags, and action buttons
+- Add client-side navigation targets for start, continue, and results actions
+- Do not connect this page to backend APIs yet
 
 ## References
 
-- `context/screenshots/dashboard_final_with_specs.PNG`
 - `context/project-overview.md`
+- `context/features/SPEC_05_MY_CASE_STUDIES.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Use `context/screenshots/dashboard_final_with_specs.PNG` as the visual source of truth
-3. Create a new dashboard route at `/dashboard`
-4. Build the main student dashboard layout shell
-5. Add static placeholder dashboard sections matching the screenshot structure
-6. Apply dashboard global styles with Tailwind CSS only
-7. Verify `/dashboard` renders successfully in the browser
-8. Run `npm run build`
-9. Fix all TypeScript, Vite, and layout startup errors
+2. Read `context/features/SPEC_05_MY_CASE_STUDIES.md`
+3. Inspect the existing dashboard route, layout, and sidebar components
+4. Create the case studies page and supporting case card components
+5. Add the `/dashboard/case-studies` route
+6. Add the My Case Studies sidebar link with `BookOpen` icon and active state
+7. Implement the exact mock data from the spec
+8. Implement client-side domain, difficulty, status, and search filtering
+9. Wire card buttons to the routes specified in the spec
+10. Verify the page renders responsively at `/dashboard/case-studies`
+11. Run `npm run build`
+12. Fix all TypeScript, Vite, and layout startup errors
 
 ## Definition of Done
 
-- [x] `/dashboard` route exists
-- [x] Dashboard layout matches the screenshot direction
-- [x] Sidebar placeholder/navigation area is present
-- [x] Header/search/user area is present
-- [x] Welcome/status panel is present
-- [x] Overall score card is present
-- [x] Capability matrix section is present
-- [x] Lower dashboard cards are present as static placeholders
-- [x] Tailwind-only styling is used
-- [x] No business features or API integrations are added
-- [x] `npm run build` passes
-- [x] Dashboard renders successfully in browser
+- [x] Page renders at `/dashboard/case-studies`
+- [x] Sidebar link navigates to this page and shows active state
+- [x] All 6 mock cards render with correct domain/difficulty/status
+- [x] Domain filter works client-side
+- [x] Difficulty filter works client-side
+- [x] Status tabs filter correctly
+- [x] Search filters by title and description
+- [x] Card buttons navigate to correct routes
+- [x] Completed card shows green checkmark badge
+- [x] In Progress card shows Continue button
+- [x] Responsive on mobile with 1 column
 
 ---
 
 ## History
+
+- 2026-06-26: SPEC_05 My Case Studies Page completed on feature/my-case-studies.
+  Added /dashboard/case-studies with exact mock case study data, client-side
+  domain/difficulty/status/search filters, responsive case cards, sidebar
+  navigation active state, and route links for start/continue/results actions.
+  npm run build passed and /dashboard/case-studies returned 200 locally.
 
 - 2026-06-25: Dashboard UI Phase 1 completed on feature/dashboard-ui-phase-1.
   Added /dashboard route with static student dashboard layout, sidebar,

@@ -15,18 +15,19 @@ import {
   Trophy,
   UserCircle,
 } from "lucide-react"
+import { NavLink } from "react-router-dom"
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
 const navigationItems = [
-  { label: "Dashboard", icon: LayoutDashboard, active: true },
-  { label: "My Case Studies", icon: BookOpen, active: false },
-  { label: "Active Attempt", icon: ClipboardList, active: false },
-  { label: "Capability Profile", icon: BarChart3, active: false },
-  { label: "Achievements", icon: Trophy, active: false },
-  { label: "Career Pathway", icon: ShieldCheck, active: false },
+  { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard", end: true },
+  { label: "My Case Studies", icon: BookOpen, to: "/dashboard/case-studies" },
+  { label: "Active Attempt", icon: ClipboardList, to: "/dashboard/case-studies/1/attempt" },
+  { label: "Capability Profile", icon: BarChart3, to: "/dashboard/capability-profile" },
+  { label: "Achievements", icon: Trophy, to: "/dashboard/achievements" },
+  { label: "Career Pathway", icon: ShieldCheck, to: "/dashboard/career-pathway" },
 ]
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -47,18 +48,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             const Icon = item.icon
 
             return (
-              <button
+              <NavLink
                 key={item.label}
-                type="button"
-                className={`flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-medium transition ${
-                  item.active
-                    ? "bg-[#c9a227] text-[#081d3a] shadow-md"
-                    : "text-white/85 hover:bg-[#122a54]"
-                }`}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-medium transition ${
+                    isActive
+                      ? "bg-[#c9a227] text-[#081d3a] shadow-md"
+                      : "text-white/85 hover:bg-[#122a54]"
+                  }`
+                }
               >
                 <Icon size={18} aria-hidden="true" />
                 <span>{item.label}</span>
-              </button>
+              </NavLink>
             )
           })}
         </nav>
