@@ -51,7 +51,9 @@ def login_user(db: Session, email: str, password: str):
     user = db.execute(text("SELECT id, name, email, password_hash, role FROM users WHERE email = :email"), {"email": email}).fetchone()
     if not user or not verify_password(password, user[3]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_access_token({"sub": str(user[0]), "email": user[2], "role": user[4]})
+    token = create_access_token(
+        {"sub": str(user[0]), "name": user[1], "email": user[2], "role": user[4]}
+    )
     return {"access_token": token, "token_type": "bearer"}
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):

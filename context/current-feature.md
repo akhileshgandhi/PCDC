@@ -2,72 +2,74 @@
 
 ## Status
 
-Completed
+In progress
 
 ## Feature
 
-SPEC_10_11_12 - Career, Achievements, and Mentor Support
+SPEC_13 - JWT Auth Implementation + Seed Users
 
 ## Spec File
 
-`context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
+`context/features/SPEC_13_JWT_AUTH_SEED_USERS.md`
 
 ## Goals
 
-- Add `/career-pathway`, `/achievements`, and `/mentor-support` routes for students
-- Build the Career Pathway page with mock data
-- Build the Achievements page with mock badges, milestones, stats, and leaderboard
-- Build the Mentor Support page with mock mentor details, notes, interventions, and scheduling form
-- Reuse the existing dashboard shell and independent sidebar navigation model
-- Add sidebar links for Career Pathway, Achievements, and Mentor Support
-- Do not connect these pages to backend APIs yet
+- Implement complete JWT authentication from React frontend to FastAPI backend
+- Create seed users for student, faculty, mentor, admin, and director roles
+- Ensure login JWT payload includes `sub`, `email`, `role`, and `exp`
+- Remove self-registration link from the login page and show administrator access text
+- Add password visibility toggle to the login page
+- Add shared frontend JWT auth utilities
+- Update protected routing to use token validity and role checks
+- Add logout controls for portal sidebars/pages
+- Verify root and role-based redirects for all supported roles
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
+- `context/features/SPEC_13_JWT_AUTH_SEED_USERS.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
-3. Inspect the existing dashboard layout, sidebar links, and any partial career files
-4. Create or complete the Career Pathway page and supporting career components
-5. Create the Achievements page and supporting achievements components
-6. Create the Mentor Support page and supporting mentor components
-7. Add routes for `/career-pathway`, `/achievements`, and `/mentor-support`
-8. Update sidebar navigation links and active states for all three pages
-9. Implement the exact mock data from the spec for all three pages
-10. Verify all three routes render successfully in the browser
-11. Run `npm run build`
-12. Fix all TypeScript, Vite, and layout startup errors
+2. Read `context/features/SPEC_13_JWT_AUTH_SEED_USERS.md`
+3. Inspect current backend auth service, JWT creation, and user table fields
+4. Create `backend/seeds/seed_users.py` with the exact seed users from the spec
+5. Verify or fix backend login so JWT includes the user role
+6. Verify `/api/v1/auth/login` and `/api/v1/auth/me`
+7. Update frontend login to call the backend auth endpoint
+8. Remove the register link and add administrator access text
+9. Add password visibility toggle and login error states
+10. Add shared frontend JWT utility functions
+11. Update `ProtectedRoute` to use token validity and role checks
+12. Add logout controls to portal navigation or placeholder pages
+13. Verify all role redirects and unauthorized route protection
+14. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] Career Pathway page renders at `/career-pathway`
-- [x] Career Pathway shows navy pathway banner
-- [x] Career timeline shows 5 milestones with correct states
-- [x] Career page renders 3 recommended activity cards
-- [x] Career page renders 10 career track cards with match percentages
-- [x] Current career pathway is highlighted
-- [x] Achievements page renders at `/achievements`
-- [x] Achievements stats bar renders with 4 metrics
-- [x] Earned badges grid renders all 6 badges
-- [x] Locked badges show greyed out with lock icon
-- [x] Milestones timeline shows correct done and pending states
-- [x] Leaderboard shows 10 rows with student row highlighted
-- [x] Mentor Support page renders at `/mentor-support`
-- [x] Mentor profile card renders with all details
-- [x] Upcoming session card renders with agenda
-- [x] 3 mentor note cards render with correct border colours
-- [x] Intervention history table renders
-- [x] Schedule session form renders
-- [x] Form submit shows success toast
-- [x] Placeholder alert actions work for Send Message and Join Session
+- [x] Seed script runs cleanly and creates 6 users on Neon
+- [x] Re-running seed script skips existing users without duplicates
+- [ ] All 6 seed users can log in successfully
+- [x] JWT contains `sub`, `email`, `role`, and `exp` fields
+- [x] Each role redirects to its correct portal after login
+- [x] Register link removed from login page
+- [x] Administrator access text shown on login page
+- [x] Password visibility toggle works
+- [x] ProtectedRoute blocks missing-token and wrong-role access
+- [x] Root `/` redirects correctly based on auth state
+- [x] Logout clears token and returns user to `/login`
+- [x] Shared auth utility file is used throughout the frontend
+- [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-06-29: SPEC_13 JWT Auth Implementation + Seed Users moved to
+  In progress. Scope updated to backend seed users, JWT role payload
+  verification, frontend backend-login integration, protected routing,
+  role redirects, and logout.
 
 - 2026-06-26: SPEC_10_11_12 Career, Achievements, and Mentor Support completed
   on feature/career_achievement_mentor. Added independent /career-pathway,

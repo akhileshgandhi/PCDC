@@ -8,6 +8,7 @@ import {
   Compass,
   ClipboardList,
   LayoutDashboard,
+  LogOut,
   MessageSquare,
   Search,
   Settings,
@@ -16,24 +17,33 @@ import {
   UserCheck,
   UserCircle,
 } from "lucide-react"
-import { NavLink } from "react-router-dom"
+import { NavLink, useNavigate } from "react-router-dom"
+
+import { clearToken } from "../utils/auth"
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
 const navigationItems = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard", end: true },
-  { label: "My Case Studies", icon: BookOpen, to: "/case-studies" },
-  { label: "Active Attempt", icon: ClipboardList, to: "/case-studies/1/attempt" },
-  { label: "Capability Profile", icon: TrendingUp, to: "/capability-profile" },
-  { label: "AI Coaches", icon: MessageSquare, to: "/ai-coach" },
-  { label: "Achievements", icon: Trophy, to: "/achievements" },
-  { label: "Career Pathway", icon: Compass, to: "/career-pathway" },
-  { label: "Mentor Support", icon: UserCheck, to: "/mentor-support" },
+  { label: "Dashboard", icon: LayoutDashboard, to: "/student/dashboard", end: true },
+  { label: "My Case Studies", icon: BookOpen, to: "/student/case-studies" },
+  { label: "Active Attempt", icon: ClipboardList, to: "/student/case-studies/1/attempt" },
+  { label: "Capability Profile", icon: TrendingUp, to: "/student/capability-profile" },
+  { label: "AI Coaches", icon: MessageSquare, to: "/student/ai-coach" },
+  { label: "Achievements", icon: Trophy, to: "/student/achievements" },
+  { label: "Career Pathway", icon: Compass, to: "/student/career-pathway" },
+  { label: "Mentor Support", icon: UserCheck, to: "/student/mentor-support" },
 ]
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    clearToken()
+    navigate("/login", { replace: true })
+  }
+
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-[#111827]">
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#081d3a] p-5 text-white lg:block">
@@ -72,7 +82,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <div className="absolute bottom-5 left-5 right-5 space-y-5">
           <NavLink
-            to="/mentor-support"
+            to="/student/mentor-support"
             className="flex w-full items-center justify-between rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#081d3a] shadow-md"
           >
             <span>Schedule Mentor</span>
@@ -87,6 +97,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <button type="button" className="flex items-center gap-3 text-sm text-white/80">
               <MessageSquare size={17} aria-hidden="true" />
               <span>Support</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-3 text-sm font-semibold text-white/80 transition hover:text-white"
+            >
+              <LogOut size={17} aria-hidden="true" />
+              <span>Log Out</span>
             </button>
           </div>
         </div>

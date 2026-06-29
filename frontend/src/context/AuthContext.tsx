@@ -1,11 +1,16 @@
 import { createContext, useContext, useMemo, useState } from "react"
 import type { ReactNode } from "react"
+import axios from "axios"
 
+import api from "../api/axios"
 import type { AuthContextValue } from "../types/auth"
 import type { User } from "../types/user"
+import { clearToken, decodeToken, getToken, setToken as storeToken } from "../utils/auth"
 
-const TOKEN_KEY = "pcdc_token"
-const MOCK_TOKEN = "mock-pcdc-token"
+interface LoginResponse {
+  access_token: string
+  token_type: string
+}
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
@@ -14,37 +19,42 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem(TOKEN_KEY),
-  )
-  const [user, setUser] = useState<User | null>(() =>
-    localStorage.getItem(TOKEN_KEY)
-      ? {
-          id: 1,
-          name: "Student User",
-          email: "student@example.com",
-          role: "student",
-        }
-      : null,
-  )
+  const [token, setToken] = useState<string | null>(() => getToken())
+  const [user, setUser] = useState<User | null>(() => userFromToken(getToken()))
 
   const login = async (email: string, password: string) => {
     if (!email.trim() || !password.trim()) {
       throw new Error("Email and password are required")
     }
 
-    localStorage.setItem(TOKEN_KEY, MOCK_TOKEN)
-    setToken(MOCK_TOKEN)
-    setUser({
-      id: 1,
-      name: "Student User",
-      email,
-      role: "student",
-    })
+    try {
+      const response = await api.post<LoginResponse>("/auth/login", {
+        email,
+        password,
+      })
+      const accessToken = response.data.access_token
+
+      storeToken(accessToken)
+      setToken(accessToken)
+      setUser(userFromToken(accessToken))
+
+      return accessToken
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (!error.response) {
+          throw new Error("Unable to connect. Please try again.")
+        }
+
+        const detail = error.response.data?.detail
+        throw new Error(typeof detail === "string" ? detail : "Login failed. Please try again.")
+      }
+
+      throw new Error("Login failed. Please try again.")
+    }
   }
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY)
+    clearToken()
     setToken(null)
     setUser(null)
   }
@@ -71,4 +81,23 @@ export function useAuth() {
   }
 
   return context
+}
+
+function userFromToken(token: string | null): User | null {
+  if (!token) {
+    return null
+  }
+
+  const payload = decodeToken(token)
+
+  if (!payload?.role) {
+    return null
+  }
+
+  return {
+    id: Number(payload.sub ?? 0),
+    name: payload.name ?? payload.email ?? "PCDC User",
+    email: payload.email ?? "",
+    role: payload.role,
+  }
 }

@@ -85,7 +85,7 @@ function attemptAction(caseDetail: CaseDetailData) {
   if (caseDetail.status === "completed") {
     return {
       statusText: "Attempt Completed",
-      to: `/case-studies/${caseDetail.id}/results`,
+      to: `/student/case-studies/${caseDetail.id}/results`,
       buttonText: "View My Results",
       buttonClassName: "bg-white text-[#0B1D3A] hover:bg-[#F6F7F9]",
       icon: CheckCircle2,
@@ -95,7 +95,7 @@ function attemptAction(caseDetail: CaseDetailData) {
   if (caseDetail.status === "in_progress") {
     return {
       statusText: `In Progress - Stage ${caseDetail.current_stage}/6`,
-      to: `/case-studies/${caseDetail.id}/attempt`,
+      to: `/student/case-studies/${caseDetail.id}/attempt`,
       buttonText: "Continue Attempt",
       buttonClassName: "bg-[#C9A227] text-white hover:bg-[#B08D20]",
       icon: Target,
@@ -104,7 +104,7 @@ function attemptAction(caseDetail: CaseDetailData) {
 
   return {
     statusText: "Ready to Start",
-    to: `/case-studies/${caseDetail.id}/attempt`,
+    to: `/student/case-studies/${caseDetail.id}/attempt`,
     buttonText: "Start My Attempt",
     buttonClassName: "bg-[#C9A227] text-white hover:bg-[#B08D20]",
     icon: Target,
@@ -119,7 +119,7 @@ export default function CaseDetail() {
     <DashboardLayout>
       <div className="space-y-5">
         <Link
-          to="/case-studies"
+          to="/student/case-studies"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
         >
           <ArrowLeft size={16} aria-hidden="true" />

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { ArrowLeft } from "lucide-react"
+import { useNavigate, useParams } from "react-router-dom"
 
 import ProgressBar from "../../components/attempt/ProgressBar"
 import Screen1Briefing from "../../components/attempt/Screen1Briefing"
@@ -61,6 +63,8 @@ function countWords(value: string) {
 }
 
 export default function CaseAttempt() {
+  const navigate = useNavigate()
+  const { id } = useParams()
   const [currentScreen, setCurrentScreen] = useState(1)
   const [analysisText, setAnalysisText] = useState("")
   const [wordCount, setWordCount] = useState(0)
@@ -88,6 +92,15 @@ export default function CaseAttempt() {
   function goNext() {
     setCurrentScreen((screen) => Math.min(screen + 1, 6))
     window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  function goBack() {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate(id ? `/student/case-studies/${id}` : "/student/case-studies")
   }
 
   function handleAnalysisChange(value: string) {
@@ -122,6 +135,16 @@ export default function CaseAttempt() {
     <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
       <ProgressBar currentScreen={currentScreen} elapsedTime={elapsedTime} />
       <main className="mx-auto max-w-[1180px] px-4 py-6 sm:px-6">
+        <button
+          type="button"
+          onClick={goBack}
+          className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227] focus:outline-none focus:ring-2 focus:ring-[#C9A227] focus:ring-offset-2 focus:ring-offset-[#F6F7F9]"
+          aria-label="Go back to the previous page"
+        >
+          <ArrowLeft size={16} aria-hidden="true" />
+          Back
+        </button>
+
         {currentScreen === 1 ? <Screen1Briefing onNext={goNext} /> : null}
         {currentScreen === 2 ? (
           <Screen2Analysis

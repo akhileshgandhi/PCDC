@@ -25,7 +25,7 @@ function actionForStatus(caseStudy: CaseStudy) {
   if (caseStudy.status === "completed") {
     return {
       label: "View Results",
-      to: `/case-studies/${caseStudy.id}/results`,
+      to: `/student/case-studies/${caseStudy.id}/results`,
       className: "border-[#16A34A] text-[#16A34A] hover:bg-[#16A34A] hover:text-white",
       showArrow: false,
     }
@@ -34,7 +34,7 @@ function actionForStatus(caseStudy: CaseStudy) {
   if (caseStudy.status === "in_progress") {
     return {
       label: "Continue Attempt",
-      to: `/case-studies/${caseStudy.id}/attempt`,
+      to: `/student/case-studies/${caseStudy.id}/attempt`,
       className: "border-[#0B1D3A] text-[#0B1D3A] hover:bg-[#0B1D3A] hover:text-white",
       showArrow: true,
     }
@@ -42,7 +42,7 @@ function actionForStatus(caseStudy: CaseStudy) {
 
   return {
     label: "Start Attempt",
-    to: `/case-studies/${caseStudy.id}`,
+    to: `/student/case-studies/${caseStudy.id}`,
     className: "border-[#C9A227] bg-[#C9A227] text-white hover:bg-[#B08D20]",
     showArrow: true,
   }

@@ -25,7 +25,7 @@ def upgrade():
             name VARCHAR(100) NOT NULL,
             email VARCHAR(100) UNIQUE NOT NULL,
             password_hash VARCHAR(255) NOT NULL,
-            role VARCHAR(20) CHECK (role IN ('student', 'faculty', 'mentor', 'admin')),
+            role VARCHAR(20) CHECK (role IN ('student', 'faculty', 'mentor', 'admin', 'director')),
             program VARCHAR(100),
             specialization VARCHAR(100),
             admission_year INT,

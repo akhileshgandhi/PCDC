@@ -69,21 +69,21 @@ const recommendedActions = [
     description: "Your score dropped 0.8% this month",
     recommendation: "Recommended: Level 5 Geopolitics case",
     icon: Target,
-    to: "/case-studies/2",
+    to: "/student/case-studies/2",
   },
   {
     title: "Build on Decision Making strength",
     description: "+4.1% growth - keep the momentum",
     recommendation: "Recommended: Level 4 Business case",
     icon: LineChart,
-    to: "/case-studies/4",
+    to: "/student/case-studies/4",
   },
   {
     title: "Schedule Mentor Session",
     description: "Your mentor has a note about Risk Awareness",
     recommendation: "Dr. Ananya Rao - Tomorrow 11:00 AM",
     icon: MessageSquare,
-    to: "/dashboard",
+    to: "/student/dashboard",
   },
 ]
 
