@@ -6,83 +6,90 @@ In Progress
 
 ## Feature
 
-SPEC_07b - AI Case Generation
+SPEC_07c - Rubric Builder
 
 ## Spec File
 
-`context/features/SPEC_07b_AI_CASE_GENERATION.md`
+`context/features/SPEC_07c_RUBRIC_BUILDER.md`
 
 ## Goals
 
-- Implement the Generate with AI path for faculty case builder drafts
-- Let faculty create a draft from core fields before making any AI call
-- Add explicit full-case generation from the editor via a Generate Full Case Draft action
-- Use the OpenAI API with `gpt-4o-mini` and structured JSON output for the 9 case sections
-- Run full-case generation asynchronously so faculty can leave the editor while generation completes
-- Validate AI output before saving generated content
-- Preserve existing draft content if generation fails or returns malformed output
-- Mark generated sections as `ai_generated` in section provenance metadata
-- Populate the editor with generated situation, background, data, characters, constraints, objectives, timeline, reflection questions, and learning outcomes
-- Store reflection questions and learning outcomes as arrays
-- Support per-section generation and regeneration with existing sections provided as consistency context
-- Show queued/in-progress, polling/refresh, retry, and inline error states for generation requests
-- Use faculty review as the sufficient output guardrail before publish
+- Implement the faculty Rubric Builder route at `/faculty/rubric-builder/{case_id}`
+- Load an existing case before editing its rubric
+- Pre-fill new rubrics with the six global default criteria and weights
+- Let faculty adjust weights for thinking depth, logic, creativity, practicality, risk awareness, and reflection
+- Keep the six default criteria fixed so capability scoring remains comparable across cases
+- Validate that default criterion weights sum to 100 before saving
+- Add Reset to Default behavior for the global 30/20/15/15/10/10 split
+- Support up to two case-specific qualitative criteria
+- Save rubric weights and case-specific criteria to the case record
+- Connect saved rubrics to the Case Builder publish gate
+- Show active-attempt warnings when rubric edits could affect in-progress student evaluations
+- Preserve historical evaluation text and scores when future rubric criteria change
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_07b_AI_CASE_GENERATION.md`
+- `context/features/SPEC_07c_RUBRIC_BUILDER.md`
 - `context/features/SPEC_07a_CASE_BUILDER.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Answered Questions
 
-- OpenAI model: `gpt-4o-mini`
-- Reflection questions / learning outcomes storage: arrays
-- Full-case generation mode: async
-- Output guardrails: faculty review is sufficient
+- Rubric model: fixed global default criteria with per-case weight adjustments
+- Default weights: Thinking Depth 30%, Logic 20%, Creativity 15%, Practicality 15%, Risk Awareness 10%, Reflection 10%
+- Case-specific criteria: qualitative only, capped at 2, no separate weight
+- Storage approach: use the existing case record rubric field unless implementation discovers a blocking reason for a separate table
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_07b_AI_CASE_GENERATION.md`
-3. Confirm existing case-builder draft creation, editor loading, section save, and provenance behavior from SPEC_07a
-4. Confirm current backend route prefix for faculty case generation and align with existing API conventions
-5. Confirm OpenAI client setup, `.env` key loading, timeout handling, and selected generation model
-6. Define the AI case JSON schema and system prompt for all 9 case sections
-7. Test prompt/schema directly against OpenAI with representative core fields
-8. Build async generation job creation for `POST /api/v1/faculty/cases/{id}/generate` with `scope: full`
-9. Add generation status/result retrieval so the editor can poll or refresh without blocking the request
-10. Validate structured output before saving and fail without modifying draft content on malformed responses
-11. Save generated sections and mark written sections as `ai_generated`
-12. Wire the editor Generate Full Case Draft button to create the async generation job
-13. Add queued/in-progress, polling/refresh, retry, and inline failure states on the frontend
-14. Add per-section `scope: section` generation and regeneration support
-15. Send existing non-target sections as context during per-section regeneration
-16. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_07c_RUBRIC_BUILDER.md`
+3. Confirm the current case record field used for `evaluation_rubric`
+4. Confirm Case Builder publish validation checks for saved rubric existence
+5. Define rubric payload shape with fixed weights and case-specific criteria
+6. Build `GET /api/v1/faculty/cases/{id}/rubric` returning saved rubric or defaults
+7. Build `PUT /api/v1/faculty/cases/{id}/rubric` with weight-sum and max-criteria validation
+8. Add frontend API helpers for rubric fetch/save
+9. Add `/faculty/rubric-builder/:case_id` route
+10. Build Rubric Builder page with back link, case title, default criteria controls, total validator, and save action
+11. Add Reset to Default behavior
+12. Add case-specific criteria add/remove behavior with max-2 cap
+13. Show active-attempt warning when relevant
+14. Confirm Case Builder publish blocker clears after rubric save
+15. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] Generate with AI creates a draft from core fields without automatically calling AI
-- [x] Editor shows a prominent Generate Full Case Draft button before generation
-- [x] Backend full-case generation runs asynchronously
-- [x] Backend full-case generation calls OpenAI `gpt-4o-mini` with structured JSON schema output
-- [x] Generated output includes situation, background, data, characters, constraints, objectives, timeline, reflection questions, and learning outcomes
-- [x] Reflection questions and learning outcomes are stored and returned as arrays
-- [x] Backend validates generated output before saving
-- [x] Failed or malformed AI output leaves existing draft content untouched
-- [x] Successfully generated sections are saved with `ai_generated` provenance
-- [x] Frontend shows queued/in-progress state while generation is in flight
-- [x] Frontend can poll or refresh generation status
-- [x] Frontend shows inline error and retry behavior on generation failure
-- [x] Faculty review remains the output guardrail before publish
-- [x] Per-section generation/regeneration works without changing unrelated sections
-- [x] Per-section regeneration sends existing sections as consistency context
+- [x] `/faculty/rubric-builder/{case_id}` loads for an existing faculty-owned case
+- [x] New rubric opens with six default criteria and 30/20/15/15/10/10 weights
+- [x] Existing saved rubric loads exactly as saved
+- [x] Faculty can adjust each default criterion weight with numeric controls
+- [x] Running total is visible and save is disabled unless weights sum to 100
+- [x] Reset to Default restores the global default weights
+- [x] Faculty can add and remove case-specific qualitative criteria
+- [x] Case-specific criteria are capped at 2
+- [x] Backend validates weight total and criteria count before saving
+- [x] Saved rubric persists to the case record
+- [x] Case Builder recognizes saved rubric for publish validation
+- [x] Active-attempt warning appears when rubric changes may affect in-progress evaluations
+- [x] Historical evaluations are not retroactively changed by rubric edits
 - [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-06-30: Implemented SPEC_07c on `feature/rubric-builder`. Added rubric
+  save/load APIs backed by `case_studies.evaluation_rubric`, fixed default
+  criteria and weight validation, max two qualitative case-specific criteria,
+  the `/faculty/rubric-builder/{case_id}` editor, active-attempt warning, reset
+  behavior, and frontend/backend verification.
+
+- 2026-06-30: SPEC_07c Rubric Builder moved to In Progress. Scope updated to
+  per-case rubric editing, fixed global default criteria, adjustable weights
+  totaling 100, max two qualitative case-specific criteria, rubric save/load
+  APIs, publish-gate integration, and active-attempt warnings.
 
 - 2026-06-30: Implemented SPEC_07b on `feature/ai-case-generation-async`.
   Added OpenAI `gpt-4o-mini` structured generation, async generation job

@@ -4,6 +4,7 @@ import FacultyCaseBuilder from "./FacultyCaseBuilder"
 import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
 import FacultyModulePlaceholder from "./FacultyModulePlaceholder"
+import FacultyRubricBuilder from "./FacultyRubricBuilder"
 
 export default function FacultyPortal() {
   return (
@@ -24,12 +25,7 @@ export default function FacultyPortal() {
       />
       <Route
         path="/rubric-builder/:caseId"
-        element={
-          <FacultyModulePlaceholder
-            title="Case Rubric Builder"
-            description="This module will load the selected case rubric and save weighted faculty criteria."
-          />
-        }
+        element={<FacultyRubricBuilder />}
       />
       <Route
         path="/students"

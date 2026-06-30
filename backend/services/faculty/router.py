@@ -52,6 +52,24 @@ DEFAULT_CAPABILITIES = [
     "Professionalism",
 ]
 
+DEFAULT_RUBRIC_WEIGHTS = {
+    "thinking_depth": 30,
+    "logic": 20,
+    "creativity": 15,
+    "practicality": 15,
+    "risk_awareness": 10,
+    "reflection": 10,
+}
+
+RUBRIC_CRITERIA = [
+    {"key": "thinking_depth", "label": "Thinking Depth"},
+    {"key": "logic", "label": "Logic"},
+    {"key": "creativity", "label": "Creativity"},
+    {"key": "practicality", "label": "Practicality"},
+    {"key": "risk_awareness", "label": "Risk Awareness"},
+    {"key": "reflection", "label": "Reflection"},
+]
+
 CASE_GENERATION_MODEL = os.getenv("OPENAI_CASE_GENERATION_MODEL", "gpt-4o-mini")
 
 CASE_GENERATION_PROMPT = """
@@ -101,6 +119,11 @@ class GenerateCaseJobResponse(BaseModel):
     scope: str
     sections: List[str]
     message: str
+
+
+class RubricRequest(BaseModel):
+    weights: Dict[str, int]
+    case_specific_criteria: List[str] = Field(default_factory=list)
 
 
 def require_faculty(current_user: Dict[str, Any]) -> None:
@@ -223,6 +246,99 @@ def get_capability_tags(db: Session, case_id: int) -> List[str]:
     return [row.tag_value for row in rows]
 
 
+def get_active_attempts_count(db: Session, case_id: int) -> int:
+    active_attempts = db.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM case_study_attempts
+            WHERE case_study_id = :case_id
+              AND status IN ('analysis_submitted', 'ai_discussion', 'solution_submitted')
+        """),
+        {"case_id": case_id},
+    ).scalar() or 0
+    return int(active_attempts)
+
+
+def default_rubric() -> Dict[str, Any]:
+    return {
+        "weights": dict(DEFAULT_RUBRIC_WEIGHTS),
+        "case_specific_criteria": [],
+    }
+
+
+def normalize_rubric(raw_rubric: Optional[str]) -> Dict[str, Any]:
+    if not raw_rubric:
+        return default_rubric()
+    try:
+        parsed = json.loads(raw_rubric)
+    except json.JSONDecodeError:
+        return default_rubric()
+
+    weights = dict(DEFAULT_RUBRIC_WEIGHTS)
+    incoming_weights = parsed.get("weights") if isinstance(parsed, dict) else {}
+    if isinstance(incoming_weights, dict):
+        for key in DEFAULT_RUBRIC_WEIGHTS:
+            try:
+                weights[key] = int(incoming_weights.get(key, DEFAULT_RUBRIC_WEIGHTS[key]))
+            except (TypeError, ValueError):
+                weights[key] = DEFAULT_RUBRIC_WEIGHTS[key]
+
+    raw_criteria = parsed.get("case_specific_criteria") if isinstance(parsed, dict) else []
+    criteria = []
+    if isinstance(raw_criteria, list):
+        criteria = [str(item).strip() for item in raw_criteria if str(item).strip()][:2]
+
+    return {
+        "weights": weights,
+        "case_specific_criteria": criteria,
+    }
+
+
+def validate_rubric(data: RubricRequest) -> Dict[str, Any]:
+    if set(data.weights.keys()) != set(DEFAULT_RUBRIC_WEIGHTS.keys()):
+        raise HTTPException(status_code=400, detail="Rubric must include all default criteria")
+
+    weights: Dict[str, int] = {}
+    for key in DEFAULT_RUBRIC_WEIGHTS:
+        try:
+            weight = int(data.weights[key])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Rubric weights must be numbers")
+        if weight < 0 or weight > 100:
+            raise HTTPException(status_code=400, detail="Rubric weights must be between 0 and 100")
+        weights[key] = weight
+
+    if sum(weights.values()) != 100:
+        raise HTTPException(status_code=400, detail="Rubric weights must total 100")
+
+    criteria = [criterion.strip() for criterion in data.case_specific_criteria if criterion.strip()]
+    if len(criteria) > 2:
+        raise HTTPException(status_code=400, detail="Case-specific criteria are capped at 2")
+    if any(len(criterion) > 160 for criterion in criteria):
+        raise HTTPException(
+            status_code=400,
+            detail="Case-specific criteria must be 160 characters or fewer",
+        )
+
+    return {
+        "weights": weights,
+        "case_specific_criteria": criteria,
+    }
+
+
+def rubric_response(db: Session, row: Any, rubric: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "case_id": row.id,
+        "case_title": row.title,
+        "case_status": row.status,
+        "active_attempts": get_active_attempts_count(db, row.id),
+        "criteria": RUBRIC_CRITERIA,
+        "rubric": rubric,
+        "rubric_exists": bool(row.evaluation_rubric),
+        "updated_at": str(row.updated_at),
+    }
+
+
 def replace_capability_tags(db: Session, case_id: int, capabilities: List[str]) -> None:
     db.execute(
         text("""
@@ -247,15 +363,6 @@ def replace_capability_tags(db: Session, case_id: int, capabilities: List[str]) 
 
 def case_editor_response(db: Session, row: Any) -> Dict[str, Any]:
     parsed_content = parse_case_content(row.content)
-    active_attempts = db.execute(
-        text("""
-            SELECT COUNT(*)
-            FROM case_study_attempts
-            WHERE case_study_id = :case_id
-              AND status IN ('analysis_submitted', 'ai_discussion', 'solution_submitted')
-        """),
-        {"case_id": row.id},
-    ).scalar() or 0
     return {
         "id": row.id,
         "title": row.title,
@@ -268,7 +375,7 @@ def case_editor_response(db: Session, row: Any) -> Dict[str, Any]:
         "sections": parsed_content["sections"],
         "section_meta": parsed_content["section_meta"],
         "rubric_exists": bool(row.evaluation_rubric),
-        "active_attempts": int(active_attempts),
+        "active_attempts": get_active_attempts_count(db, row.id),
         "created_at": str(row.created_at),
         "updated_at": str(row.updated_at),
     }
@@ -713,6 +820,48 @@ def get_faculty_case(
     require_faculty(current_user)
     row = get_owned_case_row(db, case_id, current_user)
     return case_editor_response(db, row)
+
+
+@faculty_router.get("/cases/{case_id}/rubric")
+def get_faculty_case_rubric(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    row = get_owned_case_row(db, case_id, current_user)
+    return rubric_response(db, row, normalize_rubric(row.evaluation_rubric))
+
+
+@faculty_router.put("/cases/{case_id}/rubric")
+def save_faculty_case_rubric(
+    case_id: int,
+    data: RubricRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    get_owned_case_row(db, case_id, current_user)
+    rubric = validate_rubric(data)
+    result = db.execute(
+        text("""
+            UPDATE case_studies
+            SET evaluation_rubric = :evaluation_rubric,
+                updated_at = NOW()
+            WHERE id = :case_id AND created_by = :faculty_id
+            RETURNING id, title, description, content, domain, difficulty,
+                      estimated_minutes, status, evaluation_rubric,
+                      reflection_questions, learning_outcomes, created_at, updated_at
+        """),
+        {
+            "case_id": case_id,
+            "faculty_id": current_user["id"],
+            "evaluation_rubric": json.dumps(rubric),
+        },
+    )
+    updated_row = result.fetchone()
+    db.commit()
+    return rubric_response(db, updated_row, rubric)
 
 
 @faculty_router.put("/cases/{case_id}")

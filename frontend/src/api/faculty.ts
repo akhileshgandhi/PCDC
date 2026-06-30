@@ -103,6 +103,35 @@ export interface FacultyCaseGenerationJob {
   updated_at: string
 }
 
+export type RubricCriterionKey =
+  | "thinking_depth"
+  | "logic"
+  | "creativity"
+  | "practicality"
+  | "risk_awareness"
+  | "reflection"
+
+export interface RubricCriterion {
+  key: RubricCriterionKey
+  label: string
+}
+
+export interface FacultyRubric {
+  weights: Record<RubricCriterionKey, number>
+  case_specific_criteria: string[]
+}
+
+export interface FacultyCaseRubricResponse {
+  case_id: number
+  case_title: string
+  case_status: "draft" | "published" | "archived"
+  active_attempts: number
+  criteria: RubricCriterion[]
+  rubric: FacultyRubric
+  rubric_exists: boolean
+  updated_at: string
+}
+
 export async function getFacultyDashboardSummary() {
   const response = await api.get<FacultyDashboardSummary>("/faculty/dashboard/summary")
   return response.data
@@ -153,6 +182,19 @@ export async function generateFacultyCase(
 export async function getFacultyCaseGenerationJob(caseId: number, jobId: string) {
   const response = await api.get<FacultyCaseGenerationJob>(
     `/faculty/cases/${caseId}/generate/${jobId}`,
+  )
+  return response.data
+}
+
+export async function getFacultyCaseRubric(caseId: number) {
+  const response = await api.get<FacultyCaseRubricResponse>(`/faculty/cases/${caseId}/rubric`)
+  return response.data
+}
+
+export async function saveFacultyCaseRubric(caseId: number, payload: FacultyRubric) {
+  const response = await api.put<FacultyCaseRubricResponse>(
+    `/faculty/cases/${caseId}/rubric`,
+    payload,
   )
   return response.data
 }
