@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import FacultyCaseBuilder from "./FacultyCaseBuilder"
 import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
 import FacultyModulePlaceholder from "./FacultyModulePlaceholder"
@@ -10,24 +11,8 @@ export default function FacultyPortal() {
       <Route path="/" element={<Navigate to="/faculty/dashboard" replace />} />
       <Route path="/dashboard" element={<FacultyDashboard />} />
       <Route path="/case-library" element={<FacultyCaseLibrary />} />
-      <Route
-        path="/case-builder"
-        element={
-          <FacultyModulePlaceholder
-            title="Case Builder"
-            description="The next implementation slice will add draft creation, editing, AI generation, and publish controls."
-          />
-        }
-      />
-      <Route
-        path="/case-builder/:id"
-        element={
-          <FacultyModulePlaceholder
-            title="Edit Case Study"
-            description="Editing will reuse the same case-builder workflow once the create/update API is wired."
-          />
-        }
-      />
+      <Route path="/case-builder" element={<FacultyCaseBuilder />} />
+      <Route path="/case-builder/:id" element={<FacultyCaseBuilder />} />
       <Route
         path="/rubric-builder"
         element={

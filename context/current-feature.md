@@ -6,68 +6,110 @@ In Progress
 
 ## Feature
 
-SPEC_14 - Faculty Portal
+SPEC_07b - AI Case Generation
 
 ## Spec File
 
-`context/features/SPEC_14_FACULTY_PORTAL.md`
+`context/features/SPEC_07b_AI_CASE_GENERATION.md`
 
 ## Goals
 
-- Build the faculty portal under `/faculty/*`
-- Add the faculty dashboard with summary stats and module quick links
-- Add a case study library for browsing and managing faculty-owned cases
-- Add a case builder for creating, editing, AI-generating, saving, and publishing case studies
-- Add a rubric builder for weighted evaluation criteria per case
-- Add a students roster with filters and faculty read-only drill-down views
-- Add cohort and case analytics for capability trends and teaching effectiveness
-- Add exportable reports for cohort, student, and case study summaries
-- Confirm schema and ownership details before implementing case-builder, rubric, and review flows
+- Implement the Generate with AI path for faculty case builder drafts
+- Let faculty create a draft from core fields before making any AI call
+- Add explicit full-case generation from the editor via a Generate Full Case Draft action
+- Use the OpenAI API with `gpt-4o-mini` and structured JSON output for the 9 case sections
+- Run full-case generation asynchronously so faculty can leave the editor while generation completes
+- Validate AI output before saving generated content
+- Preserve existing draft content if generation fails or returns malformed output
+- Mark generated sections as `ai_generated` in section provenance metadata
+- Populate the editor with generated situation, background, data, characters, constraints, objectives, timeline, reflection questions, and learning outcomes
+- Store reflection questions and learning outcomes as arrays
+- Support per-section generation and regeneration with existing sections provided as consistency context
+- Show queued/in-progress, polling/refresh, retry, and inline error states for generation requests
+- Use faculty review as the sufficient output guardrail before publish
 
 ## References
 
 - `context/project-overview.md`
+- `context/features/SPEC_07b_AI_CASE_GENERATION.md`
+- `context/features/SPEC_07a_CASE_BUILDER.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
+
+## Answered Questions
+
+- OpenAI model: `gpt-4o-mini`
+- Reflection questions / learning outcomes storage: arrays
+- Full-case generation mode: async
+- Output guardrails: faculty review is sufficient
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_14_FACULTY_PORTAL.md`
-3. Inspect current faculty routing, auth role guards, dashboard layout patterns, and student portal components
-4. Confirm exact case studies table names and fields from the existing Alembic migration
-5. Confirm whether `simulation_attempts` supports a pending faculty review status
-6. Confirm rubric storage model or add the required migration if no table exists
-7. Confirm faculty-to-case ownership model
-8. Locate the existing Claude/AI wrapper pattern for reuse by case-builder generation
-9. Build `/faculty/dashboard` with summary cards and quick links
-10. Build `/faculty/case-library` with filters, case rows/cards, and status actions
-11. Build `/faculty/case-builder` and `/faculty/case-builder/{id}` with draft, AI generation, edit, save, and publish flow
-12. Build `/faculty/rubric-builder/{case_id}` with default weighted criteria and 100% validation
-13. Build `/faculty/students` with roster filters and student detail drill-down
-14. Build `/faculty/analytics` with cohort and case-level aggregate views
-15. Build `/faculty/reports` with report type, date range, and PDF/CSV export flow
+2. Read `context/features/SPEC_07b_AI_CASE_GENERATION.md`
+3. Confirm existing case-builder draft creation, editor loading, section save, and provenance behavior from SPEC_07a
+4. Confirm current backend route prefix for faculty case generation and align with existing API conventions
+5. Confirm OpenAI client setup, `.env` key loading, timeout handling, and selected generation model
+6. Define the AI case JSON schema and system prompt for all 9 case sections
+7. Test prompt/schema directly against OpenAI with representative core fields
+8. Build async generation job creation for `POST /api/v1/faculty/cases/{id}/generate` with `scope: full`
+9. Add generation status/result retrieval so the editor can poll or refresh without blocking the request
+10. Validate structured output before saving and fail without modifying draft content on malformed responses
+11. Save generated sections and mark written sections as `ai_generated`
+12. Wire the editor Generate Full Case Draft button to create the async generation job
+13. Add queued/in-progress, polling/refresh, retry, and inline failure states on the frontend
+14. Add per-section `scope: section` generation and regeneration support
+15. Send existing non-target sections as context during per-section regeneration
 16. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] `/faculty/dashboard` renders after faculty login and shows summary stats
-- [x] Dashboard quick links route to all six faculty modules
-- [x] `/faculty/case-library` lists faculty-accessible case studies with search/filter/status controls
-- [ ] Faculty can create a new case study draft from `/faculty/case-builder`
-- [ ] Faculty can edit an existing case study from `/faculty/case-builder/{id}`
-- [ ] Case builder reuses the existing server-side AI integration pattern for generation
-- [ ] Faculty can save draft and publish case studies
-- [ ] `/faculty/rubric-builder/{case_id}` supports default weighted criteria
-- [ ] Rubric weights validate to 100%
-- [ ] `/faculty/students` shows roster data with filters and read-only detail drill-down
-- [ ] `/faculty/analytics` shows cohort and case-level capability/performance summaries
-- [ ] `/faculty/reports` supports report type, date range, and PDF/CSV export flow
-- [x] Faculty routes are protected by JWT role checks
+- [x] Generate with AI creates a draft from core fields without automatically calling AI
+- [x] Editor shows a prominent Generate Full Case Draft button before generation
+- [x] Backend full-case generation runs asynchronously
+- [x] Backend full-case generation calls OpenAI `gpt-4o-mini` with structured JSON schema output
+- [x] Generated output includes situation, background, data, characters, constraints, objectives, timeline, reflection questions, and learning outcomes
+- [x] Reflection questions and learning outcomes are stored and returned as arrays
+- [x] Backend validates generated output before saving
+- [x] Failed or malformed AI output leaves existing draft content untouched
+- [x] Successfully generated sections are saved with `ai_generated` provenance
+- [x] Frontend shows queued/in-progress state while generation is in flight
+- [x] Frontend can poll or refresh generation status
+- [x] Frontend shows inline error and retry behavior on generation failure
+- [x] Faculty review remains the output guardrail before publish
+- [x] Per-section generation/regeneration works without changing unrelated sections
+- [x] Per-section regeneration sends existing sections as consistency context
 - [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-06-30: Implemented SPEC_07b on `feature/ai-case-generation-async`.
+  Added OpenAI `gpt-4o-mini` structured generation, async generation job
+  creation/status endpoints, validation-before-save behavior, array storage for
+  reflection questions and learning outcomes, editor polling, queued/in-progress
+  UI, and per-section regeneration support.
+
+- 2026-06-30: SPEC_07b answered questions recorded: standard model is
+  `gpt-4o-mini`, reflection questions and learning outcomes are arrays,
+  full-case generation should be async, and faculty review is sufficient as
+  the output guardrail.
+
+- 2026-06-30: SPEC_07b AI Case Generation moved to In Progress. Scope updated
+  to the Generate with AI path, OpenAI structured generation, full-case and
+  per-section generation, validation-before-save behavior, provenance updates,
+  and frontend loading/error/retry states.
+
+- 2026-06-30: Started implementation on feature/case-builder. Added
+  faculty case-builder APIs for capabilities, draft create, editor fetch,
+  manual save, AI generation, and publish validation. Replaced the frontend
+  case-builder placeholder with entry cards, core fields, section editor,
+  provenance tags, generation controls, save draft, and publish flow.
+
+- 2026-06-30: SPEC_07a Case Builder moved to In progress. Scope updated to
+  faculty case-builder entry flow, core fields, draft creation, shared section
+  editor, manual saves, AI generation, provenance tracking, and publish
+  validation.
 
 - 2026-06-30: Started implementation on feature/faculty-cases. Added
   faculty API endpoints for dashboard summary and case list, replaced the
