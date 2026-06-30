@@ -2,69 +2,81 @@
 
 ## Status
 
-In progress
+In Progress
 
 ## Feature
 
-SPEC_13 - JWT Auth Implementation + Seed Users
+SPEC_14 - Faculty Portal
 
 ## Spec File
 
-`context/features/SPEC_13_JWT_AUTH_SEED_USERS.md`
+`context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Goals
 
-- Implement complete JWT authentication from React frontend to FastAPI backend
-- Create seed users for student, faculty, mentor, admin, and director roles
-- Ensure login JWT payload includes `sub`, `email`, `role`, and `exp`
-- Remove self-registration link from the login page and show administrator access text
-- Add password visibility toggle to the login page
-- Add shared frontend JWT auth utilities
-- Update protected routing to use token validity and role checks
-- Add logout controls for portal sidebars/pages
-- Verify root and role-based redirects for all supported roles
+- Build the faculty portal under `/faculty/*`
+- Add the faculty dashboard with summary stats and module quick links
+- Add a case study library for browsing and managing faculty-owned cases
+- Add a case builder for creating, editing, AI-generating, saving, and publishing case studies
+- Add a rubric builder for weighted evaluation criteria per case
+- Add a students roster with filters and faculty read-only drill-down views
+- Add cohort and case analytics for capability trends and teaching effectiveness
+- Add exportable reports for cohort, student, and case study summaries
+- Confirm schema and ownership details before implementing case-builder, rubric, and review flows
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_13_JWT_AUTH_SEED_USERS.md`
+- `context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_13_JWT_AUTH_SEED_USERS.md`
-3. Inspect current backend auth service, JWT creation, and user table fields
-4. Create `backend/seeds/seed_users.py` with the exact seed users from the spec
-5. Verify or fix backend login so JWT includes the user role
-6. Verify `/api/v1/auth/login` and `/api/v1/auth/me`
-7. Update frontend login to call the backend auth endpoint
-8. Remove the register link and add administrator access text
-9. Add password visibility toggle and login error states
-10. Add shared frontend JWT utility functions
-11. Update `ProtectedRoute` to use token validity and role checks
-12. Add logout controls to portal navigation or placeholder pages
-13. Verify all role redirects and unauthorized route protection
-14. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_14_FACULTY_PORTAL.md`
+3. Inspect current faculty routing, auth role guards, dashboard layout patterns, and student portal components
+4. Confirm exact case studies table names and fields from the existing Alembic migration
+5. Confirm whether `simulation_attempts` supports a pending faculty review status
+6. Confirm rubric storage model or add the required migration if no table exists
+7. Confirm faculty-to-case ownership model
+8. Locate the existing Claude/AI wrapper pattern for reuse by case-builder generation
+9. Build `/faculty/dashboard` with summary cards and quick links
+10. Build `/faculty/case-library` with filters, case rows/cards, and status actions
+11. Build `/faculty/case-builder` and `/faculty/case-builder/{id}` with draft, AI generation, edit, save, and publish flow
+12. Build `/faculty/rubric-builder/{case_id}` with default weighted criteria and 100% validation
+13. Build `/faculty/students` with roster filters and student detail drill-down
+14. Build `/faculty/analytics` with cohort and case-level aggregate views
+15. Build `/faculty/reports` with report type, date range, and PDF/CSV export flow
+16. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] Seed script runs cleanly and creates 6 users on Neon
-- [x] Re-running seed script skips existing users without duplicates
-- [ ] All 6 seed users can log in successfully
-- [x] JWT contains `sub`, `email`, `role`, and `exp` fields
-- [x] Each role redirects to its correct portal after login
-- [x] Register link removed from login page
-- [x] Administrator access text shown on login page
-- [x] Password visibility toggle works
-- [x] ProtectedRoute blocks missing-token and wrong-role access
-- [x] Root `/` redirects correctly based on auth state
-- [x] Logout clears token and returns user to `/login`
-- [x] Shared auth utility file is used throughout the frontend
+- [x] `/faculty/dashboard` renders after faculty login and shows summary stats
+- [x] Dashboard quick links route to all six faculty modules
+- [x] `/faculty/case-library` lists faculty-accessible case studies with search/filter/status controls
+- [ ] Faculty can create a new case study draft from `/faculty/case-builder`
+- [ ] Faculty can edit an existing case study from `/faculty/case-builder/{id}`
+- [ ] Case builder reuses the existing server-side AI integration pattern for generation
+- [ ] Faculty can save draft and publish case studies
+- [ ] `/faculty/rubric-builder/{case_id}` supports default weighted criteria
+- [ ] Rubric weights validate to 100%
+- [ ] `/faculty/students` shows roster data with filters and read-only detail drill-down
+- [ ] `/faculty/analytics` shows cohort and case-level capability/performance summaries
+- [ ] `/faculty/reports` supports report type, date range, and PDF/CSV export flow
+- [x] Faculty routes are protected by JWT role checks
 - [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-06-30: Started implementation on feature/faculty-cases. Added
+  faculty API endpoints for dashboard summary and case list, replaced the
+  placeholder faculty portal with routed faculty layout/navigation, and built
+  `/faculty/dashboard` plus `/faculty/case-library`.
+
+- 2026-06-30: SPEC_14 Faculty Portal moved to In Progress. Scope updated to
+  seven faculty pages under `/faculty/*`: dashboard, case-library,
+  case-builder, rubric-builder, students, analytics, and reports.
 
 - 2026-06-29: SPEC_13 JWT Auth Implementation + Seed Users moved to
   In progress. Scope updated to backend seed users, JWT role payload
@@ -133,4 +145,3 @@ SPEC_13 - JWT Auth Implementation + Seed Users
   Context files created: project-overview, ai-interaction,
   coding-standards, current-feature. Feature specs moved to
   context/features/ folder.
-

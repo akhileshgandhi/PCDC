@@ -4,6 +4,7 @@ from services.auth.router import auth_router
 from services.simulation.router import simulation_router
 from services.capability.router import capability_router
 from services.ai.router import ai_router
+from services.faculty.router import faculty_router
 from services.mentor.router import mentor_router
 from services.notification.router import notification_router
 
@@ -20,6 +21,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(simulation_router, prefix="/api/v1")
+app.include_router(faculty_router, prefix="/api/v1")
 app.include_router(capability_router, prefix="/capability")
 app.include_router(ai_router, prefix="/ai")
 app.include_router(mentor_router, prefix="/mentor")

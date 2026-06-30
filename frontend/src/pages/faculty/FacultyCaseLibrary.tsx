@@ -1,0 +1,320 @@
+import { Archive, Edit3, Eye, Plus, Search } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
+
+import { getFacultyCases, type FacultyCase } from "../../api/faculty"
+import FacultyLayout from "../../layouts/FacultyLayout"
+
+const domains = [
+  "All Domains",
+  "geopolitics",
+  "sports",
+  "business",
+  "social",
+  "science",
+  "technology",
+  "environment",
+  "healthcare",
+] as const
+
+const statuses = [
+  { label: "All", value: "" },
+  { label: "Draft", value: "draft" },
+  { label: "Published", value: "published" },
+  { label: "Archived", value: "archived" },
+] as const
+
+export default function FacultyCaseLibrary() {
+  const [cases, setCases] = useState<FacultyCase[]>([])
+  const [domainFilter, setDomainFilter] = useState("All Domains")
+  const [difficultyFilter, setDifficultyFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCases() {
+      setIsLoading(true)
+      try {
+        const data = await getFacultyCases({
+          domain: domainFilter === "All Domains" ? undefined : domainFilter,
+          difficulty: difficultyFilter ? Number(difficultyFilter) : undefined,
+          status: statusFilter || undefined,
+        })
+        if (isMounted) {
+          setCases(data)
+          setError("")
+        }
+      } catch {
+        if (isMounted) {
+          setError("Unable to load faculty case studies right now.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadCases()
+
+    return () => {
+      isMounted = false
+    }
+  }, [difficultyFilter, domainFilter, statusFilter])
+
+  const filteredCases = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase()
+    if (!normalizedSearch) {
+      return cases
+    }
+
+    return cases.filter((caseStudy) => {
+      return (
+        caseStudy.title.toLowerCase().includes(normalizedSearch) ||
+        caseStudy.domain.toLowerCase().includes(normalizedSearch) ||
+        caseStudy.description?.toLowerCase().includes(normalizedSearch)
+      )
+    })
+  }, [cases, searchQuery])
+
+  const stats = useMemo(
+    () => ({
+      draft: cases.filter((caseStudy) => caseStudy.status === "draft").length,
+      published: cases.filter((caseStudy) => caseStudy.status === "published").length,
+      archived: cases.filter((caseStudy) => caseStudy.status === "archived").length,
+    }),
+    [cases],
+  )
+
+  return (
+    <FacultyLayout>
+      <div className="space-y-5">
+        <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-normal text-[#111827]">
+                Case Study Library
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
+                Browse, filter, and manage case studies owned by your faculty account.
+              </p>
+            </div>
+
+            <Link
+              to="/faculty/case-builder"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e]"
+            >
+              <Plus size={17} aria-hidden="true" />
+              New Case Study
+            </Link>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <StatPill label="Draft" value={stats.draft} />
+            <StatPill label="Published" value={stats.published} />
+            <StatPill label="Archived" value={stats.archived} />
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm">
+          <div className="grid gap-3 xl:grid-cols-[180px_160px_auto_320px]">
+            <select
+              value={domainFilter}
+              onChange={(event) => setDomainFilter(event.target.value)}
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              aria-label="Domain"
+            >
+              {domains.map((domain) => (
+                <option key={domain} value={domain}>
+                  {domain === "All Domains" ? domain : titleCase(domain)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={difficultyFilter}
+              onChange={(event) => setDifficultyFilter(event.target.value)}
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              aria-label="Difficulty"
+            >
+              <option value="">All Levels</option>
+              {[1, 2, 3, 4, 5, 6, 7].map((level) => (
+                <option key={level} value={level}>
+                  Level {level}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex rounded-md border border-[#e6e8eb] bg-[#f6f7fb] p-1">
+              {statuses.map((status) => (
+                <button
+                  key={status.label}
+                  type="button"
+                  onClick={() => setStatusFilter(status.value)}
+                  className={`flex-1 rounded px-3 py-2 text-sm font-semibold transition ${
+                    statusFilter === status.value
+                      ? "bg-[#0b1d3a] text-white shadow-sm"
+                      : "text-[#6b7280] hover:text-[#111827]"
+                  }`}
+                >
+                  {status.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="flex h-11 items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-3 text-[#6b7280] transition focus-within:border-[#c9a227] focus-within:ring-2 focus-within:ring-[#c9a227]/20">
+              <Search size={17} aria-hidden="true" />
+              <span className="sr-only">Search cases</span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search cases..."
+                className="w-full bg-transparent text-sm font-medium text-[#111827] outline-none placeholder:text-[#6b7280]"
+              />
+            </label>
+          </div>
+        </section>
+
+        {error ? (
+          <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
+            {error}
+          </div>
+        ) : null}
+
+        <section className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white shadow-sm">
+          <div className="hidden grid-cols-[1.7fr_0.8fr_0.7fr_0.7fr_0.8fr_1fr] gap-4 border-b border-[#e6e8eb] bg-[#f6f7fb] px-5 py-3 text-xs font-semibold uppercase text-[#6b7280] lg:grid">
+            <span>Title</span>
+            <span>Industry</span>
+            <span>Difficulty</span>
+            <span>Status</span>
+            <span>Attempts</span>
+            <span>Actions</span>
+          </div>
+
+          {isLoading ? (
+            <div className="px-5 py-12 text-center text-sm font-medium text-[#6b7280]">
+              Loading faculty cases...
+            </div>
+          ) : filteredCases.length > 0 ? (
+            <div className="divide-y divide-[#e6e8eb]">
+              {filteredCases.map((caseStudy) => (
+                <CaseRow key={caseStudy.id} caseStudy={caseStudy} />
+              ))}
+            </div>
+          ) : (
+            <div className="px-5 py-14 text-center">
+              <h2 className="text-lg font-semibold text-[#111827]">No case studies found.</h2>
+              <p className="mt-2 text-sm text-[#6b7280]">
+                Create a draft or adjust the current filters.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
+    </FacultyLayout>
+  )
+}
+
+interface CaseRowProps {
+  caseStudy: FacultyCase
+}
+
+function CaseRow({ caseStudy }: CaseRowProps) {
+  return (
+    <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.7fr_0.8fr_0.7fr_0.7fr_0.8fr_1fr] lg:items-center">
+      <div className="min-w-0">
+        <h2 className="truncate text-sm font-semibold text-[#111827]">{caseStudy.title}</h2>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#6b7280]">
+          {caseStudy.description || "No description provided yet."}
+        </p>
+        <p className="mt-2 text-xs text-[#6b7280] lg:hidden">
+          {titleCase(caseStudy.domain)} - Level {caseStudy.difficulty} -{" "}
+          {caseStudy.attempts_count} attempts
+        </p>
+      </div>
+      <span className="hidden text-sm font-medium text-[#111827] lg:block">
+        {titleCase(caseStudy.domain)}
+      </span>
+      <span className="hidden text-sm font-medium text-[#111827] lg:block">
+        Level {caseStudy.difficulty}
+      </span>
+      <span>
+        <StatusBadge status={caseStudy.status} />
+      </span>
+      <span className="hidden text-sm font-semibold text-[#111827] lg:block">
+        {caseStudy.attempts_count}
+      </span>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          to={`/faculty/case-builder/${caseStudy.id}`}
+          className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+          aria-label={`Edit ${caseStudy.title}`}
+          title="Edit"
+        >
+          <Edit3 size={16} aria-hidden="true" />
+        </Link>
+        <Link
+          to={`/faculty/case-library?case=${caseStudy.id}`}
+          className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+          aria-label={`View attempts for ${caseStudy.title}`}
+          title="View attempts"
+        >
+          <Eye size={16} aria-hidden="true" />
+        </Link>
+        <button
+          type="button"
+          className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+          aria-label={`Archive ${caseStudy.title}`}
+          title="Archive"
+        >
+          <Archive size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </article>
+  )
+}
+
+interface StatusBadgeProps {
+  status: FacultyCase["status"]
+}
+
+function StatusBadge({ status }: StatusBadgeProps) {
+  const className =
+    status === "published"
+      ? "bg-[#ecfdf3] text-[#027a48]"
+      : status === "archived"
+        ? "bg-[#f2f4f7] text-[#475467]"
+        : "bg-[#fff7df] text-[#92702a]"
+
+  return (
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${className}`}>
+      {titleCase(status)}
+    </span>
+  )
+}
+
+interface StatPillProps {
+  label: string
+  value: number
+}
+
+function StatPill({ label, value }: StatPillProps) {
+  return (
+    <div className="rounded-full border border-[#e6e8eb] bg-[#f6f7fb] px-4 py-2 text-sm">
+      <span className="font-semibold text-[#111827]">{label}:</span>{" "}
+      <span className="font-semibold text-[#0b1d3a]">{value}</span>
+    </div>
+  )
+}
+
+function titleCase(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+}
