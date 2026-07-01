@@ -48,9 +48,34 @@ def register_user(db: Session, name: str, email: str, password: str, role: str =
     return {"id": row[0], "name": row[1], "email": row[2], "role": row[3], "created_at": str(row[4])}
 
 def login_user(db: Session, email: str, password: str):
-    user = db.execute(text("SELECT id, name, email, password_hash, role FROM users WHERE email = :email"), {"email": email}).fetchone()
+    user = db.execute(
+        text("""
+            SELECT id, name, email, password_hash, role, COALESCE(status, 'active') AS status
+            FROM users
+            WHERE email = :email
+        """),
+        {"email": email},
+    ).fetchone()
     if not user or not verify_password(password, user[3]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if user[5] != "active":
+        raise HTTPException(status_code=403, detail="Account is inactive")
+    db.execute(
+        text("""
+            UPDATE users
+            SET last_login_at = NOW(), updated_at = NOW()
+            WHERE id = :id
+        """),
+        {"id": user[0]},
+    )
+    db.execute(
+        text("""
+            INSERT INTO login_events (user_id)
+            VALUES (:id)
+        """),
+        {"id": user[0]},
+    )
+    db.commit()
     token = create_access_token(
         {"sub": str(user[0]), "name": user[1], "email": user[2], "role": user[4]}
     )

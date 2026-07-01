@@ -6,79 +6,108 @@ In Progress
 
 ## Feature
 
-SPEC_07c - Rubric Builder
+SPEC_08 - Admin Portal
 
 ## Spec File
 
-`context/features/SPEC_07c_RUBRIC_BUILDER.md`
+`context/features/SPEC_08_ADMIN_PORTAL.md`
 
 ## Goals
 
-- Implement the faculty Rubric Builder route at `/faculty/rubric-builder/{case_id}`
-- Load an existing case before editing its rubric
-- Pre-fill new rubrics with the six global default criteria and weights
-- Let faculty adjust weights for thinking depth, logic, creativity, practicality, risk awareness, and reflection
-- Keep the six default criteria fixed so capability scoring remains comparable across cases
-- Validate that default criterion weights sum to 100 before saving
-- Add Reset to Default behavior for the global 30/20/15/15/10/10 split
-- Support up to two case-specific qualitative criteria
-- Save rubric weights and case-specific criteria to the case record
-- Connect saved rubrics to the Case Builder publish gate
-- Show active-attempt warnings when rubric edits could affect in-progress student evaluations
-- Preserve historical evaluation text and scores when future rubric criteria change
+- Implement the Admin Portal under `/admin/*` for platform operations
+- Keep admin scope focused on users, onboarding, external case imports, system settings, and notifications
+- Build admin role routing and navigation separate from student, faculty, mentor, and director experiences
+- Add `/admin/users` for roster search, role/program/status/batch filters, pagination, row actions, and bulk actions
+- Support manual user creation with welcome/set-password flow and no admin-managed raw passwords
+- Support CSV user import with template download, upload, preview, inline validation, confirmation, and import summary
+- Add `/admin/user/:id` for role-aware user profile editing, account actions, login history, and mentor assignment
+- Add mentor assignment search with student-load display and overload warnings
+- Add `/admin/settings` for thresholds, adaptive difficulty rules, mentor assignment rules, career tracks, notification channels, and AI/LLM configuration
+- Ensure API keys in settings are write-only, masked in UI, never returned raw, and stored securely
+- Add `/admin/notifications` for delivery log filters, retry failed notifications, editable notification rules, and broadcast sending
+- Add notification log and notification rules persistence if missing
+- Add `/admin/case-import` for external case import queue, upload, field mapping, review, approval, rejection, and draft save
+- Reuse the faculty Case Builder case schema for imported case sections and core fields
+- Add `/admin/dashboard` for operational summary, users by role, active users, pending imports, recent activity, and quick actions
+- Provide backend admin APIs needed by each admin page
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_07c_RUBRIC_BUILDER.md`
+- `context/features/SPEC_08_ADMIN_PORTAL.md`
+- `context/features/SPEC_13_JWT_AUTH_IMPLEMENTATION.md`
 - `context/features/SPEC_07a_CASE_BUILDER.md`
+- `context/features/SPEC_07b_AI_CASE_GENERATION.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Answered Questions
 
-- Rubric model: fixed global default criteria with per-case weight adjustments
-- Default weights: Thinking Depth 30%, Logic 20%, Creativity 15%, Practicality 15%, Risk Awareness 10%, Reflection 10%
-- Case-specific criteria: qualitative only, capped at 2, no separate weight
-- Storage approach: use the existing case record rubric field unless implementation discovers a blocking reason for a separate table
+- Admin portal is for platform operations, not academic evaluation, mentoring, or institution-wide analytics
+- PCDC is a closed system: no self-registration; accounts are created or imported by admins
+- Admin should not handle raw passwords; account creation sends welcome/set-password links
+- External cases are imported by admin and attributed to External / Institution
+- Faculty can edit imported cases only when given editor rights
+- Settings API keys are write-only fields and only masked values should be displayed
+- Recommended mentor ratio is 1:25, with warnings when mentor load exceeds configured thresholds
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_07c_RUBRIC_BUILDER.md`
-3. Confirm the current case record field used for `evaluation_rubric`
-4. Confirm Case Builder publish validation checks for saved rubric existence
-5. Define rubric payload shape with fixed weights and case-specific criteria
-6. Build `GET /api/v1/faculty/cases/{id}/rubric` returning saved rubric or defaults
-7. Build `PUT /api/v1/faculty/cases/{id}/rubric` with weight-sum and max-criteria validation
-8. Add frontend API helpers for rubric fetch/save
-9. Add `/faculty/rubric-builder/:case_id` route
-10. Build Rubric Builder page with back link, case title, default criteria controls, total validator, and save action
-11. Add Reset to Default behavior
-12. Add case-specific criteria add/remove behavior with max-2 cap
-13. Show active-attempt warning when relevant
-14. Confirm Case Builder publish blocker clears after rubric save
-15. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_08_ADMIN_PORTAL.md`
+3. Confirm existing auth, role routing, user, student, mentor, case study, and settings-related schema
+4. Confirm whether login events, activity events, notification log, and notification rules tables exist
+5. Confirm SMTP/email provider behavior for welcome and reset-password emails
+6. Define admin API contracts and shared admin response shapes
+7. Build admin auth/role guards and frontend admin layout/navigation
+8. Build `/admin/users` list API and page with filters, pagination, manual add, status toggle, and bulk export/deactivate hooks
+9. Build user CSV template, upload, preview validation, confirm import, and summary flow
+10. Build `/admin/user/:id` detail API and page with role-conditional fields, account actions, login history, and mentor assignment
+11. Build settings storage and `/admin/settings` sections for thresholds, adaptive difficulty, mentor rules, career tracks, channels, and AI configuration
+12. Add secure handling for masked/write-only API key fields
+13. Build notification log/rules storage if missing
+14. Build `/admin/notifications` APIs and page with delivery filters, retry, rules CRUD, and broadcast flow
+15. Build `/admin/case-import` APIs and page for import queue, upload, mapping, review, approve, reject, and draft save
+16. Build `/admin/dashboard` summary API and page after dependent operational data exists
+17. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] `/faculty/rubric-builder/{case_id}` loads for an existing faculty-owned case
-- [x] New rubric opens with six default criteria and 30/20/15/15/10/10 weights
-- [x] Existing saved rubric loads exactly as saved
-- [x] Faculty can adjust each default criterion weight with numeric controls
-- [x] Running total is visible and save is disabled unless weights sum to 100
-- [x] Reset to Default restores the global default weights
-- [x] Faculty can add and remove case-specific qualitative criteria
-- [x] Case-specific criteria are capped at 2
-- [x] Backend validates weight total and criteria count before saving
-- [x] Saved rubric persists to the case record
-- [x] Case Builder recognizes saved rubric for publish validation
-- [x] Active-attempt warning appears when rubric changes may affect in-progress evaluations
-- [x] Historical evaluations are not retroactively changed by rubric edits
-- [x] Frontend build and relevant backend checks pass
+- [x] `/admin/*` routes are protected for admin users only
+- [x] Admin layout/navigation supports dashboard, users, user detail, case import, settings, and notifications
+- [x] `/admin/users` lists users with search, role, program, status, and batch filters
+- [ ] Users list supports pagination and row actions for edit, deactivate/reactivate, reset password, and role change
+- [ ] Manual Add User creates an account and triggers welcome/set-password flow
+- [x] CSV import template downloads with required headers
+- [ ] CSV upload preview flags missing email, duplicate email, invalid role, and other validation errors
+- [ ] Confirmed CSV import creates valid accounts and reports created/skipped/failed counts
+- [ ] `/admin/user/:id` loads role-aware profile, account metadata, and recent login history
+- [ ] User detail supports editable profile fields allowed by role
+- [ ] Mentor assignment shows active mentors with current student counts and overload warnings
+- [ ] Settings page saves thresholds, adaptive difficulty, mentor rules, career tracks, notification channels, and AI/LLM configuration
+- [ ] API keys are masked in the UI, write-only through APIs, and never returned raw
+- [ ] Notifications page lists delivery logs with role, channel, status, and date filters
+- [ ] Failed notifications can be retried
+- [ ] Notification rules can be created, edited, and deleted
+- [ ] Broadcast flow supports recipient targeting, channel selection, preview, confirmation, and delivery log entries
+- [ ] Case import queue supports upload, mapping, edit, review, approve, reject, and save-draft flows
+- [ ] Imported cases use the same section/core-field schema as faculty Case Builder
+- [x] Admin dashboard summarizes users, active users, pending imports, users by role, recent activity, and quick actions
+- [ ] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-07-01: Started SPEC_08 implementation on `feature/admin-portal`.
+  Added admin operations migration, `/api/v1/admin` dashboard/users APIs,
+  login activity tracking, admin layout/navigation, dashboard, users list,
+  manual user creation drawer, status/role actions, reset-password queueing,
+  CSV template download, and placeholder routes for remaining admin modules.
+
+- 2026-07-01: SPEC_08 Admin Portal moved to In Progress. Scope updated to
+  admin-only platform operations under `/admin/*`, user roster and onboarding,
+  CSV imports, role-aware user detail, external case imports, system settings,
+  notification logs/rules/broadcasts, and operational dashboard summary.
 
 - 2026-06-30: Implemented SPEC_07c on `feature/rubric-builder`. Added rubric
   save/load APIs backed by `case_studies.evaluation_rubric`, fixed default
