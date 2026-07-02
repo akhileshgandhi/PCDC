@@ -45,12 +45,73 @@ export interface FacultyCapability {
   name: string
 }
 
+export interface FacultyCaseMetadata {
+  case_code?: string | null
+  volume?: string | null
+  subject?: string | null
+  functional_area?: string | null
+  capability_category?: string | null
+  blooms_levels?: string[]
+  target_learners?: string | null
+  difficulty_label?: string | null
+}
+
+export interface FacultyCaseTiming {
+  reading_time_minutes?: number | null
+  answer_writing_time_minutes?: number | null
+  rapid_fire_time_minutes?: number | null
+}
+
+export interface FacultyCaseMarks {
+  total_marks?: number | null
+  written_marks?: number | null
+  rapid_fire_marks?: number | null
+}
+
+export interface FacultyCaseInstructions {
+  student_instructions_before?: string | null
+  student_instructions_during?: string | null
+  student_instructions_submission?: string | null
+  company_background?: string | null
+  industry_background?: string | null
+  faculty_common_mistakes?: string | null
+  faculty_discussion_points?: string | null
+  key_learning_points?: string | null
+}
+
+export interface FacultyCaseQuestion {
+  id?: number
+  question_number: number
+  question_text: string
+  marks: number
+  blooms_level?: string | null
+  word_limit_min?: number | null
+  word_limit_max?: number | null
+  instructions?: string | null
+  model_answer?: string | null
+  alternative_answers?: string[]
+  marking_scheme?: string | null
+}
+
+export interface FacultyRapidFireQuestion {
+  id?: number
+  sequence: number
+  question_text: string
+  answer_text?: string | null
+}
+
 export interface FacultyCaseEditor {
   id: number
   title: string
   industry: string
   difficulty: number
   duration_minutes: number
+  metadata: FacultyCaseMetadata
+  timing: FacultyCaseTiming
+  marks: FacultyCaseMarks
+  instructions: FacultyCaseInstructions
+  questions: FacultyCaseQuestion[]
+  rapid_fire_questions: FacultyRapidFireQuestion[]
   status: "draft" | "published" | "archived"
   capabilities: string[]
   expected_outcomes: string
@@ -69,6 +130,10 @@ export interface CreateFacultyCasePayload {
   duration_minutes: number
   capabilities: string[]
   expected_outcomes: string
+  metadata?: FacultyCaseMetadata
+  timing?: FacultyCaseTiming
+  marks?: FacultyCaseMarks
+  instructions?: FacultyCaseInstructions
 }
 
 export interface UpdateFacultyCasePayload {
@@ -80,6 +145,12 @@ export interface UpdateFacultyCasePayload {
   expected_outcomes?: string
   sections?: Partial<Record<CaseSectionKey, CaseSectionValue>>
   section_meta?: Partial<Record<CaseSectionKey, CaseSectionMeta>>
+  metadata?: FacultyCaseMetadata
+  timing?: FacultyCaseTiming
+  marks?: FacultyCaseMarks
+  instructions?: FacultyCaseInstructions
+  questions?: FacultyCaseQuestion[]
+  rapid_fire_questions?: FacultyRapidFireQuestion[]
 }
 
 export interface GenerateFacultyCasePayload {

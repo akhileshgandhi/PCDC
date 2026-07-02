@@ -8,6 +8,15 @@ export interface CaseStudyResponse {
   description: string | null
   domain: string
   difficulty: number
+  case_code?: string | null
+  subject?: string | null
+  difficulty_label?: string | null
+  total_marks?: number | null
+  written_marks?: number | null
+  rapid_fire_marks?: number | null
+  reading_time_minutes?: number | null
+  answer_writing_time_minutes?: number | null
+  rapid_fire_time_minutes?: number | null
   estimated_minutes: number
   source: string
   status: string

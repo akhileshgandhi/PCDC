@@ -28,6 +28,15 @@ class CaseStudyResponse(BaseModel):
     description: Optional[str] = None
     domain: str
     difficulty: int
+    case_code: Optional[str] = None
+    subject: Optional[str] = None
+    difficulty_label: Optional[str] = None
+    total_marks: Optional[float] = None
+    written_marks: Optional[float] = None
+    rapid_fire_marks: Optional[float] = None
+    reading_time_minutes: Optional[int] = None
+    answer_writing_time_minutes: Optional[int] = None
+    rapid_fire_time_minutes: Optional[int] = None
     estimated_minutes: int
     source: str
     status: str

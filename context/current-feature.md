@@ -6,106 +6,120 @@ In Progress
 
 ## Feature
 
-SPEC_10 - Dynamic Data & Role Mapping
+SPEC_11 - Case Study Schema Gap Analysis
 
 ## Spec File
 
-`context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
+`context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
 
 ## Goals
 
-- Implement the dynamic relationship and data-flow layer across admin, faculty, mentor, student, and director portals
-- Add `assigned_cases` persistence to separate case assignment intent from actual student attempts
-- Ensure admin-created students seed user, student, capability rows, optional mentor assignment, optional career track, and onboarding notifications
-- Support single and bulk student-to-mentor assignment with mentor load warnings and immediate mentor roster updates
-- Support student-to-career-track assignment from admin and student flows, with downstream recommendation refresh behavior
-- Keep faculty-to-student mapping case-based: faculty sees students only through attempts on faculty-created cases
-- Implement mentor case assignment from the published case library to assigned students, with assignment status tracking and intervention logging
-- Update student case-study lists to show assigned pending cases and "Assigned by Mentor" state
-- Ensure capability scores update after completed attempts using rolling weighted average and configurable recency weight
-- Add level progression checks after capability score updates
-- Add immediate score-drop alert creation inside score update transactions
-- Wire dashboard summary stats to live DB aggregations for student, faculty, mentor, admin, and director dashboards
-- Add a thin in-memory TTL cache wrapper for dashboard summary endpoints
-- Wire cross-portal notifications for mentor assignment, case assignment, simulation completion, score drops, level achievement, sessions, placement readiness, and delivery failures
+- Align the case study schema with stakeholder-provided case samples from `AI_Case_Samples.docx`
+- Add missing case identity and classification fields: case code, volume, subject, functional area, capability category, Bloom's levels, target learners, and difficulty label
+- Support stakeholder 5-level difficulty labels while preserving current numeric difficulty behavior where needed
+- Add case time breakdown fields for reading, answer writing, and rapid fire phases
+- Add marks breakdown fields for total, written, and rapid fire marks
+- Add instructional content sections for student instructions, company/industry background, faculty notes, and key learning points
+- Add structured `case_questions` persistence for the three written questions, word limits, Bloom's level, model answers, alternatives, and marking scheme
+- Add `rapid_fire_questions` persistence for six quick-response questions per case
+- Add student response persistence for written question responses and rapid fire responses
+- Add attempt marks fields for written marks, rapid fire marks, total marks, eligibility, and phase-specific time spent
+- Update Faculty Case Builder to create and edit the new metadata, structured questions, rapid fire questions, instructions, and faculty notes
+- Update Student Case Attempt flow from one free-form answer to structured question responses plus a rapid fire phase
+- Update AI evaluation to score against model answers, alternatives, and marking schemes while still deriving capability scores
+- Update case library displays to show case code, subject, difficulty label, and marks/time breakdown
+- Update Mentor Thinking Path to show structured written responses and rapid fire responses
+- Update analytics to include marks distribution alongside capability scores
 
 ## References
 
 - `context/project-overview.md`
+- `context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
+- `context/features/SPEC_07a_CASE_BUILDER.md`
+- `context/features/SPEC_07c_RUBRIC_BUILDER.md`
 - `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
 - `context/features/SPEC_09_MENTOR_PORTAL.md`
 - `context/features/SPEC_08_ADMIN_PORTAL.md`
-- `context/features/SPEC_13_JWT_AUTH_IMPLEMENTATION.md`
-- `context/features/SPEC_07a_CASE_BUILDER.md`
-- `context/features/SPEC_07c_RUBRIC_BUILDER.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Answered Questions
 
-- Case library scoping is open: all published cases are visible globally, with phase 1 student attempts driven by assigned cases
-- Faculty-to-student relationship is case-based only; no direct faculty-student cohort assignment table
-- Phase 1 student case selection is assigned cases only; future self-selection can unlock by current level and case difficulty
-- Recency weight for capability score updates is admin-configurable, defaulting to 0.3
-- Dashboard summaries use DB-level aggregations and a 5-minute in-memory TTL cache
-- Capability scores are seeded and displayed as 0 until the first completed attempt
-- Mentor load is a soft cap of 25 students, warned in UI but not hard-blocked in the database
-- Reassigning a mentor preserves historical interventions and transfers open alerts to the new mentor
+- Stakeholder cases are the source of truth for the initial import schema
+- Actual stakeholder cases use 5 named difficulty levels: Foundation, Regular, Pro, Expert, and Champion
+- Current 7-level platform difficulty needs a compatibility strategy; recommended approach is adopting the 5 stakeholder levels for these cases
+- Structured written assessment has three specific questions with marks, word limits, model answers, alternatives, and marking schemes
+- Rapid Fire is a new post-written phase with six quick questions and 3 total marks
+- Student attempts need both marks scores and capability scores
+- Students should see both marks and capability-score outcomes because they answer different feedback needs
+- 70% written completion eligibility determines whether an attempt is evaluated
+- Bloom's Taxonomy data should be stored per question from day one, even if analytics come later
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
-3. Confirm existing user, student, mentor, career track, capability, case study, attempt, evaluation, alert, session, intervention, notification, and settings schema
-4. Add `assigned_cases` migration and indexes
-5. Add or confirm capability score seeding for new students
-6. Implement shared TTL cache wrapper for dashboard summary endpoints
-7. Implement capability score update logic after completed attempts using configurable recency weight
-8. Add level progression checks after score updates
-9. Add score-drop alert writes inside the same transaction as score updates
-10. Implement admin single mentor assignment API and UI behavior
-11. Implement admin bulk mentor assignment API and UI behavior
-12. Implement admin and student career-track assignment APIs and UI behavior
-13. Implement mentor published-case selector API
-14. Implement mentor case assignment API with duplicate-attempt blocking, `assigned_cases` write, notification, and intervention log
-15. Update student case-study list API and UI to read assigned pending cases and assignment status
-16. Update attempt start/completion flow to transition assigned case status pending to active to completed
-17. Update faculty student and analytics endpoints to use case-based student relationships
-18. Update dashboard summary endpoints across portals to use live aggregation and cache
-19. Wire notification events from the dynamic data flows
-20. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
+3. Confirm current `case_studies`, `case_study_attempts`, `cs_evaluations`, `cs_ai_conversations`, Faculty Case Builder, Student Case Attempt, case library, Admin Case Import, and Mentor Thinking Path behavior
+4. Add Alembic migration for new case metadata columns on `case_studies`
+5. Add Alembic migration for marks, eligibility, and phase timing columns on `case_study_attempts`
+6. Add `case_questions`, `rapid_fire_questions`, `case_question_responses`, and `rapid_fire_responses` tables
+7. Update backend case serialization/parsing helpers to include new metadata and structured sections
+8. Update Faculty Case Builder APIs to read/write metadata, instructions, faculty notes, written questions, and rapid fire questions
+9. Update Faculty Case Builder UI with metadata, question editor, rapid fire editor, student instructions, faculty notes, and key learning points
+10. Update Admin Case Import mapping to accept the full stakeholder case structure
+11. Update student case library APIs and cards to show case code, subject, difficulty label, time breakdown, and marks
+12. Update Student Case Attempt flow to reading phase, structured written questions, word counts, eligibility check, and rapid fire phase
+13. Update AI evaluation to compare against model answers, alternatives, and marking schemes
+14. Persist per-question marks, rapid fire marks, total marks, feedback, and capability score updates
+15. Update Mentor Thinking Path to display written question responses and rapid fire responses
+16. Update faculty and director analytics to include marks distributions
+17. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] `assigned_cases` table exists with student, case, assigner, assigned_at, status, and useful indexes
-- [x] New student creation seeds user, student, and one capability row per capability with score 0
-- [x] Single student creation supports optional mentor and career track assignment
-- [ ] Bulk CSV import validates optional mentor and career track data with mentor load warnings
-- [x] Admin can assign or reassign one student's mentor from user detail
-- [x] Admin can bulk assign selected students to a mentor
-- [ ] Mentor reassignment updates student roster visibility immediately and preserves intervention history
-- [x] Open alerts for reassigned students transfer to the new mentor
-- [x] Admin can assign or update a student's career track
-- [ ] Student can self-select or update career track from the student career page
-- [ ] Faculty student visibility is based on attempts on faculty-created cases only
-- [x] Mentor can search/select published cases for assigned students
-- [x] Mentor case assignment blocks cases already attempted by that student
-- [x] Mentor case assignment creates an `assigned_cases` pending record
-- [x] Mentor case assignment notifies the student and auto-logs a case-assigned intervention
-- [x] Student case-study list shows assigned pending cases with "Assigned by Mentor" state
-- [x] Attempt start changes matching assigned case status from pending to active
-- [x] Attempt completion changes matching assigned case status from active to completed
-- [x] Capability scores update after completed attempts using rolling weighted average
-- [x] Recency weight is read from admin settings with default 0.3 fallback
-- [x] Student level updates when overall score crosses configured thresholds
-- [x] Score-drop alerts are written immediately in the score update transaction
-- [ ] Student, faculty, mentor, admin, and director dashboard summary stats use live DB aggregation
-- [ ] Dashboard summary endpoints use the shared 5-minute TTL cache wrapper
-- [ ] Notification events are wired for mentor assignment, case assignment, simulation completion, score drops, level achievement, sessions, placement readiness, and delivery failures
+- [x] `case_studies` stores case code, volume, subject, functional area, capability category, Bloom's levels, target learners, and difficulty label
+- [x] `case_studies` stores reading, answer writing, and rapid fire time breakdowns
+- [x] `case_studies` stores total, written, and rapid fire marks breakdowns
+- [x] `case_studies` stores student instructions, company background, industry background, faculty discussion notes, and key learning points
+- [x] `case_questions` table stores question number, text, marks, Bloom's level, word limits, instructions, model answer, alternative answers, and marking scheme
+- [x] `rapid_fire_questions` table stores six ordered quick questions and answers per case
+- [x] `case_question_responses` table stores per-attempt written responses, word counts, AI marks, and feedback
+- [x] `rapid_fire_responses` table stores per-attempt rapid fire responses, correctness, and marks awarded
+- [x] `case_study_attempts` stores written marks, rapid fire marks, total marks, eligibility, and phase-specific time spent
+- [ ] Faculty Case Builder can create and edit all new metadata and instructional fields
+- [ ] Faculty Case Builder can create and edit three structured written questions
+- [ ] Faculty Case Builder can create and edit six rapid fire questions
+- [ ] Admin Case Import can map/import the stakeholder case schema
+- [x] Student case library displays case code, subject, difficulty label, marks breakdown, and time breakdown
+- [ ] Student attempt flow supports reading, structured writing, and rapid fire phases
+- [ ] Written question response UI shows word count indicators and enforces eligibility rules
+- [ ] Rapid fire UI supports six short-answer questions with phase timer
+- [ ] AI evaluation awards marks per written question using model answers, alternatives, and marking schemes
+- [ ] AI evaluation awards rapid fire marks and persists total marks out of 10
+- [ ] Capability score updates still run after structured case completion
+- [ ] Mentor Thinking Path shows written question responses and rapid fire responses
+- [ ] Faculty/director analytics include marks distributions alongside capability scores
 - [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-07-02: Started SPEC_11 implementation on
+  `feature/case-schema-gap-analysis`. Added case schema migration for rich
+  case metadata, time and marks breakdowns, instructional sections, structured
+  written questions, rapid fire questions, written/rapid-fire responses, and
+  attempt marks/timing/eligibility fields. Extended faculty case APIs to
+  read/write metadata, timing, marks, instructions, written questions, and
+  rapid fire questions. Exposed case code, subject, difficulty label, marks,
+  and phase timing through case list APIs and student case cards. Frontend
+  build passed and backend Python syntax check passed via `py`.
+
+- 2026-07-02: SPEC_11 Case Study Schema Gap Analysis moved to In Progress.
+  Scope updated to stakeholder case schema alignment, rich case metadata,
+  structured written questions, rapid fire questions, marks scoring,
+  phase-specific timing, eligibility rules, model-answer-aware AI evaluation,
+  case library display updates, mentor thinking path updates, and marks
+  analytics.
 
 - 2026-07-02: Started SPEC_10 implementation on
   `feature/dynamic-data-mapping`. Added `assigned_cases` migration, shared TTL

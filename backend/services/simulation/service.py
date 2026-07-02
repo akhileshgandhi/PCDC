@@ -112,12 +112,22 @@ def get_case_tags(db: Session, case_study_id: int) -> List[Dict[str, Any]]:
 
 
 def case_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
+    values = dict(getattr(row, "_mapping", {}) or {})
     return {
         "id": row.id,
         "title": row.title,
         "description": row.description,
         "domain": row.domain,
         "difficulty": row.difficulty,
+        "case_code": values.get("case_code"),
+        "subject": values.get("subject"),
+        "difficulty_label": values.get("difficulty_label"),
+        "total_marks": float(values["total_marks"]) if values.get("total_marks") is not None else None,
+        "written_marks": float(values["written_marks"]) if values.get("written_marks") is not None else None,
+        "rapid_fire_marks": float(values["rapid_fire_marks"]) if values.get("rapid_fire_marks") is not None else None,
+        "reading_time_minutes": values.get("reading_time_minutes"),
+        "answer_writing_time_minutes": values.get("answer_writing_time_minutes"),
+        "rapid_fire_time_minutes": values.get("rapid_fire_time_minutes"),
         "estimated_minutes": row.estimated_minutes,
         "source": row.source,
         "status": row.status,
@@ -219,6 +229,9 @@ def list_case_studies(
         text(f"""
             SELECT cs.id, cs.title, cs.description, cs.domain, cs.difficulty,
                    cs.estimated_minutes, cs.source, cs.status, cs.created_by,
+                   cs.case_code, cs.subject, cs.difficulty_label, cs.total_marks,
+                   cs.written_marks, cs.rapid_fire_marks, cs.reading_time_minutes,
+                   cs.answer_writing_time_minutes, cs.rapid_fire_time_minutes,
                    cs.created_at
             FROM case_studies cs
             WHERE {" AND ".join(where_clauses)}
@@ -249,7 +262,10 @@ def list_assigned_case_studies(
                        WHEN ac.status = 'active' THEN 'in_progress'
                        ELSE 'completed'
                    END AS status,
-                   cs.created_by, ac.assigned_at AS created_at
+                   cs.created_by, cs.case_code, cs.subject, cs.difficulty_label,
+                   cs.total_marks, cs.written_marks, cs.rapid_fire_marks,
+                   cs.reading_time_minutes, cs.answer_writing_time_minutes,
+                   cs.rapid_fire_time_minutes, ac.assigned_at AS created_at
             FROM assigned_cases ac
             JOIN students s ON s.id = ac.student_id
             JOIN users u ON u.id = s.user_id
@@ -301,7 +317,10 @@ def get_case_study(db: Session, case_id: int, current_user: Dict[str, Any]) -> D
     row = db.execute(
         text("""
             SELECT id, title, description, domain, difficulty,
-                   estimated_minutes, source, status, created_by, created_at
+                   estimated_minutes, source, status, created_by, case_code,
+                   subject, difficulty_label, total_marks, written_marks,
+                   rapid_fire_marks, reading_time_minutes,
+                   answer_writing_time_minutes, rapid_fire_time_minutes, created_at
             FROM case_studies
             WHERE id = :case_id
         """),
