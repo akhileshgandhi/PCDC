@@ -26,7 +26,7 @@ app.include_router(admin_router, prefix="/api/v1")
 app.include_router(faculty_router, prefix="/api/v1")
 app.include_router(capability_router, prefix="/capability")
 app.include_router(ai_router, prefix="/ai")
-app.include_router(mentor_router, prefix="/mentor")
+app.include_router(mentor_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/notification")
 
 @app.get("/")

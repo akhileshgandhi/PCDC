@@ -6,97 +6,117 @@ In Progress
 
 ## Feature
 
-SPEC_08 - Admin Portal
+SPEC_09 - Mentor Portal
 
 ## Spec File
 
-`context/features/SPEC_08_ADMIN_PORTAL.md`
+`context/features/SPEC_09_MENTOR_PORTAL.md`
 
 ## Goals
 
-- Implement the Admin Portal under `/admin/*` for platform operations
-- Keep admin scope focused on users, onboarding, external case imports, system settings, and notifications
-- Build admin role routing and navigation separate from student, faculty, mentor, and director experiences
-- Add `/admin/users` for roster search, role/program/status/batch filters, pagination, row actions, and bulk actions
-- Support manual user creation with welcome/set-password flow and no admin-managed raw passwords
-- Support CSV user import with template download, upload, preview, inline validation, confirmation, and import summary
-- Add `/admin/user/:id` for role-aware user profile editing, account actions, login history, and mentor assignment
-- Add mentor assignment search with student-load display and overload warnings
-- Add `/admin/settings` for thresholds, adaptive difficulty rules, mentor assignment rules, career tracks, notification channels, and AI/LLM configuration
-- Ensure API keys in settings are write-only, masked in UI, never returned raw, and stored securely
-- Add `/admin/notifications` for delivery log filters, retry failed notifications, editable notification rules, and broadcast sending
-- Add notification log and notification rules persistence if missing
-- Add `/admin/case-import` for external case import queue, upload, field mapping, review, approval, rejection, and draft save
-- Reuse the faculty Case Builder case schema for imported case sections and core fields
-- Add `/admin/dashboard` for operational summary, users by role, active users, pending imports, recent activity, and quick actions
-- Provide backend admin APIs needed by each admin page
+- Implement the Mentor Portal under `/mentor/*` as the human intervention layer for assigned students
+- Keep mentor scope focused on capability trends, struggling or stagnant students, thinking paths, sessions, alerts, and intervention logs
+- Build mentor role routing and navigation separate from student, faculty, admin, and director experiences
+- Add `/mentor/dashboard` for assigned-student counts, at-risk counts, top performers, sessions this week, cohort weakness signals, urgent alerts, and upcoming sessions
+- Add `/mentor/students` roster with search, status/career track/weakest capability/level filters, sorting, and row links to student detail
+- Add `/mentor/student/:id` for student profile, capability trend, recent simulations, AI intervention suggestions, direct actions, and intervention history
+- Add `/mentor/thinking-path` so mentors can inspect a student's full case attempt trace: initial analysis, AI conversation, solution, defense, and reflection
+- Support mentor comments and per-stage flags on thinking paths, including flagging attempts for session discussion
+- Add `/mentor/interventions` for filtering, viewing, creating, and updating mentor actions across assigned students
+- Add `/mentor/sessions` for scheduling one-on-one and group sessions, completing sessions with notes, and writing completed sessions into interventions
+- Add `/mentor/alerts` for active and dismissed system-generated student alerts with actions to view student, view thinking path, log intervention, or dismiss
+- Add required persistence for sessions, session students, mentor attempt comments, and alerts if missing
+- Add alert generation using immediate score-drop checks and APScheduler sweeps for inactivity, stagnation, low capability score, copy-paste risk, and placement-readiness concerns
+- Use existing OpenAI configuration for mentor AI suggestions with a coaching-specific prompt
+- Provide backend mentor APIs needed by each mentor page
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_08_ADMIN_PORTAL.md`
+- `context/features/SPEC_09_MENTOR_PORTAL.md`
 - `context/features/SPEC_13_JWT_AUTH_IMPLEMENTATION.md`
-- `context/features/SPEC_07a_CASE_BUILDER.md`
-- `context/features/SPEC_07b_AI_CASE_GENERATION.md`
+- `context/features/SPEC_08_ADMIN_PORTAL.md`
+- `context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Answered Questions
 
-- Admin portal is for platform operations, not academic evaluation, mentoring, or institution-wide analytics
-- PCDC is a closed system: no self-registration; accounts are created or imported by admins
-- Admin should not handle raw passwords; account creation sends welcome/set-password links
-- External cases are imported by admin and attributed to External / Institution
-- Faculty can edit imported cases only when given editor rights
-- Settings API keys are write-only fields and only masked values should be displayed
-- Recommended mentor ratio is 1:25, with warnings when mentor load exceeds configured thresholds
+- Mentor portal is the human intervention layer, not an evaluator, content creator, or platform operator
+- Mentors are assigned up to 25 students and focus on early, intelligent intervention
+- Sessions need a dedicated table because they have a scheduled-to-completed lifecycle separate from interventions
+- Mentor attempt comments need a dedicated `mentor_attempt_comments` table
+- Alert generation is hybrid: immediate score-drop checks plus APScheduler sweeps every 6 hours for slow-moving conditions
+- Case assignment from mentor recommendations is immediate and appears in the student's pending list
+- AI suggestions use the same OpenAI setup as case generation with a mentor-coaching-specific prompt
+- Group sessions use one session record with a `session_students` join table
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_08_ADMIN_PORTAL.md`
-3. Confirm existing auth, role routing, user, student, mentor, case study, and settings-related schema
-4. Confirm whether login events, activity events, notification log, and notification rules tables exist
-5. Confirm SMTP/email provider behavior for welcome and reset-password emails
-6. Define admin API contracts and shared admin response shapes
-7. Build admin auth/role guards and frontend admin layout/navigation
-8. Build `/admin/users` list API and page with filters, pagination, manual add, status toggle, and bulk export/deactivate hooks
-9. Build user CSV template, upload, preview validation, confirm import, and summary flow
-10. Build `/admin/user/:id` detail API and page with role-conditional fields, account actions, login history, and mentor assignment
-11. Build settings storage and `/admin/settings` sections for thresholds, adaptive difficulty, mentor rules, career tracks, channels, and AI configuration
-12. Add secure handling for masked/write-only API key fields
-13. Build notification log/rules storage if missing
-14. Build `/admin/notifications` APIs and page with delivery filters, retry, rules CRUD, and broadcast flow
-15. Build `/admin/case-import` APIs and page for import queue, upload, mapping, review, approve, reject, and draft save
-16. Build `/admin/dashboard` summary API and page after dependent operational data exists
-17. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_09_MENTOR_PORTAL.md`
+3. Confirm existing auth, role routing, mentor assignment, student, capability, simulation attempt, AI conversation, reflection, intervention, case assignment, and settings-related schema
+4. Confirm whether `sessions`, `session_students`, `mentor_attempt_comments`, and `alerts` tables already exist
+5. Add Alembic migrations for missing mentor portal tables and enums
+6. Define mentor API contracts and shared mentor response shapes
+7. Build mentor auth/role guards and frontend mentor layout/navigation
+8. Build `/mentor/students` list API and page with search, filters, sorting, status labels, and links to student detail
+9. Build `/mentor/student/:id` API and page with capability profile, trend data, recent simulations, AI suggestions, actions, and intervention history
+10. Build mentor AI suggestions API using published case library recommendations
+11. Build case assignment API so recommended or selected cases appear in the student's pending list immediately
+12. Build `/mentor/thinking-path` APIs and page for attempt trace, per-stage flags, overall comments, and flag-for-session behavior
+13. Build `/mentor/alerts` APIs and page for active/dismissed alerts, filters, actions, and dismissal audit trail
+14. Add score-drop alert writes inside score update flow and APScheduler sweeps for inactivity, level stagnation, low capability, copy-paste risk, and placement readiness
+15. Build `/mentor/sessions` APIs and page for scheduling, upcoming/past views, completion notes, and intervention auto-write
+16. Build `/mentor/interventions` APIs and page with filters, log modal, create, and update behavior
+17. Build `/mentor/dashboard` summary APIs and page after roster, alerts, sessions, and interventions are available
+18. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] `/admin/*` routes are protected for admin users only
-- [x] Admin layout/navigation supports dashboard, users, user detail, case import, settings, and notifications
-- [x] `/admin/users` lists users with search, role, program, status, and batch filters
-- [ ] Users list supports pagination and row actions for edit, deactivate/reactivate, reset password, and role change
-- [ ] Manual Add User creates an account and triggers welcome/set-password flow
-- [x] CSV import template downloads with required headers
-- [ ] CSV upload preview flags missing email, duplicate email, invalid role, and other validation errors
-- [ ] Confirmed CSV import creates valid accounts and reports created/skipped/failed counts
-- [ ] `/admin/user/:id` loads role-aware profile, account metadata, and recent login history
-- [ ] User detail supports editable profile fields allowed by role
-- [ ] Mentor assignment shows active mentors with current student counts and overload warnings
-- [ ] Settings page saves thresholds, adaptive difficulty, mentor rules, career tracks, notification channels, and AI/LLM configuration
-- [ ] API keys are masked in the UI, write-only through APIs, and never returned raw
-- [ ] Notifications page lists delivery logs with role, channel, status, and date filters
-- [ ] Failed notifications can be retried
-- [ ] Notification rules can be created, edited, and deleted
-- [ ] Broadcast flow supports recipient targeting, channel selection, preview, confirmation, and delivery log entries
-- [ ] Case import queue supports upload, mapping, edit, review, approve, reject, and save-draft flows
-- [ ] Imported cases use the same section/core-field schema as faculty Case Builder
-- [x] Admin dashboard summarizes users, active users, pending imports, users by role, recent activity, and quick actions
-- [ ] Frontend build and relevant backend checks pass
+- [x] `/mentor/*` routes are protected for mentor users only
+- [x] Mentor layout/navigation supports dashboard, students, student detail, thinking path, interventions, sessions, and alerts
+- [x] Required persistence exists for sessions, session students, mentor attempt comments, and alerts
+- [x] `/mentor/students` lists only the authenticated mentor's assigned students
+- [ ] Student roster supports search, status, career track, weakest capability, and level filters
+- [ ] Student roster supports sorting by capability score, last activity, and level
+- [ ] Student roster shows status labels for On Track, At Risk, Stagnant, Top Performer, and Inactive
+- [ ] `/mentor/student/:id` enforces mentor assignment ownership
+- [ ] Student detail shows profile, career track, level, status, capability scores, trends, recent simulations, AI suggestions, actions, and intervention history
+- [ ] AI suggestions identify weak areas and recommend published cases or exercises
+- [ ] Recommended or selected case assignment appears in the student's pending list immediately
+- [ ] `/mentor/thinking-path` shows initial analysis, AI conversation log, solution, defense, reflection, time taken, and final score for a selected attempt
+- [ ] Thinking path supports per-stage comments and flags
+- [ ] Thinking path supports overall mentor comments and flagging an attempt for session discussion
+- [ ] `/mentor/alerts` lists active and dismissed alerts with type, student, and status filters
+- [ ] Alerts support View Student, View Thinking Path, Log Intervention, and Dismiss actions
+- [ ] Score-drop alerts are created immediately when score changes exceed the configured threshold
+- [ ] APScheduler sweep creates alerts for inactivity, level stagnation, low capability score, copy-paste risk, and placement readiness concerns
+- [ ] `/mentor/sessions` lists upcoming and past sessions
+- [ ] Sessions can be scheduled for one-on-one and group mentoring
+- [ ] Completed sessions save notes, link discussed thinking paths, and auto-create intervention entries
+- [ ] `/mentor/interventions` lists actions with student, type, and date range filters
+- [ ] Mentors can create and update interventions with type, date, notes, action taken, and optional follow-up date
+- [x] `/mentor/dashboard` summarizes assigned students, at-risk students, top performers, sessions this week, weakness signals, urgent alerts, and upcoming sessions
+- [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-07-02: Started SPEC_09 implementation on `feature/mentor-portal`.
+  Added mentor portal migration for sessions, session_students,
+  mentor_attempt_comments, alerts, and intervention metadata; replaced the
+  mentor backend stub with dashboard, students, alerts, sessions,
+  interventions, and thinking-path comment APIs; moved mentor API routing under
+  `/api/v1`; added mentor frontend API client, layout/navigation, dashboard,
+  students roster, and placeholder routes for remaining mentor modules.
+  Frontend build passed and backend Python syntax check passed via `py`.
+
+- 2026-07-02: SPEC_09 Mentor Portal moved to In Progress. Scope updated to
+  mentor-only coaching workflows under `/mentor/*`, assigned-student roster,
+  student detail with capability trends and AI suggestions, thinking path review,
+  intervention logging, session scheduling/completion, alert handling, required
+  mentor persistence, and dashboard summaries.
 
 - 2026-07-01: Started SPEC_08 implementation on `feature/admin-portal`.
   Added admin operations migration, `/api/v1/admin` dashboard/users APIs,
