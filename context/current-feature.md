@@ -6,102 +6,122 @@ In Progress
 
 ## Feature
 
-SPEC_09 - Mentor Portal
+SPEC_10 - Dynamic Data & Role Mapping
 
 ## Spec File
 
-`context/features/SPEC_09_MENTOR_PORTAL.md`
+`context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
 
 ## Goals
 
-- Implement the Mentor Portal under `/mentor/*` as the human intervention layer for assigned students
-- Keep mentor scope focused on capability trends, struggling or stagnant students, thinking paths, sessions, alerts, and intervention logs
-- Build mentor role routing and navigation separate from student, faculty, admin, and director experiences
-- Add `/mentor/dashboard` for assigned-student counts, at-risk counts, top performers, sessions this week, cohort weakness signals, urgent alerts, and upcoming sessions
-- Add `/mentor/students` roster with search, status/career track/weakest capability/level filters, sorting, and row links to student detail
-- Add `/mentor/student/:id` for student profile, capability trend, recent simulations, AI intervention suggestions, direct actions, and intervention history
-- Add `/mentor/thinking-path` so mentors can inspect a student's full case attempt trace: initial analysis, AI conversation, solution, defense, and reflection
-- Support mentor comments and per-stage flags on thinking paths, including flagging attempts for session discussion
-- Add `/mentor/interventions` for filtering, viewing, creating, and updating mentor actions across assigned students
-- Add `/mentor/sessions` for scheduling one-on-one and group sessions, completing sessions with notes, and writing completed sessions into interventions
-- Add `/mentor/alerts` for active and dismissed system-generated student alerts with actions to view student, view thinking path, log intervention, or dismiss
-- Add required persistence for sessions, session students, mentor attempt comments, and alerts if missing
-- Add alert generation using immediate score-drop checks and APScheduler sweeps for inactivity, stagnation, low capability score, copy-paste risk, and placement-readiness concerns
-- Use existing OpenAI configuration for mentor AI suggestions with a coaching-specific prompt
-- Provide backend mentor APIs needed by each mentor page
+- Implement the dynamic relationship and data-flow layer across admin, faculty, mentor, student, and director portals
+- Add `assigned_cases` persistence to separate case assignment intent from actual student attempts
+- Ensure admin-created students seed user, student, capability rows, optional mentor assignment, optional career track, and onboarding notifications
+- Support single and bulk student-to-mentor assignment with mentor load warnings and immediate mentor roster updates
+- Support student-to-career-track assignment from admin and student flows, with downstream recommendation refresh behavior
+- Keep faculty-to-student mapping case-based: faculty sees students only through attempts on faculty-created cases
+- Implement mentor case assignment from the published case library to assigned students, with assignment status tracking and intervention logging
+- Update student case-study lists to show assigned pending cases and "Assigned by Mentor" state
+- Ensure capability scores update after completed attempts using rolling weighted average and configurable recency weight
+- Add level progression checks after capability score updates
+- Add immediate score-drop alert creation inside score update transactions
+- Wire dashboard summary stats to live DB aggregations for student, faculty, mentor, admin, and director dashboards
+- Add a thin in-memory TTL cache wrapper for dashboard summary endpoints
+- Wire cross-portal notifications for mentor assignment, case assignment, simulation completion, score drops, level achievement, sessions, placement readiness, and delivery failures
 
 ## References
 
 - `context/project-overview.md`
+- `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
 - `context/features/SPEC_09_MENTOR_PORTAL.md`
-- `context/features/SPEC_13_JWT_AUTH_IMPLEMENTATION.md`
 - `context/features/SPEC_08_ADMIN_PORTAL.md`
-- `context/features/SPEC_10_11_12_CAREER_ACHIEVEMENTS_MENTOR.md`
+- `context/features/SPEC_13_JWT_AUTH_IMPLEMENTATION.md`
+- `context/features/SPEC_07a_CASE_BUILDER.md`
+- `context/features/SPEC_07c_RUBRIC_BUILDER.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
 
 ## Answered Questions
 
-- Mentor portal is the human intervention layer, not an evaluator, content creator, or platform operator
-- Mentors are assigned up to 25 students and focus on early, intelligent intervention
-- Sessions need a dedicated table because they have a scheduled-to-completed lifecycle separate from interventions
-- Mentor attempt comments need a dedicated `mentor_attempt_comments` table
-- Alert generation is hybrid: immediate score-drop checks plus APScheduler sweeps every 6 hours for slow-moving conditions
-- Case assignment from mentor recommendations is immediate and appears in the student's pending list
-- AI suggestions use the same OpenAI setup as case generation with a mentor-coaching-specific prompt
-- Group sessions use one session record with a `session_students` join table
+- Case library scoping is open: all published cases are visible globally, with phase 1 student attempts driven by assigned cases
+- Faculty-to-student relationship is case-based only; no direct faculty-student cohort assignment table
+- Phase 1 student case selection is assigned cases only; future self-selection can unlock by current level and case difficulty
+- Recency weight for capability score updates is admin-configurable, defaulting to 0.3
+- Dashboard summaries use DB-level aggregations and a 5-minute in-memory TTL cache
+- Capability scores are seeded and displayed as 0 until the first completed attempt
+- Mentor load is a soft cap of 25 students, warned in UI but not hard-blocked in the database
+- Reassigning a mentor preserves historical interventions and transfers open alerts to the new mentor
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_09_MENTOR_PORTAL.md`
-3. Confirm existing auth, role routing, mentor assignment, student, capability, simulation attempt, AI conversation, reflection, intervention, case assignment, and settings-related schema
-4. Confirm whether `sessions`, `session_students`, `mentor_attempt_comments`, and `alerts` tables already exist
-5. Add Alembic migrations for missing mentor portal tables and enums
-6. Define mentor API contracts and shared mentor response shapes
-7. Build mentor auth/role guards and frontend mentor layout/navigation
-8. Build `/mentor/students` list API and page with search, filters, sorting, status labels, and links to student detail
-9. Build `/mentor/student/:id` API and page with capability profile, trend data, recent simulations, AI suggestions, actions, and intervention history
-10. Build mentor AI suggestions API using published case library recommendations
-11. Build case assignment API so recommended or selected cases appear in the student's pending list immediately
-12. Build `/mentor/thinking-path` APIs and page for attempt trace, per-stage flags, overall comments, and flag-for-session behavior
-13. Build `/mentor/alerts` APIs and page for active/dismissed alerts, filters, actions, and dismissal audit trail
-14. Add score-drop alert writes inside score update flow and APScheduler sweeps for inactivity, level stagnation, low capability, copy-paste risk, and placement readiness
-15. Build `/mentor/sessions` APIs and page for scheduling, upcoming/past views, completion notes, and intervention auto-write
-16. Build `/mentor/interventions` APIs and page with filters, log modal, create, and update behavior
-17. Build `/mentor/dashboard` summary APIs and page after roster, alerts, sessions, and interventions are available
-18. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
+3. Confirm existing user, student, mentor, career track, capability, case study, attempt, evaluation, alert, session, intervention, notification, and settings schema
+4. Add `assigned_cases` migration and indexes
+5. Add or confirm capability score seeding for new students
+6. Implement shared TTL cache wrapper for dashboard summary endpoints
+7. Implement capability score update logic after completed attempts using configurable recency weight
+8. Add level progression checks after score updates
+9. Add score-drop alert writes inside the same transaction as score updates
+10. Implement admin single mentor assignment API and UI behavior
+11. Implement admin bulk mentor assignment API and UI behavior
+12. Implement admin and student career-track assignment APIs and UI behavior
+13. Implement mentor published-case selector API
+14. Implement mentor case assignment API with duplicate-attempt blocking, `assigned_cases` write, notification, and intervention log
+15. Update student case-study list API and UI to read assigned pending cases and assignment status
+16. Update attempt start/completion flow to transition assigned case status pending to active to completed
+17. Update faculty student and analytics endpoints to use case-based student relationships
+18. Update dashboard summary endpoints across portals to use live aggregation and cache
+19. Wire notification events from the dynamic data flows
+20. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] `/mentor/*` routes are protected for mentor users only
-- [x] Mentor layout/navigation supports dashboard, students, student detail, thinking path, interventions, sessions, and alerts
-- [x] Required persistence exists for sessions, session students, mentor attempt comments, and alerts
-- [x] `/mentor/students` lists only the authenticated mentor's assigned students
-- [ ] Student roster supports search, status, career track, weakest capability, and level filters
-- [ ] Student roster supports sorting by capability score, last activity, and level
-- [ ] Student roster shows status labels for On Track, At Risk, Stagnant, Top Performer, and Inactive
-- [ ] `/mentor/student/:id` enforces mentor assignment ownership
-- [ ] Student detail shows profile, career track, level, status, capability scores, trends, recent simulations, AI suggestions, actions, and intervention history
-- [ ] AI suggestions identify weak areas and recommend published cases or exercises
-- [ ] Recommended or selected case assignment appears in the student's pending list immediately
-- [ ] `/mentor/thinking-path` shows initial analysis, AI conversation log, solution, defense, reflection, time taken, and final score for a selected attempt
-- [ ] Thinking path supports per-stage comments and flags
-- [ ] Thinking path supports overall mentor comments and flagging an attempt for session discussion
-- [ ] `/mentor/alerts` lists active and dismissed alerts with type, student, and status filters
-- [ ] Alerts support View Student, View Thinking Path, Log Intervention, and Dismiss actions
-- [ ] Score-drop alerts are created immediately when score changes exceed the configured threshold
-- [ ] APScheduler sweep creates alerts for inactivity, level stagnation, low capability score, copy-paste risk, and placement readiness concerns
-- [ ] `/mentor/sessions` lists upcoming and past sessions
-- [ ] Sessions can be scheduled for one-on-one and group mentoring
-- [ ] Completed sessions save notes, link discussed thinking paths, and auto-create intervention entries
-- [ ] `/mentor/interventions` lists actions with student, type, and date range filters
-- [ ] Mentors can create and update interventions with type, date, notes, action taken, and optional follow-up date
-- [x] `/mentor/dashboard` summarizes assigned students, at-risk students, top performers, sessions this week, weakness signals, urgent alerts, and upcoming sessions
+- [x] `assigned_cases` table exists with student, case, assigner, assigned_at, status, and useful indexes
+- [x] New student creation seeds user, student, and one capability row per capability with score 0
+- [x] Single student creation supports optional mentor and career track assignment
+- [ ] Bulk CSV import validates optional mentor and career track data with mentor load warnings
+- [x] Admin can assign or reassign one student's mentor from user detail
+- [x] Admin can bulk assign selected students to a mentor
+- [ ] Mentor reassignment updates student roster visibility immediately and preserves intervention history
+- [x] Open alerts for reassigned students transfer to the new mentor
+- [x] Admin can assign or update a student's career track
+- [ ] Student can self-select or update career track from the student career page
+- [ ] Faculty student visibility is based on attempts on faculty-created cases only
+- [x] Mentor can search/select published cases for assigned students
+- [x] Mentor case assignment blocks cases already attempted by that student
+- [x] Mentor case assignment creates an `assigned_cases` pending record
+- [x] Mentor case assignment notifies the student and auto-logs a case-assigned intervention
+- [x] Student case-study list shows assigned pending cases with "Assigned by Mentor" state
+- [x] Attempt start changes matching assigned case status from pending to active
+- [x] Attempt completion changes matching assigned case status from active to completed
+- [x] Capability scores update after completed attempts using rolling weighted average
+- [x] Recency weight is read from admin settings with default 0.3 fallback
+- [x] Student level updates when overall score crosses configured thresholds
+- [x] Score-drop alerts are written immediately in the score update transaction
+- [ ] Student, faculty, mentor, admin, and director dashboard summary stats use live DB aggregation
+- [ ] Dashboard summary endpoints use the shared 5-minute TTL cache wrapper
+- [ ] Notification events are wired for mentor assignment, case assignment, simulation completion, score drops, level achievement, sessions, placement readiness, and delivery failures
 - [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-07-02: Started SPEC_10 implementation on
+  `feature/dynamic-data-mapping`. Added `assigned_cases` migration, shared TTL
+  cache helper, admin APIs for optional mentor/career-track onboarding plus
+  single and bulk mentor reassignment, mentor published-case selector and case
+  assignment APIs, student assigned-case listing, attempt status transitions for
+  assigned cases, rolling capability score updates with configurable recency
+  weight, level progression, immediate score-drop alerts, completion
+  notifications, and live student case-study UI. Frontend build passed and
+  backend Python syntax check passed via `py`.
+
+- 2026-07-02: SPEC_10 Dynamic Data & Role Mapping moved to In Progress.
+  Scope updated to cross-portal relationship mapping, assigned case queueing,
+  mentor and career track assignment flows, capability score recalculation,
+  level progression, score-drop alerts, live dashboard aggregations, TTL
+  caching, and notification wiring.
 
 - 2026-07-02: Started SPEC_09 implementation on `feature/mentor-portal`.
   Added mentor portal migration for sessions, session_students,

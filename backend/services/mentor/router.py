@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
+from shared.cache import cache_get, cache_set
 from shared.database import get_db
 
 mentor_router = APIRouter(prefix="/mentor", tags=["mentor"])
@@ -52,6 +53,11 @@ class AttemptCommentRequest(BaseModel):
     stage: str
     comment_text: str
     flagged_for_session: bool = False
+
+
+class AssignCaseRequest(BaseModel):
+    case_study_id: int
+    note: Optional[str] = None
 
 
 def require_mentor(current_user: Dict[str, Any]) -> None:
@@ -111,6 +117,19 @@ def student_row_to_response(row: Any) -> Dict[str, Any]:
         "last_activity_at": str(row.last_activity_at) if row.last_activity_at else None,
         "status": row.status,
     }
+
+
+def case_tags(db: Session, case_study_id: int, tag_type: str) -> List[str]:
+    rows = db.execute(
+        text("""
+            SELECT tag_value
+            FROM case_study_tags
+            WHERE case_study_id = :case_study_id AND tag_type = :tag_type
+            ORDER BY tag_value
+        """),
+        {"case_study_id": case_study_id, "tag_type": tag_type},
+    ).fetchall()
+    return [row.tag_value for row in rows]
 
 
 @mentor_router.get("/health")
@@ -308,12 +327,188 @@ def get_student_detail(
     }
 
 
+@mentor_router.get("/cases")
+def list_published_cases(
+    search: Optional[str] = None,
+    difficulty: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_mentor(current_user)
+    where_clauses = ["status = 'published'"]
+    params: Dict[str, Any] = {}
+    if search:
+        where_clauses.append("(title ILIKE :search OR description ILIKE :search)")
+        params["search"] = f"%{search.strip()}%"
+    if difficulty:
+        where_clauses.append("difficulty = :difficulty")
+        params["difficulty"] = difficulty
+    rows = db.execute(
+        text(f"""
+            SELECT id, title, description, domain, difficulty, estimated_minutes, created_at
+            FROM case_studies
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY created_at DESC
+            LIMIT 100
+        """),
+        params,
+    ).fetchall()
+    items = [
+        {
+            "id": row.id,
+            "title": row.title,
+            "description": row.description,
+            "domain": row.domain,
+            "difficulty": row.difficulty,
+            "estimated_minutes": row.estimated_minutes,
+            "career_tracks": case_tags(db, row.id, "career_track"),
+            "capabilities": case_tags(db, row.id, "capability"),
+        }
+        for row in rows
+    ]
+    return {"items": items, "total": len(items)}
+
+
+@mentor_router.post("/students/{student_id}/assign-case", status_code=201)
+def assign_case_to_student(
+    student_id: int,
+    data: AssignCaseRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_mentor(current_user)
+    student = ensure_assigned_student(db, current_user["id"], student_id)
+    case_row = db.execute(
+        text("""
+            SELECT id, title
+            FROM case_studies
+            WHERE id = :case_study_id AND status = 'published'
+        """),
+        {"case_study_id": data.case_study_id},
+    ).fetchone()
+    if not case_row:
+        raise HTTPException(status_code=404, detail="Published case not found")
+    attempted = db.execute(
+        text("""
+            SELECT id
+            FROM case_study_attempts
+            WHERE case_study_id = :case_study_id AND student_id = :student_user_id
+        """),
+        {"case_study_id": data.case_study_id, "student_user_id": student.user_id},
+    ).fetchone()
+    if attempted:
+        raise HTTPException(status_code=409, detail="This student has already attempted this case")
+    existing = db.execute(
+        text("""
+            SELECT id, status
+            FROM assigned_cases
+            WHERE student_id = :student_id AND case_study_id = :case_study_id
+        """),
+        {"student_id": student_id, "case_study_id": data.case_study_id},
+    ).fetchone()
+    if existing:
+        return {"id": existing.id, "status": existing.status, "already_assigned": True}
+
+    assignment = db.execute(
+        text("""
+            INSERT INTO assigned_cases (student_id, case_study_id, assigned_by, status)
+            VALUES (:student_id, :case_study_id, :assigned_by, 'pending')
+            RETURNING id, assigned_at, status
+        """),
+        {
+            "student_id": student_id,
+            "case_study_id": data.case_study_id,
+            "assigned_by": current_user["id"],
+        },
+    ).fetchone()
+    db.execute(
+        text("""
+            INSERT INTO notification_log (
+                recipient_user_id, event_type, channel, status, subject, body
+            )
+            VALUES (
+                :recipient_user_id, 'case_assigned', 'email', 'pending',
+                'New case study assigned', :body
+            )
+        """),
+        {
+            "recipient_user_id": student.user_id,
+            "body": f"Your mentor assigned {case_row.title}.",
+        },
+    )
+    db.execute(
+        text("""
+            INSERT INTO interventions (
+                student_id, mentor_id, intervention_type, action_taken, notes
+            )
+            VALUES (
+                :student_id, :mentor_id, 'case_assigned', :action_taken, :notes
+            )
+        """),
+        {
+            "student_id": student_id,
+            "mentor_id": current_user["id"],
+            "action_taken": f"Assigned case study: {case_row.title}",
+            "notes": data.note,
+        },
+    )
+    db.commit()
+    return {
+        "id": assignment.id,
+        "case_study_id": case_row.id,
+        "case_title": case_row.title,
+        "student_id": student_id,
+        "status": assignment.status,
+        "assigned_at": str(assignment.assigned_at),
+        "already_assigned": False,
+    }
+
+
+@mentor_router.get("/students/{student_id}/assigned-cases")
+def list_student_assigned_cases(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_mentor(current_user)
+    ensure_assigned_student(db, current_user["id"], student_id)
+    rows = db.execute(
+        text("""
+            SELECT ac.id, ac.status, ac.assigned_at, ac.completed_at,
+                   cs.id AS case_study_id, cs.title, cs.difficulty, cs.domain
+            FROM assigned_cases ac
+            JOIN case_studies cs ON cs.id = ac.case_study_id
+            WHERE ac.student_id = :student_id
+            ORDER BY ac.assigned_at DESC
+        """),
+        {"student_id": student_id},
+    ).fetchall()
+    items = [
+        {
+            "id": row.id,
+            "status": row.status,
+            "assigned_at": str(row.assigned_at),
+            "completed_at": str(row.completed_at) if row.completed_at else None,
+            "case_study_id": row.case_study_id,
+            "case_title": row.title,
+            "difficulty": row.difficulty,
+            "domain": row.domain,
+        }
+        for row in rows
+    ]
+    return {"items": items, "total": len(items)}
+
+
 @mentor_router.get("/dashboard/summary")
 def dashboard_summary(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_mentor(current_user)
+    cache_key = f"mentor_dashboard_summary:{current_user['id']}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
     roster = list_students(db=db, current_user=current_user)["items"]
     weakness_rows = db.execute(
         text(
@@ -342,7 +537,7 @@ def dashboard_summary(
         ),
         {"mentor_id": current_user["id"]},
     ).scalar() or 0
-    return {
+    return cache_set(cache_key, {
         "assigned_students": len(roster),
         "at_risk_students": len(
             [item for item in roster if item["status"] in ["at_risk", "inactive"]]
@@ -353,7 +548,7 @@ def dashboard_summary(
             {"capability": row.name, "student_count": int(row.student_count)}
             for row in weakness_rows
         ],
-    }
+    })
 
 
 @mentor_router.get("/dashboard/alerts")

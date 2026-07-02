@@ -85,6 +85,9 @@ CAPABILITY_MAP = {
     "risk_assessment": 8,
 }
 
+DEFAULT_RECENCY_WEIGHT = 0.3
+DEFAULT_SCORE_DROP_THRESHOLD = 10
+
 
 def require_role(current_user: Dict[str, Any], allowed_roles: List[str], message: str) -> None:
     if current_user["role"] not in allowed_roles:
@@ -205,6 +208,10 @@ def list_case_studies(
     capability: Optional[str],
     status: str,
 ) -> List[Dict[str, Any]]:
+    if current_user["role"] == "student":
+        return list_assigned_case_studies(
+            db, current_user, domain, difficulty, career_track, capability
+        )
     where_clauses = ["cs.status = :status"]
     params: Dict[str, Any] = {"status": status}
     add_case_filters(where_clauses, params, domain, difficulty, career_track, capability)
@@ -216,6 +223,39 @@ def list_case_studies(
             FROM case_studies cs
             WHERE {" AND ".join(where_clauses)}
             ORDER BY cs.created_at DESC
+        """),
+        params,
+    ).fetchall()
+    return [case_row_to_response(db, row) for row in rows]
+
+
+def list_assigned_case_studies(
+    db: Session,
+    current_user: Dict[str, Any],
+    domain: Optional[str],
+    difficulty: Optional[int],
+    career_track: Optional[str],
+    capability: Optional[str],
+) -> List[Dict[str, Any]]:
+    where_clauses = ["ac.student_id = s.id", "u.id = :student_user_id"]
+    params: Dict[str, Any] = {"student_user_id": current_user["id"]}
+    add_case_filters(where_clauses, params, domain, difficulty, career_track, capability)
+    rows = db.execute(
+        text(f"""
+            SELECT cs.id, cs.title, cs.description, cs.domain, cs.difficulty,
+                   cs.estimated_minutes, cs.source,
+                   CASE
+                       WHEN ac.status = 'pending' THEN 'available'
+                       WHEN ac.status = 'active' THEN 'in_progress'
+                       ELSE 'completed'
+                   END AS status,
+                   cs.created_by, ac.assigned_at AS created_at
+            FROM assigned_cases ac
+            JOIN students s ON s.id = ac.student_id
+            JOIN users u ON u.id = s.user_id
+            JOIN case_studies cs ON cs.id = ac.case_study_id
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY ac.assigned_at DESC
         """),
         params,
     ).fetchall()
@@ -298,6 +338,7 @@ def start_case_attempt(
 ) -> Dict[str, Any]:
     require_role(current_user, ["student"], "Only students can start case attempts")
     case_row = get_published_case_content(db, case_study_id)
+    assignment = get_startable_assignment(db, current_user["id"], case_study_id)
     try:
         result = db.execute(
             text("""
@@ -310,6 +351,14 @@ def start_case_attempt(
             {"case_study_id": case_study_id, "student_id": current_user["id"]},
         )
         attempt_row = result.fetchone()
+        db.execute(
+            text("""
+                UPDATE assigned_cases
+                SET status = 'active', started_attempt_id = :attempt_id
+                WHERE id = :assignment_id
+            """),
+            {"attempt_id": attempt_row.id, "assignment_id": assignment.id},
+        )
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -324,6 +373,23 @@ def start_case_attempt(
         "reflection_questions": case_row.reflection_questions,
         "status": attempt_row.status,
     }
+
+
+def get_startable_assignment(db: Session, student_user_id: int, case_study_id: int) -> Any:
+    row = db.execute(
+        text("""
+            SELECT ac.id, ac.status
+            FROM assigned_cases ac
+            JOIN students s ON s.id = ac.student_id
+            WHERE s.user_id = :student_user_id
+              AND ac.case_study_id = :case_study_id
+              AND ac.status IN ('pending', 'active')
+        """),
+        {"student_user_id": student_user_id, "case_study_id": case_study_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=403, detail="This case has not been assigned to you")
+    return row
 
 
 def get_published_case_content(db: Session, case_study_id: int) -> Any:
@@ -501,9 +567,65 @@ def submit_reflection(
     )
     evaluation = get_or_create_evaluation(db, attempt.id)
     update_capability_scores(db, current_user["id"], attempt.id, evaluation)
+    mark_assignment_completed(db, current_user["id"], attempt.id)
+    queue_completion_notifications(db, current_user["id"], attempt.id, evaluation)
     db.commit()
     evaluation["status"] = "evaluated"
     return evaluation
+
+
+def mark_assignment_completed(db: Session, student_user_id: int, attempt_id: int) -> None:
+    db.execute(
+        text("""
+            UPDATE assigned_cases ac
+            SET status = 'completed', completed_at = NOW(), started_attempt_id = :attempt_id
+            FROM students s, case_study_attempts csa
+            WHERE ac.student_id = s.id
+              AND csa.id = :attempt_id
+              AND s.user_id = :student_user_id
+              AND ac.case_study_id = csa.case_study_id
+        """),
+        {"student_user_id": student_user_id, "attempt_id": attempt_id},
+    )
+
+
+def queue_completion_notifications(
+    db: Session, student_user_id: int, attempt_id: int, evaluation: Dict[str, Any]
+) -> None:
+    row = db.execute(
+        text("""
+            SELECT s.mentor_id, cs.created_by, cs.title
+            FROM case_study_attempts csa
+            JOIN students s ON s.user_id = csa.student_id
+            JOIN case_studies cs ON cs.id = csa.case_study_id
+            WHERE csa.id = :attempt_id
+        """),
+        {"attempt_id": attempt_id},
+    ).fetchone()
+    if not row:
+        return
+    recipients = []
+    if row.mentor_id:
+        recipients.append((row.mentor_id, "mentor_simulation_completed"))
+    if row.created_by:
+        recipients.append((row.created_by, "faculty_simulation_completed"))
+    for recipient_user_id, event_type in recipients:
+        db.execute(
+            text("""
+                INSERT INTO notification_log (
+                    recipient_user_id, event_type, channel, status, subject, body
+                )
+                VALUES (
+                    :recipient_user_id, :event_type, 'email', 'pending',
+                    'Case attempt completed', :body
+                )
+            """),
+            {
+                "recipient_user_id": recipient_user_id,
+                "event_type": event_type,
+                "body": f"{row.title} completed. Score: {evaluation.get('total_score')}",
+            },
+        )
 
 
 def get_or_create_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]:
@@ -678,11 +800,12 @@ def update_capability_scores(
         update_single_capability_score(
             db, student_profile.id, capability_id, evaluation["total_score"]
         )
+    update_student_level(db, student_profile.id)
 
 
 def get_student_profile(db: Session, student_user_id: int) -> Optional[Any]:
     return db.execute(
-        text("SELECT id FROM students WHERE user_id = :user_id"),
+        text("SELECT id, mentor_id FROM students WHERE user_id = :user_id"),
         {"user_id": student_user_id},
     ).fetchone()
 
@@ -690,10 +813,12 @@ def get_student_profile(db: Session, student_user_id: int) -> Optional[Any]:
 def get_attempt_capability_ids(db: Session, attempt_id: int) -> List[int]:
     rows = db.execute(
         text("""
-            SELECT tag_value
-            FROM case_study_tags
-            WHERE tag_type = 'capability'
-              AND case_study_id = (
+            SELECT c.id
+            FROM case_study_tags cst
+            JOIN capabilities c
+              ON LOWER(REPLACE(c.name, ' ', '_')) = LOWER(REPLACE(cst.tag_value, ' ', '_'))
+            WHERE cst.tag_type = 'capability'
+              AND cst.case_study_id = (
                   SELECT case_study_id
                   FROM case_study_attempts
                   WHERE id = :attempt_id
@@ -701,7 +826,10 @@ def get_attempt_capability_ids(db: Session, attempt_id: int) -> List[int]:
         """),
         {"attempt_id": attempt_id},
     ).fetchall()
-    return [CAPABILITY_MAP[row.tag_value] for row in rows if row.tag_value in CAPABILITY_MAP]
+    if rows:
+        return [row.id for row in rows]
+    fallback_rows = db.execute(text("SELECT id FROM capabilities ORDER BY id")).fetchall()
+    return [row.id for row in fallback_rows]
 
 
 def update_single_capability_score(
@@ -715,8 +843,10 @@ def update_single_capability_score(
         """),
         {"student_id": student_id, "capability_id": capability_id},
     ).fetchone()
+    recency_weight = get_recency_weight(db)
     if row:
-        new_score = round((row.current_score * 0.7) + (total_score * 0.3))
+        old_score = row.current_score or 0
+        new_score = round((old_score * (1 - recency_weight)) + (total_score * recency_weight))
         db.execute(
             text("""
                 UPDATE student_capabilities
@@ -725,6 +855,7 @@ def update_single_capability_score(
             """),
             {"new_score": new_score, "id": row.id},
         )
+        maybe_create_score_drop_alert(db, student_id, capability_id, old_score, new_score)
         return
     db.execute(
         text("""
@@ -737,6 +868,139 @@ def update_single_capability_score(
             "current_score": total_score,
         },
     )
+
+
+def get_recency_weight(db: Session) -> float:
+    row = db.execute(
+        text("SELECT config FROM platform_settings WHERE section = 'capability_thresholds'")
+    ).fetchone()
+    if not row:
+        return DEFAULT_RECENCY_WEIGHT
+    try:
+        config = json.loads(row.config or "{}")
+        value = float(config.get("recency_weight", DEFAULT_RECENCY_WEIGHT))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return DEFAULT_RECENCY_WEIGHT
+    return min(1, max(0, value))
+
+
+def get_score_drop_threshold(db: Session) -> int:
+    row = db.execute(
+        text("SELECT config FROM platform_settings WHERE section = 'capability_thresholds'")
+    ).fetchone()
+    if not row:
+        return DEFAULT_SCORE_DROP_THRESHOLD
+    try:
+        config = json.loads(row.config or "{}")
+        return int(config.get("score_drop_threshold", DEFAULT_SCORE_DROP_THRESHOLD))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return DEFAULT_SCORE_DROP_THRESHOLD
+
+
+def maybe_create_score_drop_alert(
+    db: Session, student_id: int, capability_id: int, old_score: int, new_score: int
+) -> None:
+    drop = old_score - new_score
+    threshold = get_score_drop_threshold(db)
+    if old_score <= 0 or drop < threshold:
+        return
+    row = db.execute(
+        text("""
+            SELECT s.mentor_id, u.name AS student_name, c.name AS capability_name
+            FROM students s
+            JOIN users u ON u.id = s.user_id
+            JOIN capabilities c ON c.id = :capability_id
+            WHERE s.id = :student_id AND s.mentor_id IS NOT NULL
+        """),
+        {"student_id": student_id, "capability_id": capability_id},
+    ).fetchone()
+    if not row:
+        return
+    db.execute(
+        text("""
+            INSERT INTO alerts (
+                mentor_id, student_id, alert_type, severity, message, metadata
+            )
+            VALUES (
+                :mentor_id, :student_id, 'score_drop', 'critical',
+                :message, :metadata
+            )
+        """),
+        {
+            "mentor_id": row.mentor_id,
+            "student_id": student_id,
+            "message": (
+                f"{row.student_name}'s {row.capability_name} score dropped "
+                f"{drop} points"
+            ),
+            "metadata": json.dumps(
+                {
+                    "capability_id": capability_id,
+                    "capability": row.capability_name,
+                    "from": old_score,
+                    "to": new_score,
+                    "drop": drop,
+                }
+            ),
+        },
+    )
+
+
+def update_student_level(db: Session, student_id: int) -> None:
+    average_score = db.execute(
+        text("""
+            SELECT AVG(current_score)
+            FROM student_capabilities
+            WHERE student_id = :student_id
+        """),
+        {"student_id": student_id},
+    ).scalar()
+    if average_score is None:
+        return
+    score = float(average_score)
+    if score < 60:
+        level = 1
+    elif score < 70:
+        level = 2
+    elif score < 80:
+        level = 3
+    elif score < 85:
+        level = 4
+    elif score < 90:
+        level = 5
+    elif score < 95:
+        level = 6
+    else:
+        level = 7
+    previous = db.execute(
+        text("SELECT user_id, mentor_id, current_level FROM students WHERE id = :student_id"),
+        {"student_id": student_id},
+    ).fetchone()
+    if not previous or previous.current_level == level:
+        return
+    db.execute(
+        text("UPDATE students SET current_level = :level WHERE id = :student_id"),
+        {"level": level, "student_id": student_id},
+    )
+    recipients = [previous.user_id]
+    if previous.mentor_id:
+        recipients.append(previous.mentor_id)
+    for recipient_user_id in recipients:
+        db.execute(
+            text("""
+                INSERT INTO notification_log (
+                    recipient_user_id, event_type, channel, status, subject, body
+                )
+                VALUES (
+                    :recipient_user_id, 'level_achieved', 'email', 'pending',
+                    'PCDC level updated', :body
+                )
+            """),
+            {
+                "recipient_user_id": recipient_user_id,
+                "body": f"Student level changed from {previous.current_level} to {level}.",
+            },
+        )
 
 
 def get_attempt_detail(

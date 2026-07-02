@@ -15,6 +15,7 @@ export interface CaseStudy {
   status: CaseStatus
   career_tracks: string[]
   capabilities: string[]
+  assigned_by_mentor?: boolean
 }
 
 interface CaseCardProps {
@@ -65,6 +66,11 @@ export default function CaseCard({ caseStudy }: CaseCardProps) {
         <DomainTag domain={caseStudy.domain} />
         <DifficultyBadge level={caseStudy.difficulty} />
         <StatusBadge status={caseStudy.status} />
+        {caseStudy.assigned_by_mentor ? (
+          <span className="rounded-full bg-[#E9F7F1] px-3 py-1 text-xs font-semibold text-[#0F766E]">
+            Assigned by Mentor
+          </span>
+        ) : null}
       </div>
 
       <h2 className="mt-5 text-lg font-semibold leading-6 text-[#111827]">{caseStudy.title}</h2>

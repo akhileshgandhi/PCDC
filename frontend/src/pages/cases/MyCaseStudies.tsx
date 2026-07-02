@@ -1,6 +1,7 @@
 import { Search } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
+import { getCaseStudies, toCaseDomain, toCaseStatus } from "../../api/cases"
 import CaseCard, { type CaseStudy } from "../../components/cases/CaseCard"
 import type { CaseDomain } from "../../components/cases/DomainTag"
 import type { CaseStatus } from "../../components/cases/StatusBadge"
@@ -36,97 +37,70 @@ const statusTabs = [
   { label: "Completed", value: "completed" },
 ] as const
 
-const mockCaseStudies: CaseStudy[] = [
-  {
-    id: 1,
-    title: "Q3 Market Entry Strategy",
-    description:
-      "A consumer electronics company faces declining market share in Southeast Asia. As the Strategy Head, develop a market re-entry plan.",
-    domain: "Business",
-    difficulty: 3,
-    estimated_minutes: 45,
-    status: "in_progress",
-    career_tracks: ["Consulting", "Marketing"],
-    capabilities: ["Strategic Thinking", "Decision Making"],
-  },
-  {
-    id: 2,
-    title: "India-China Border Tensions: Economic Impact",
-    description:
-      "Analyse the cascading economic impact of geopolitical tensions on Indian manufacturing and supply chain strategy.",
-    domain: "Geopolitics",
-    difficulty: 5,
-    estimated_minutes: 90,
-    status: "available",
-    career_tracks: ["Consulting", "General Management"],
-    capabilities: ["Analytical Thinking", "Risk Assessment"],
-  },
-  {
-    id: 3,
-    title: "IPL Franchise Turnaround",
-    description:
-      "A mid-table IPL franchise is losing fan engagement and sponsorship revenue. Design a 3-year revival strategy.",
-    domain: "Sports",
-    difficulty: 2,
-    estimated_minutes: 30,
-    status: "completed",
-    career_tracks: ["Marketing", "General Management"],
-    capabilities: ["Innovation", "Communication"],
-  },
-  {
-    id: 4,
-    title: "Rural Healthcare Delivery Model",
-    description:
-      "Design a financially sustainable last-mile healthcare delivery model for tier-3 Indian cities.",
-    domain: "Healthcare",
-    difficulty: 4,
-    estimated_minutes: 60,
-    status: "available",
-    career_tracks: ["Entrepreneurship", "General Management"],
-    capabilities: ["Innovation", "Decision Making"],
-  },
-  {
-    id: 5,
-    title: "EV Adoption Barriers in India",
-    description:
-      "Identify and prioritise the key barriers to EV adoption and recommend a policy + product strategy.",
-    domain: "Technology",
-    difficulty: 4,
-    estimated_minutes: 60,
-    status: "available",
-    career_tracks: ["Consulting", "Analytics"],
-    capabilities: ["Analytical Thinking", "Strategic Thinking"],
-  },
-  {
-    id: 6,
-    title: "Water Scarcity in Marathwada",
-    description:
-      "Develop a multi-stakeholder intervention plan for the water crisis in Maharashtra's Marathwada region.",
-    domain: "Environment",
-    difficulty: 6,
-    estimated_minutes: 120,
-    status: "available",
-    career_tracks: ["General Management", "Entrepreneurship"],
-    capabilities: ["Systems Thinking", "Risk Assessment"],
-  },
-]
-
 type DomainFilter = (typeof domains)[number]
 type DifficultyFilter = (typeof difficulties)[number]
 type StatusFilter = (typeof statusTabs)[number]["value"]
 
 export default function MyCaseStudies() {
+  const [caseStudies, setCaseStudies] = useState<CaseStudy[]>([])
   const [domainFilter, setDomainFilter] = useState<DomainFilter>("All Domains")
   const [difficultyFilter, setDifficultyFilter] = useState<DifficultyFilter>("All Levels")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [searchQuery, setSearchQuery] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCases() {
+      setIsLoading(true)
+      try {
+        const data = await getCaseStudies()
+        const mappedCases = data.map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description || "",
+          domain: toCaseDomain(item.domain),
+          difficulty: item.difficulty,
+          estimated_minutes: item.estimated_minutes,
+          status: toCaseStatus(item.status),
+          career_tracks: item.tags
+            .filter((tag) => tag.tag_type === "career_track")
+            .map((tag) => titleCase(tag.tag_value)),
+          capabilities: item.tags
+            .filter((tag) => tag.tag_type === "capability")
+            .map((tag) => titleCase(tag.tag_value)),
+          assigned_by_mentor: true,
+        }))
+        if (isMounted) {
+          setCaseStudies(mappedCases)
+          setError("")
+        }
+      } catch {
+        if (isMounted) {
+          setError("Unable to load assigned case studies right now.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadCases()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const filteredCaseStudies = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase()
     const selectedDifficulty =
       difficultyFilter === "All Levels" ? null : Number(difficultyFilter.replace("Level ", ""))
 
-    return mockCaseStudies.filter((caseStudy) => {
+    return caseStudies.filter((caseStudy) => {
       const matchesDomain =
         domainFilter === "All Domains" || caseStudy.domain === (domainFilter as CaseDomain)
       const matchesDifficulty =
@@ -140,7 +114,11 @@ export default function MyCaseStudies() {
 
       return matchesDomain && matchesDifficulty && matchesStatus && matchesSearch
     })
-  }, [difficultyFilter, domainFilter, searchQuery, statusFilter])
+  }, [caseStudies, difficultyFilter, domainFilter, searchQuery, statusFilter])
+
+  const availableCount = caseStudies.filter((caseStudy) => caseStudy.status === "available").length
+  const activeCount = caseStudies.filter((caseStudy) => caseStudy.status === "in_progress").length
+  const completedCount = caseStudies.filter((caseStudy) => caseStudy.status === "completed").length
 
   return (
     <DashboardLayout>
@@ -152,14 +130,14 @@ export default function MyCaseStudies() {
                 My Case Studies
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">
-                Browse and attempt case studies assigned to your career track.
+                Work through case studies assigned by your mentor.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <StatPill label="Available" value="12" />
-              <StatPill label="In Progress" value="1" />
-              <StatPill label="Completed" value="4" />
+              <StatPill label="Available" value={String(availableCount)} />
+              <StatPill label="In Progress" value={String(activeCount)} />
+              <StatPill label="Completed" value={String(completedCount)} />
             </div>
           </div>
         </section>
@@ -231,7 +209,17 @@ export default function MyCaseStudies() {
           </div>
         </section>
 
-        {filteredCaseStudies.length > 0 ? (
+        {error ? (
+          <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm font-medium text-[#B91C1C]">
+            {error}
+          </div>
+        ) : null}
+
+        {isLoading ? (
+          <section className="rounded-xl border border-[#E6EBEB] bg-white px-5 py-16 text-center shadow-sm">
+            <p className="text-sm font-medium text-[#6B7280]">Loading assigned cases...</p>
+          </section>
+        ) : filteredCaseStudies.length > 0 ? (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredCaseStudies.map((caseStudy) => (
               <CaseCard key={caseStudy.id} caseStudy={caseStudy} />
@@ -240,9 +228,11 @@ export default function MyCaseStudies() {
         ) : (
           <section className="rounded-xl border border-dashed border-[#E6EBEB] bg-white px-5 py-16 text-center shadow-sm">
             <h2 className="text-lg font-semibold text-[#111827]">
-              No case studies match your filters.
+              No assigned case studies match your filters.
             </h2>
-            <p className="mt-2 text-sm text-[#6B7280]">Try adjusting the filters above.</p>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              Your mentor-assigned cases will appear here.
+            </p>
           </section>
         )}
       </div>
@@ -262,4 +252,11 @@ function StatPill({ label, value }: StatPillProps) {
       <span className="font-semibold text-[#0B1D3A]">{value}</span>
     </div>
   )
+}
+
+function titleCase(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
 }

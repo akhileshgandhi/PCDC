@@ -481,11 +481,11 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#102033]/45 p-4">
-      <div className="ml-auto flex min-h-full w-full max-w-xl items-stretch">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4">
+      <div className="w-full max-w-xl">
         <form
           onSubmit={handleSubmit}
-          className="my-auto w-full rounded-lg bg-white p-5 shadow-xl sm:p-6"
+          className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
