@@ -163,11 +163,11 @@ def list_students(
         params["search"] = f"%{search.strip()}%"
 
     order_sql = {
-        "score_asc": "average_score ASC, u.name ASC",
-        "score_desc": "average_score DESC, u.name ASC",
-        "last_activity": "last_activity_at DESC NULLS LAST, u.name ASC",
-        "level": "s.current_level DESC, u.name ASC",
-    }.get(sort, "average_score DESC, u.name ASC")
+        "score_asc": "average_score ASC, name ASC",
+        "score_desc": "average_score DESC, name ASC",
+        "last_activity": "last_activity_at DESC NULLS LAST, name ASC",
+        "level": "current_level DESC, name ASC",
+    }.get(sort, "average_score DESC, name ASC")
 
     rows = db.execute(
         text(

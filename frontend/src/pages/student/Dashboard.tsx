@@ -18,19 +18,15 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react"
+import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
 
+import {
+  getStudentDashboardSummary,
+  type StudentDashboardSummary,
+} from "../../api/student"
 import DashboardLayout from "../../layouts/DashboardLayout"
-
-interface CapabilityMetric {
-  label: string
-  score: number
-  change: string
-  trend: "up" | "down" | "stable"
-  accent: "navy" | "gold"
-  progressClassName: string
-  icon: LucideIcon
-}
+import { getCurrentUser } from "../../utils/auth"
 
 interface CoachItem {
   name: string
@@ -50,80 +46,37 @@ interface PathwayItem {
   level: string
 }
 
-const capabilityMetrics: CapabilityMetric[] = [
-  {
-    label: "Analytical Thinking",
-    score: 78,
-    change: "+3.2%",
-    trend: "up",
-    accent: "navy",
-    progressClassName: "w-[78%]",
-    icon: BarChart3,
-  },
-  {
-    label: "Critical Thinking",
-    score: 74,
-    change: "+1.5%",
-    trend: "up",
-    accent: "navy",
-    progressClassName: "w-[74%]",
-    icon: Target,
-  },
-  {
-    label: "Strategic Thinking",
-    score: 68,
-    change: "-0.8%",
-    trend: "down",
-    accent: "gold",
-    progressClassName: "w-[68%]",
-    icon: CheckCircle2,
-  },
-  {
-    label: "Decision Making",
-    score: 71,
-    change: "+4.1%",
-    trend: "up",
-    accent: "navy",
-    progressClassName: "w-[71%]",
-    icon: BriefcaseBusiness,
-  },
-  {
-    label: "Communication",
-    score: 74,
-    change: "stable",
-    trend: "stable",
-    accent: "navy",
-    progressClassName: "w-[74%]",
-    icon: MessageCircle,
-  },
-  {
-    label: "Leadership",
-    score: 65,
-    change: "+2.0%",
-    trend: "up",
-    accent: "navy",
-    progressClassName: "w-[65%]",
-    icon: Users,
-  },
-  {
-    label: "Innovation",
-    score: 61,
-    change: "-1.2%",
-    trend: "down",
-    accent: "navy",
-    progressClassName: "w-[61%]",
-    icon: Lightbulb,
-  },
-  {
-    label: "Risk Assessment",
-    score: 69,
-    change: "+5.5%",
-    trend: "up",
-    accent: "gold",
-    progressClassName: "w-[69%]",
-    icon: ShieldCheck,
-  },
-]
+const CAPABILITY_ICONS: Record<string, LucideIcon> = {
+  Communication: MessageCircle,
+  Leadership: Users,
+  "Problem Solving": Target,
+  "Decision Making": BriefcaseBusiness,
+  Innovation: Lightbulb,
+  "Strategic Thinking": CheckCircle2,
+  Entrepreneurship: BarChart3,
+  Professionalism: ShieldCheck,
+}
+
+const defaultSummary: StudentDashboardSummary = {
+  overall_capability_score: 0,
+  capability_scores: [],
+  pending_simulations: 0,
+  completed_simulations: 0,
+  current_level: null,
+  upcoming_session: null,
+}
+
+function formatSessionTime(scheduledAt: string) {
+  const date = new Date(scheduledAt)
+  if (Number.isNaN(date.getTime())) return scheduledAt
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
 
 const coaches: CoachItem[] = [
   { name: "Capability Coach", description: "Strengthen core thinking", icon: Sparkles },
@@ -147,27 +100,56 @@ const pathwayItems: PathwayItem[] = [
 
 const attemptStages = ["Briefing", "Analysis", "AI Discussion", "Solution", "Defense", "Evaluation"]
 
-function trendClass(trend: CapabilityMetric["trend"]) {
-  if (trend === "up") return "text-[#16a34a]"
-  if (trend === "down") return "text-[#ef4444]"
-  return "text-[#6b7280]"
-}
-
-function progressClass(accent: CapabilityMetric["accent"]) {
-  return accent === "gold" ? "bg-[#c9a227]" : "bg-[#081d3a]"
-}
-
 export default function Dashboard() {
+  const [summary, setSummary] = useState<StudentDashboardSummary>(defaultSummary)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  const currentUser = getCurrentUser()
+  const firstName = currentUser?.name?.split(" ")[0] ?? "Student"
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadDashboard() {
+      try {
+        const data = await getStudentDashboardSummary()
+        if (isMounted) {
+          setSummary(data)
+          setError("")
+        }
+      } catch {
+        if (isMounted) {
+          setError("Unable to load your dashboard right now.")
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadDashboard()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   return (
     <DashboardLayout>
       <div className="space-y-5">
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {error}
+          </div>
+        )}
         <section className="grid gap-5 xl:grid-cols-[1fr_340px]">
           <div className="rounded-lg bg-[#081d3a] p-6 text-white shadow-md sm:p-8">
             <div className="inline-flex rounded-full bg-[#c9a227] px-3 py-1 text-xs font-semibold text-white">
               Current Status: Active
             </div>
             <h2 className="mt-7 text-3xl font-semibold leading-tight sm:text-4xl">
-              Welcome back, Sanjay
+              Welcome back, {firstName}
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/82 sm:text-base">
               Your next challenge is designed to strengthen strategic judgment
@@ -193,19 +175,18 @@ export default function Dashboard() {
           <div className="rounded-lg border border-[#e6e8eb] bg-white p-6 shadow-sm">
             <div className="mx-auto grid size-36 place-items-center rounded-full border-[10px] border-[#e6e8eb] border-t-[#92702a]">
               <div className="text-center">
-                <div className="text-3xl font-semibold">72</div>
+                <div className="text-3xl font-semibold">
+                  {isLoading ? "--" : summary.overall_capability_score}
+                </div>
                 <div className="text-xs font-semibold text-[#111827]">Overall Score</div>
               </div>
             </div>
             <div className="mt-5 text-center">
-              <h3 className="text-xl font-semibold">Level 3</h3>
-              <p className="mt-1 text-xs font-semibold uppercase text-[#92702a]">
-                Strategic Decision Making
-              </p>
-              <div className="mx-auto mt-4 h-2 max-w-44 rounded-full bg-[#e6e8eb]">
-                <div className="h-2 w-3/5 rounded-full bg-[#081d3a]" />
-              </div>
-              <p className="mt-3 text-xs text-[#6b7280]">240 points to next level</p>
+              <h3 className="text-xl font-semibold">
+                {isLoading || summary.current_level === null
+                  ? "Level --"
+                  : `Level ${summary.current_level}`}
+              </h3>
             </div>
           </div>
         </section>
@@ -228,36 +209,28 @@ export default function Dashboard() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {capabilityMetrics.map((metric) => {
-              const Icon = metric.icon
+            {(isLoading ? [] : summary.capability_scores).map((metric) => {
+              const Icon = CAPABILITY_ICONS[metric.capability] ?? Sparkles
 
               return (
                 <article
-                  key={metric.label}
+                  key={metric.capability}
                   className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={`grid size-8 place-items-center rounded-md ${
-                        metric.accent === "gold"
-                          ? "bg-[#fff7df] text-[#92702a]"
-                          : "bg-[#f6f7fb] text-[#081d3a]"
-                      }`}
-                    >
+                    <div className="grid size-8 place-items-center rounded-md bg-[#f6f7fb] text-[#081d3a]">
                       <Icon size={17} aria-hidden="true" />
                     </div>
-                    <span className={`text-xs font-semibold ${trendClass(metric.trend)}`}>
-                      {metric.change}
-                    </span>
                   </div>
-                  <h3 className="mt-4 text-sm font-semibold">{metric.label}</h3>
+                  <h3 className="mt-4 text-sm font-semibold">{metric.capability}</h3>
                   <div className="mt-3 flex items-end gap-1">
                     <span className="text-2xl font-semibold">{metric.score}</span>
                     <span className="pb-1 text-xs text-[#6b7280]">/ 100</span>
                   </div>
                   <div className="mt-4 h-2 rounded-full bg-[#e6e8eb]">
                     <div
-                      className={`h-2 rounded-full ${progressClass(metric.accent)} ${metric.progressClassName}`}
+                      className="h-2 rounded-full bg-[#081d3a]"
+                      style={{ width: `${Math.min(100, Math.max(0, metric.score))}%` }}
                     />
                   </div>
                 </article>
@@ -360,15 +333,22 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="mt-5 rounded-lg bg-[#f6f7fb] p-4">
-              <p className="inline-flex items-center gap-2 text-sm font-semibold">
-                <CalendarDays size={17} aria-hidden="true" />
-                Tomorrow 11:00 AM
-              </p>
-              <p className="mt-1 text-sm font-semibold">Mentoring Session</p>
-              <p className="mt-4 text-sm italic leading-6 text-[#6b7280]">
-                Focus on improving risk awareness and implementation clarity in
-                your next defense.
-              </p>
+              {summary.upcoming_session ? (
+                <>
+                  <p className="inline-flex items-center gap-2 text-sm font-semibold">
+                    <CalendarDays size={17} aria-hidden="true" />
+                    {formatSessionTime(summary.upcoming_session.scheduled_at)}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {summary.upcoming_session.session_type} with{" "}
+                    {summary.upcoming_session.mentor_name}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm font-semibold text-[#6b7280]">
+                  {isLoading ? "Loading session details..." : "No upcoming session scheduled"}
+                </p>
+              )}
             </div>
             <button
               type="button"

@@ -1,0 +1,108 @@
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from services.auth.service import get_current_user
+from shared.cache import cache_get, cache_set
+from shared.database import get_db
+
+student_router = APIRouter(prefix="/student", tags=["student"])
+
+
+def require_student(current_user: Dict[str, Any]) -> None:
+    if current_user["role"] != "student":
+        raise HTTPException(status_code=403, detail="Student access required")
+
+
+@student_router.get("/dashboard/summary")
+def student_dashboard_summary(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_student(current_user)
+    user_id = current_user["id"]
+    cache_key = f"student_dashboard_summary:{user_id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    student_row = db.execute(
+        text("SELECT id, current_level FROM students WHERE user_id = :user_id"),
+        {"user_id": user_id},
+    ).fetchone()
+    if not student_row:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    student_id = student_row.id
+
+    capability_rows = db.execute(
+        text("""
+            SELECT c.name, sc.current_score
+            FROM student_capabilities sc
+            JOIN capabilities c ON c.id = sc.capability_id
+            WHERE sc.student_id = :student_id
+            ORDER BY c.name
+        """),
+        {"student_id": student_id},
+    ).fetchall()
+
+    overall_score = db.execute(
+        text("""
+            SELECT AVG(current_score)
+            FROM student_capabilities
+            WHERE student_id = :student_id
+        """),
+        {"student_id": student_id},
+    ).scalar()
+
+    pending_simulations = db.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM assigned_cases
+            WHERE student_id = :student_id AND status = 'pending'
+        """),
+        {"student_id": student_id},
+    ).scalar() or 0
+
+    completed_simulations = db.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM case_study_attempts
+            WHERE student_id = :user_id AND status = 'evaluated'
+        """),
+        {"user_id": user_id},
+    ).scalar() or 0
+
+    upcoming_session_row = db.execute(
+        text("""
+            SELECT se.id, se.session_type, se.scheduled_at, u.name AS mentor_name
+            FROM session_students ss
+            JOIN sessions se ON se.id = ss.session_id
+            JOIN users u ON u.id = se.mentor_id
+            WHERE ss.student_id = :student_id
+              AND se.completed_at IS NULL
+              AND se.scheduled_at > NOW()
+            ORDER BY se.scheduled_at ASC
+            LIMIT 1
+        """),
+        {"student_id": student_id},
+    ).fetchone()
+
+    result = {
+        "overall_capability_score": round(float(overall_score), 1) if overall_score is not None else 0,
+        "capability_scores": [
+            {"capability": row.name, "score": int(row.current_score)}
+            for row in capability_rows
+        ],
+        "pending_simulations": int(pending_simulations),
+        "completed_simulations": int(completed_simulations),
+        "current_level": student_row.current_level,
+        "upcoming_session": {
+            "id": upcoming_session_row.id,
+            "session_type": upcoming_session_row.session_type,
+            "scheduled_at": str(upcoming_session_row.scheduled_at),
+            "mentor_name": upcoming_session_row.mentor_name,
+        } if upcoming_session_row else None,
+    }
+    return cache_set(cache_key, result)

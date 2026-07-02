@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
+from shared.cache import cache_get, cache_set
 from shared.database import SessionLocal, get_db
 
 faculty_router = APIRouter(prefix="/faculty", tags=["faculty"])
@@ -919,6 +920,10 @@ def dashboard_summary(
 ) -> Dict[str, int]:
     require_faculty(current_user)
     faculty_id = current_user["id"]
+    cache_key = f"faculty_dashboard_summary:{faculty_id}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     active_students = db.execute(
         text("""
@@ -965,12 +970,12 @@ def dashboard_summary(
         {"faculty_id": faculty_id},
     ).scalar() or 0
 
-    return {
+    return cache_set(cache_key, {
         "active_students": int(active_students),
         "simulations_running": int(simulations_running),
         "pending_reviews": int(pending_reviews),
         "capability_alerts": int(capability_alerts),
-    }
+    })
 
 
 @faculty_router.get("/cases")

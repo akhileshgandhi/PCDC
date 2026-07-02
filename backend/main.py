@@ -8,6 +8,7 @@ from services.admin.router import admin_router
 from services.faculty.router import faculty_router
 from services.mentor.router import mentor_router
 from services.notification.router import notification_router
+from services.student.router import student_router
 
 app = FastAPI()
 
@@ -28,6 +29,7 @@ app.include_router(capability_router, prefix="/capability")
 app.include_router(ai_router, prefix="/ai")
 app.include_router(mentor_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/notification")
+app.include_router(student_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

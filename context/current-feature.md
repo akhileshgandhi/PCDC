@@ -104,6 +104,21 @@ SPEC_11 - Case Study Schema Gap Analysis
 
 ## History
 
+- 2026-07-02: Continued SPEC_10 dashboard work on `feature/case-builder`.
+  Added a `student` backend service module with a live `GET
+  /api/v1/student/dashboard/summary` endpoint (overall capability score,
+  per-capability scores, pending/completed simulation counts, current level,
+  upcoming mentor session) backed by the shared TTL cache; added the TTL
+  cache wrapper to the faculty dashboard summary endpoint; wired the student
+  Dashboard page's score circle, level, capability matrix, and mentor-session
+  card to live data. Found the Neon database was 3 migrations behind head
+  (0004 vs 0007) and applied `alembic upgrade head`, which surfaced a
+  pre-existing bug in the mentor `list_students` query (`ORDER BY` referenced
+  an out-of-scope `u.name` alias, 500ing every roster/dashboard call) and
+  fixed it. Verified student, faculty, mentor, and admin dashboard endpoints
+  end-to-end against the live DB. Frontend build passed and backend Python
+  syntax check passed via `py`.
+
 - 2026-07-02: Started SPEC_11 implementation on
   `feature/case-schema-gap-analysis`. Added case schema migration for rich
   case metadata, time and marks breakdowns, instructional sections, structured
