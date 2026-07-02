@@ -5,6 +5,7 @@ import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
 import FacultyModulePlaceholder from "./FacultyModulePlaceholder"
 import FacultyRubricBuilder from "./FacultyRubricBuilder"
+import FacultyStudents from "./FacultyStudents"
 
 export default function FacultyPortal() {
   return (
@@ -27,15 +28,7 @@ export default function FacultyPortal() {
         path="/rubric-builder/:caseId"
         element={<FacultyRubricBuilder />}
       />
-      <Route
-        path="/students"
-        element={
-          <FacultyModulePlaceholder
-            title="Students"
-            description="The roster view will show faculty-scoped students, filters, capability snapshots, and read-only detail."
-          />
-        }
-      />
+      <Route path="/students" element={<FacultyStudents />} />
       <Route
         path="/analytics"
         element={

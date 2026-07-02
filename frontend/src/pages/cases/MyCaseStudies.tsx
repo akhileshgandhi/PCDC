@@ -80,7 +80,8 @@ export default function MyCaseStudies() {
           capabilities: item.tags
             .filter((tag) => tag.tag_type === "capability")
             .map((tag) => titleCase(tag.tag_value)),
-          assigned_by_mentor: true,
+          assignment_source: item.assignment_source,
+          due_date: item.due_date,
         }))
         if (isMounted) {
           setCaseStudies(mappedCases)
@@ -139,7 +140,7 @@ export default function MyCaseStudies() {
                 My Case Studies
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">
-                Work through case studies assigned by your mentor.
+                Work through case studies assigned by your faculty or mentor.
               </p>
             </div>
 
@@ -240,7 +241,7 @@ export default function MyCaseStudies() {
               No assigned case studies match your filters.
             </h2>
             <p className="mt-2 text-sm text-[#6B7280]">
-              Your mentor-assigned cases will appear here.
+              Cases assigned by your faculty or mentor will appear here.
             </p>
           </section>
         )}

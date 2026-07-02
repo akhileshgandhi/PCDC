@@ -134,6 +134,8 @@ def case_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
         "created_by": row.created_by,
         "tags": get_case_tags(db, row.id),
         "created_at": str(row.created_at),
+        "assignment_source": values.get("assignment_source"),
+        "due_date": str(values["due_date"]) if values.get("due_date") else None,
     }
 
 
@@ -265,7 +267,8 @@ def list_assigned_case_studies(
                    cs.created_by, cs.case_code, cs.subject, cs.difficulty_label,
                    cs.total_marks, cs.written_marks, cs.rapid_fire_marks,
                    cs.reading_time_minutes, cs.answer_writing_time_minutes,
-                   cs.rapid_fire_time_minutes, ac.assigned_at AS created_at
+                   cs.rapid_fire_time_minutes, ac.assigned_at AS created_at,
+                   ac.assignment_source, ac.due_date
             FROM assigned_cases ac
             JOIN students s ON s.id = ac.student_id
             JOIN users u ON u.id = s.user_id

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import AdminCourses from "./AdminCourses"
 import AdminDashboard from "./AdminDashboard"
 import AdminModulePlaceholder from "./AdminModulePlaceholder"
 import AdminUserDetail from "./AdminUserDetail"
@@ -12,6 +13,7 @@ export default function AdminPortal() {
       <Route path="/dashboard" element={<AdminDashboard />} />
       <Route path="/users" element={<AdminUsers />} />
       <Route path="/user/:id" element={<AdminUserDetail />} />
+      <Route path="/courses" element={<AdminCourses />} />
       <Route
         path="/case-import"
         element={

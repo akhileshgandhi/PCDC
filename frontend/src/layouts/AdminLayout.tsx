@@ -3,6 +3,7 @@ import {
   Bell,
   Database,
   FileUp,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Search,
@@ -22,6 +23,7 @@ interface AdminLayoutProps {
 const navigationItems = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/admin/dashboard", end: true },
   { label: "Users", icon: Users, to: "/admin/users" },
+  { label: "Courses", icon: GraduationCap, to: "/admin/courses" },
   { label: "Case Import", icon: FileUp, to: "/admin/case-import" },
   { label: "Settings", icon: Settings, to: "/admin/settings" },
   { label: "Notifications", icon: Bell, to: "/admin/notifications" },

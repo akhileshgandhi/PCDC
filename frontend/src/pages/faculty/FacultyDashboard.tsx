@@ -15,7 +15,9 @@ import { Link } from "react-router-dom"
 
 import {
   getFacultyDashboardSummary,
+  getFacultySections,
   type FacultyDashboardSummary,
+  type FacultySection,
 } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { getCurrentUser } from "../../utils/auth"
@@ -68,6 +70,7 @@ const quickLinks = [
 
 export default function FacultyDashboard() {
   const [summary, setSummary] = useState<FacultyDashboardSummary>(defaultSummary)
+  const [sections, setSections] = useState<FacultySection[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const currentUser = getCurrentUser()
@@ -78,9 +81,13 @@ export default function FacultyDashboard() {
 
     async function loadSummary() {
       try {
-        const data = await getFacultyDashboardSummary()
+        const [summaryData, sectionsData] = await Promise.all([
+          getFacultyDashboardSummary(),
+          getFacultySections(),
+        ])
         if (isMounted) {
-          setSummary(data)
+          setSummary(summaryData)
+          setSections(sectionsData.items)
           setError("")
         }
       } catch {
@@ -100,6 +107,8 @@ export default function FacultyDashboard() {
       isMounted = false
     }
   }, [])
+
+  const totalSectionStudents = sections.reduce((sum, section) => sum + section.student_count, 0)
 
   return (
     <FacultyLayout>
@@ -152,10 +161,16 @@ export default function FacultyDashboard() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
-            label="Active Students"
-            value={summary.active_students}
+            label="My Sections"
+            value={sections.length}
+            icon={FolderKanban}
+            isLoading={isLoading}
+          />
+          <SummaryCard
+            label="My Students"
+            value={totalSectionStudents}
             icon={Users}
             isLoading={isLoading}
           />
@@ -177,6 +192,43 @@ export default function FacultyDashboard() {
             icon={AlertTriangle}
             isLoading={isLoading}
           />
+        </section>
+
+        <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-2xl font-semibold">My Sections</h2>
+            <p className="mt-1 text-sm text-[#6b7280]">
+              Class sections you teach. Assign cases from the case library to reach every
+              enrolled student at once.
+            </p>
+          </div>
+          {isLoading ? (
+            <p className="text-sm text-[#6b7280]">Loading sections...</p>
+          ) : sections.length === 0 ? (
+            <p className="text-sm text-[#6b7280]">
+              No sections assigned yet. Ask an admin to assign you to a class section.
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {sections.map((section) => (
+                <div
+                  key={section.id}
+                  className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
+                >
+                  <p className="text-sm font-semibold text-[#111827]">{section.name}</p>
+                  <p className="mt-1 text-xs text-[#6b7280]">
+                    {section.course_name} · {section.semester_name} · {section.batch_name}
+                  </p>
+                  {section.subjects ? (
+                    <p className="mt-1 text-xs text-[#6b7280]">{section.subjects}</p>
+                  ) : null}
+                  <p className="mt-3 text-sm font-semibold text-[#0b1d3a]">
+                    {section.student_count} students
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">

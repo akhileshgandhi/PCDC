@@ -1,8 +1,15 @@
-import { Archive, Edit3, Eye, Plus, Search } from "lucide-react"
+import { Archive, Edit3, Eye, Plus, Search, Send } from "lucide-react"
+import type { FormEvent } from "react"
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
-import { getFacultyCases, type FacultyCase } from "../../api/faculty"
+import {
+  assignCaseToSections,
+  getFacultyCases,
+  getFacultySections,
+  type FacultyCase,
+  type FacultySection,
+} from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 const domains = [
@@ -32,6 +39,8 @@ export default function FacultyCaseLibrary() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [assigningCase, setAssigningCase] = useState<FacultyCase | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -180,6 +189,11 @@ export default function FacultyCaseLibrary() {
           </div>
         </section>
 
+        {notice ? (
+          <div className="rounded-lg border border-[#bdebdc] bg-[#f0fcf8] px-4 py-3 text-sm font-medium text-[#176b5a]">
+            {notice}
+          </div>
+        ) : null}
         {error ? (
           <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
             {error}
@@ -187,7 +201,7 @@ export default function FacultyCaseLibrary() {
         ) : null}
 
         <section className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white shadow-sm">
-          <div className="hidden grid-cols-[1.7fr_0.8fr_0.7fr_0.7fr_0.8fr_1fr] gap-4 border-b border-[#e6e8eb] bg-[#f6f7fb] px-5 py-3 text-xs font-semibold uppercase text-[#6b7280] lg:grid">
+          <div className="hidden grid-cols-[1.5fr_0.8fr_0.7fr_0.7fr_0.8fr_1.2fr] gap-4 border-b border-[#e6e8eb] bg-[#f6f7fb] px-5 py-3 text-xs font-semibold uppercase text-[#6b7280] lg:grid">
             <span>Title</span>
             <span>Industry</span>
             <span>Difficulty</span>
@@ -203,7 +217,11 @@ export default function FacultyCaseLibrary() {
           ) : filteredCases.length > 0 ? (
             <div className="divide-y divide-[#e6e8eb]">
               {filteredCases.map((caseStudy) => (
-                <CaseRow key={caseStudy.id} caseStudy={caseStudy} />
+                <CaseRow
+                  key={caseStudy.id}
+                  caseStudy={caseStudy}
+                  onAssign={() => setAssigningCase(caseStudy)}
+                />
               ))}
             </div>
           ) : (
@@ -216,17 +234,30 @@ export default function FacultyCaseLibrary() {
           )}
         </section>
       </div>
+
+      {assigningCase ? (
+        <AssignToClassDialog
+          caseStudy={assigningCase}
+          onClose={() => setAssigningCase(null)}
+          onAssigned={(message) => {
+            setAssigningCase(null)
+            setNotice(message)
+            setError("")
+          }}
+        />
+      ) : null}
     </FacultyLayout>
   )
 }
 
 interface CaseRowProps {
   caseStudy: FacultyCase
+  onAssign: () => void
 }
 
-function CaseRow({ caseStudy }: CaseRowProps) {
+function CaseRow({ caseStudy, onAssign }: CaseRowProps) {
   return (
-    <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.7fr_0.8fr_0.7fr_0.7fr_0.8fr_1fr] lg:items-center">
+    <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.5fr_0.8fr_0.7fr_0.7fr_0.8fr_1.2fr] lg:items-center">
       <div className="min-w-0">
         <h2 className="truncate text-sm font-semibold text-[#111827]">{caseStudy.title}</h2>
         <p className="mt-1 line-clamp-2 text-sm leading-6 text-[#6b7280]">
@@ -250,6 +281,18 @@ function CaseRow({ caseStudy }: CaseRowProps) {
         {caseStudy.attempts_count}
       </span>
       <div className="flex flex-wrap gap-2">
+        {caseStudy.status === "published" ? (
+          <button
+            type="button"
+            onClick={onAssign}
+            className="inline-flex items-center gap-2 rounded-md border border-[#c9a227] px-3 py-2 text-xs font-semibold text-[#92702a] transition hover:bg-[#fff7df]"
+            aria-label={`Assign ${caseStudy.title} to a class`}
+            title="Assign to Class"
+          >
+            <Send size={14} aria-hidden="true" />
+            Assign to Class
+          </button>
+        ) : null}
         <Link
           to={`/faculty/case-builder/${caseStudy.id}`}
           className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
@@ -276,6 +319,171 @@ function CaseRow({ caseStudy }: CaseRowProps) {
         </button>
       </div>
     </article>
+  )
+}
+
+interface AssignToClassDialogProps {
+  caseStudy: FacultyCase
+  onClose: () => void
+  onAssigned: (message: string) => void
+}
+
+function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDialogProps) {
+  const [sections, setSections] = useState<FacultySection[]>([])
+  const [selectedSectionIds, setSelectedSectionIds] = useState<number[]>([])
+  const [dueDate, setDueDate] = useState("")
+  const [instructions, setInstructions] = useState("")
+  const [isLoadingSections, setIsLoadingSections] = useState(true)
+  const [error, setError] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    getFacultySections()
+      .then((data) => {
+        if (isMounted) setSections(data.items)
+      })
+      .catch(() => {
+        if (isMounted) setError("Unable to load your sections.")
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingSections(false)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  function toggleSection(sectionId: number) {
+    setSelectedSectionIds((current) =>
+      current.includes(sectionId)
+        ? current.filter((id) => id !== sectionId)
+        : [...current, sectionId],
+    )
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (selectedSectionIds.length === 0) {
+      setError("Select at least one section.")
+      return
+    }
+    setIsSaving(true)
+    setError("")
+    try {
+      const result = await assignCaseToSections(caseStudy.id, {
+        section_ids: selectedSectionIds,
+        due_date: dueDate || undefined,
+        instructions: instructions || undefined,
+      })
+      const totalNew = result.assignments.reduce((sum, item) => sum + item.newly_assigned, 0)
+      onAssigned(
+        `Assigned "${caseStudy.title}" to ${result.assignments.length} section(s); ${totalNew} student(s) newly notified.`,
+      )
+    } catch {
+      setError("Unable to assign this case. It may already be assigned or not published.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1d3a]/45 p-4">
+      <div className="w-full max-w-lg">
+        <form
+          onSubmit={handleSubmit}
+          className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-[#111827]">Assign to Class</h2>
+              <p className="mt-1 text-sm text-[#6b7280]">{caseStudy.title}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-4">
+            <div>
+              <p className="text-sm font-semibold text-[#111827]">Select Section(s)</p>
+              <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-[#e6e8eb] p-3">
+                {isLoadingSections ? (
+                  <p className="text-sm text-[#6b7280]">Loading sections...</p>
+                ) : sections.length === 0 ? (
+                  <p className="text-sm text-[#6b7280]">
+                    You have no sections yet. Ask an admin to assign you to a class section.
+                  </p>
+                ) : (
+                  sections.map((section) => (
+                    <label key={section.id} className="flex items-center gap-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedSectionIds.includes(section.id)}
+                        onChange={() => toggleSection(section.id)}
+                        className="size-4"
+                      />
+                      <span>
+                        {section.name} · {section.semester_name} · {section.batch_name} (
+                        {section.student_count} students)
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+              Due Date (optional)
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                className="h-11 rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+              Instructions to Class (optional)
+              <textarea
+                value={instructions}
+                onChange={(event) => setInstructions(event.target.value)}
+                rows={3}
+                placeholder="e.g. Complete this before Thursday's session"
+                className="rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              />
+            </label>
+          </div>
+
+          {error ? (
+            <div className="mt-4 rounded-md border border-[#f3c4c4] bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#e6e8eb] px-4 py-3 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#0b1d3a] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSaving ? "Assigning..." : "Assign to Selected Sections"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 

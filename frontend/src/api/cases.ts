@@ -24,6 +24,8 @@ export interface CaseStudyResponse {
     tag_type: string
     tag_value: string
   }>
+  assignment_source?: "mentor" | "faculty" | "admin" | null
+  due_date?: string | null
 }
 
 export interface CaseStudyFilters {

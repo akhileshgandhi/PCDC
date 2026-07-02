@@ -6,103 +6,148 @@ In Progress
 
 ## Feature
 
-SPEC_11 - Case Study Schema Gap Analysis
+SPEC_12 - Courses, Faculty Management, Student Management & Case Assignment
 
 ## Spec File
 
-`context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
+`context/features/SPEC_12_COURSES_FACULTY_STUDENT_MANAGEMENT.md`
 
 ## Goals
 
-- Align the case study schema with stakeholder-provided case samples from `AI_Case_Samples.docx`
-- Add missing case identity and classification fields: case code, volume, subject, functional area, capability category, Bloom's levels, target learners, and difficulty label
-- Support stakeholder 5-level difficulty labels while preserving current numeric difficulty behavior where needed
-- Add case time breakdown fields for reading, answer writing, and rapid fire phases
-- Add marks breakdown fields for total, written, and rapid fire marks
-- Add instructional content sections for student instructions, company/industry background, faculty notes, and key learning points
-- Add structured `case_questions` persistence for the three written questions, word limits, Bloom's level, model answers, alternatives, and marking scheme
-- Add `rapid_fire_questions` persistence for six quick-response questions per case
-- Add student response persistence for written question responses and rapid fire responses
-- Add attempt marks fields for written marks, rapid fire marks, total marks, eligibility, and phase-specific time spent
-- Update Faculty Case Builder to create and edit the new metadata, structured questions, rapid fire questions, instructions, and faculty notes
-- Update Student Case Attempt flow from one free-form answer to structured question responses plus a rapid fire phase
-- Update AI evaluation to score against model answers, alternatives, and marking schemes while still deriving capability scores
-- Update case library displays to show case code, subject, difficulty label, and marks/time breakdown
-- Update Mentor Thinking Path to show structured written responses and rapid fire responses
-- Update analytics to include marks distribution alongside capability scores
+- Introduce a real academic structure: courses, semesters, batches, and class sections
+- Link faculty to the class sections they teach (`faculty_sections`)
+- Link students to the one class section they are enrolled in (`student_sections`)
+- Let faculty assign a published case study to an entire class section at once (`case_section_assignments`), alongside the existing mentor per-student assignment path
+- Extend `assigned_cases` with `assignment_source` and `section_assignment_id` to distinguish section-based (faculty) assignments from mentor assignments
+- Add Admin Course & Section Management: create courses (auto-seeds semesters), add batches, create class sections, assign faculty and students to sections (individual, bulk, and CSV import)
+- Add an admin bulk "advance semester" action per batch
+- Update Admin Users list/CSV import/user creation to capture course, batch, and section
+- Update Faculty Dashboard to show real section counts, student counts, and cases assigned
+- Update Faculty Students page to show the full class roster by section, including students with zero attempts (not just students who've attempted a case)
+- Add Faculty "Assign to Class" flow on the case library, with due date and instructions, plus a per-section completion-rate view and close-assignment action
+- Update Faculty Case Builder with recommended course/semester tagging (soft, non-restrictive)
+- Update Faculty Analytics with a section dimension
+- Update Student Dashboard to show course/semester/batch/section identity
+- Update Student case list to separate faculty-assigned (by section) from mentor-assigned cases, with a Completed tab
+- One-time admin-driven migration of existing students into course/section data (no automated migration)
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
-- `context/features/SPEC_07a_CASE_BUILDER.md`
-- `context/features/SPEC_07c_RUBRIC_BUILDER.md`
-- `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
-- `context/features/SPEC_09_MENTOR_PORTAL.md`
+- `context/features/SPEC_12_COURSES_FACULTY_STUDENT_MANAGEMENT.md`
 - `context/features/SPEC_08_ADMIN_PORTAL.md`
+- `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
+- `context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
 - `context/features/SPEC_14_FACULTY_PORTAL.md`
+- `context/features/SPEC_15_CASE_PUBLISHING_TARGETING.md`
 
 ## Answered Questions
 
-- Stakeholder cases are the source of truth for the initial import schema
-- Actual stakeholder cases use 5 named difficulty levels: Foundation, Regular, Pro, Expert, and Champion
-- Current 7-level platform difficulty needs a compatibility strategy; recommended approach is adopting the 5 stakeholder levels for these cases
-- Structured written assessment has three specific questions with marks, word limits, model answers, alternatives, and marking schemes
-- Rapid Fire is a new post-written phase with six quick questions and 3 total marks
-- Student attempts need both marks scores and capability scores
-- Students should see both marks and capability-score outcomes because they answer different feedback needs
-- 70% written completion eligibility determines whether an attempt is evaluated
-- Bloom's Taxonomy data should be stored per question from day one, even if analytics come later
+- A student belongs to exactly one section at a time; no secondary/elective sections in phase 1
+- Section naming is admin-defined at creation time and not editable after students are enrolled
+- Existing students with no section are migrated via a one-time admin bulk enrollment CSV (student email + section_name); no automated migration
+- Faculty assigning the same case to multiple sections creates a separate `case_section_assignments` record per section, with independent completion analytics per section
+- Active/pending case assignments show in the student's main case list; completed cases move to a separate Completed tab
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
-3. Confirm current `case_studies`, `case_study_attempts`, `cs_evaluations`, `cs_ai_conversations`, Faculty Case Builder, Student Case Attempt, case library, Admin Case Import, and Mentor Thinking Path behavior
-4. Add Alembic migration for new case metadata columns on `case_studies`
-5. Add Alembic migration for marks, eligibility, and phase timing columns on `case_study_attempts`
-6. Add `case_questions`, `rapid_fire_questions`, `case_question_responses`, and `rapid_fire_responses` tables
-7. Update backend case serialization/parsing helpers to include new metadata and structured sections
-8. Update Faculty Case Builder APIs to read/write metadata, instructions, faculty notes, written questions, and rapid fire questions
-9. Update Faculty Case Builder UI with metadata, question editor, rapid fire editor, student instructions, faculty notes, and key learning points
-10. Update Admin Case Import mapping to accept the full stakeholder case structure
-11. Update student case library APIs and cards to show case code, subject, difficulty label, time breakdown, and marks
-12. Update Student Case Attempt flow to reading phase, structured written questions, word counts, eligibility check, and rapid fire phase
-13. Update AI evaluation to compare against model answers, alternatives, and marking schemes
-14. Persist per-question marks, rapid fire marks, total marks, feedback, and capability score updates
-15. Update Mentor Thinking Path to display written question responses and rapid fire responses
-16. Update faculty and director analytics to include marks distributions
-17. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_12_COURSES_FACULTY_STUDENT_MANAGEMENT.md`
+3. Confirm current `users`, `students`, `case_studies`, `assigned_cases` schema and existing Admin, Faculty, and Student portal behavior
+4. Add Alembic migration for `courses`, `semesters`, `batches`, `class_sections`, `faculty_sections`, `student_sections`, and `case_section_assignments` tables
+5. Add Alembic migration for `students.course_id/batch_id/current_section_id/current_semester_number`, `case_studies.recommended_semester/recommended_courses`, and `assigned_cases.assignment_source/section_assignment_id`
+6. Implement Admin course and batch management APIs (creating a course seeds its semesters)
+7. Implement Admin section management APIs: create section, assign faculty, enroll students, bulk CSV enroll
+8. Implement Admin bulk semester-advancement API
+9. Update Admin Users UI and CSV import/template for course/batch/section fields
+10. Build Admin Course & Section management UI
+11. Implement Faculty sections-roster API and update Faculty Dashboard summary
+12. Implement Faculty students-by-section API and update the Faculty Students page
+13. Implement Faculty case-to-section assignment API ("Assign to Class"), assigned-cases completion view, and close-assignment action
+14. Update Faculty Case Builder with recommended course/semester tagging
+15. Update Faculty Analytics with a section dimension
+16. Update Student profile/dashboard API and UI for course/semester/batch/section identity
+17. Update Student case list API/UI to separate faculty-assigned (by section) vs mentor-assigned cases, plus a Completed tab
+18. Build the one-time admin bulk tool to migrate existing students into course/section data
+19. Run frontend build and relevant backend checks
 
 ## Definition of Done
 
-- [x] `case_studies` stores case code, volume, subject, functional area, capability category, Bloom's levels, target learners, and difficulty label
-- [x] `case_studies` stores reading, answer writing, and rapid fire time breakdowns
-- [x] `case_studies` stores total, written, and rapid fire marks breakdowns
-- [x] `case_studies` stores student instructions, company background, industry background, faculty discussion notes, and key learning points
-- [x] `case_questions` table stores question number, text, marks, Bloom's level, word limits, instructions, model answer, alternative answers, and marking scheme
-- [x] `rapid_fire_questions` table stores six ordered quick questions and answers per case
-- [x] `case_question_responses` table stores per-attempt written responses, word counts, AI marks, and feedback
-- [x] `rapid_fire_responses` table stores per-attempt rapid fire responses, correctness, and marks awarded
-- [x] `case_study_attempts` stores written marks, rapid fire marks, total marks, eligibility, and phase-specific time spent
-- [x] Faculty Case Builder can create and edit all new metadata and instructional fields
-- [x] Faculty Case Builder can create and edit three structured written questions
-- [x] Faculty Case Builder can create and edit six rapid fire questions
-- [ ] Admin Case Import can map/import the stakeholder case schema
-- [x] Student case library displays case code, subject, difficulty label, marks breakdown, and time breakdown
-- [ ] Student attempt flow supports reading, structured writing, and rapid fire phases
-- [ ] Written question response UI shows word count indicators and enforces eligibility rules
-- [ ] Rapid fire UI supports six short-answer questions with phase timer
-- [ ] AI evaluation awards marks per written question using model answers, alternatives, and marking schemes
-- [ ] AI evaluation awards rapid fire marks and persists total marks out of 10
-- [ ] Capability score updates still run after structured case completion
-- [ ] Mentor Thinking Path shows written question responses and rapid fire responses
-- [ ] Faculty/director analytics include marks distributions alongside capability scores
+- [x] `courses` table stores course name, code, total semesters, duration, and status
+- [x] Creating a course auto-seeds its `semesters` rows
+- [x] `batches` table stores batch name, start/end year, and status per course
+- [x] `class_sections` table links course + semester + batch with a section name and academic year
+- [x] `faculty_sections` table links faculty to sections with a subject
+- [x] `student_sections` table links each student to their one active section (enforced via partial unique index)
+- [x] `case_section_assignments` table records case-to-section assignments with due date, instructions, and status
+- [x] `assigned_cases` gains `assignment_source` and `section_assignment_id`
+- [x] Admin can create courses and batches; creating a course seeds semesters (course rename/status edit exists; batch edit does not)
+- [x] Admin can create class sections and assign faculty and students to them (individual and bulk-by-selection)
+- [ ] Admin Users CSV import (file upload) supports course/batch/section columns — deferred: no CSV upload/parse endpoint exists anywhere in the codebase yet (only template download), so this wasn't built as part of this pass. Admin Users list and the manual creation drawer do support course/batch/section.
+- [x] Admin can run a bulk semester-advancement action per batch
+- [x] Faculty Dashboard shows section count and student count drawn from real sections (a dedicated "cases assigned" tile was not added)
+- [x] Faculty Students page lists the full class roster grouped by section, including students with zero attempts
+- [x] Faculty can assign a published case to one or more sections via "Assign to Class"
+- [ ] Faculty can view per-section assigned-case completion rates and close an assignment — backend endpoints exist (`GET /faculty/cases/assigned`, `PATCH /faculty/case-assignments/{id}/close`) and are tested, but no frontend screen was built to display them
+- [ ] Faculty Case Builder supports recommended course/semester tagging — deprioritized, not started
+- [ ] Faculty Analytics includes a section dimension — deprioritized, Analytics page remains the pre-existing placeholder
+- [x] Student Dashboard shows course/semester/batch/section identity
+- [x] Student case list separates faculty-assigned (by section) from mentor-assigned cases, with a Completed tab
 - [x] Frontend build and relevant backend checks pass
 
 ---
 
 ## History
+
+- 2026-07-02: Implemented the core of SPEC_12 on
+  `feature/courses-faculty-student-management`. Added migration 0008
+  (`courses`, `semesters`, `batches`, `class_sections`, `faculty_sections`,
+  `student_sections` with a partial-unique one-active-section constraint,
+  `case_section_assignments`, plus new columns on `students`, `case_studies`,
+  and `assigned_cases`) and a follow-up migration 0009 fixing a missed
+  `assigned_cases.due_date` column. Built Admin course/batch/section
+  management APIs and a new `/admin/courses` UI (create course with
+  semester auto-seeding, add batches, create sections, assign faculty,
+  enroll students, per-batch semester advancement with flagged students
+  when no next-semester section exists). Added `section_id` to admin
+  student creation and course/batch/section columns to the admin users
+  list. Built Faculty `/faculty/sections` and `/faculty/students` roster
+  APIs (replacing case-attempt-only visibility with real section
+  enrollment) and a new Faculty Students page. Built the faculty
+  "Assign to Class" flow end-to-end: `POST
+  /faculty/cases/{id}/assign-section` bulk-creates `assigned_cases` rows
+  and notifications for every enrolled student, wired into the Case
+  Library with a section-picker dialog. Added `GET
+  /faculty/cases/assigned` and a close-assignment endpoint (backend only,
+  no frontend view yet). Added `GET /student/profile` and wired course/
+  semester/batch/section/mentor identity into the student dashboard.
+  Updated the student case list to show "Assigned by Faculty" vs
+  "Assigned by Mentor" and due dates using the existing Completed tab.
+  Fixed two bugs found during testing: a route-ordering collision where
+  `/faculty/cases/{case_id}` was shadowing `/faculty/cases/assigned`, and
+  the missing `due_date` column from migration 0008. Verified the full
+  admin-to-student flow end-to-end with a headless browser (create
+  course/batch/section, enroll student, assign faculty, publish a case,
+  assign it to the section, confirm the student sees it with the correct
+  badge and due date) with zero console errors. Deprioritized and left
+  unstarted: Faculty Case Builder course/semester tagging, Faculty
+  Analytics section dimension, and a dedicated CSV bulk-enrollment upload
+  (CSV import doesn't exist anywhere in the codebase yet, only template
+  download). Frontend build passed and backend Python syntax checks
+  passed via `py`.
+
+- 2026-07-02: SPEC_12 Courses, Faculty Management, Student Management &
+  Case Assignment moved to In Progress. Scope updated to a full academic
+  structure (courses, semesters, batches, class sections), faculty and
+  student section enrollment, faculty-to-section case assignment
+  ("Assign to Class") alongside existing mentor per-student assignment,
+  admin course/section management and semester progression, and the
+  corresponding faculty/student portal updates for section-based
+  visibility. SPEC_11 (Case Study Schema Gap Analysis) is not fully
+  complete — Admin Case Import, Student Attempt flow, AI evaluation
+  against model answers, Mentor Thinking Path, and marks analytics
+  remain unchecked — but work is intentionally moving to SPEC_12 next
+  per direction.
 
 - 2026-07-02: Continued SPEC_11 implementation on `main`. Added the
   Faculty Case Builder UI for the stakeholder case schema: a Case Metadata

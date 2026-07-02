@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, Clock3, Layers3 } from "lucide-react"
+import { ArrowRight, CalendarClock, CheckCircle2, Clock3, Layers3 } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import DifficultyBadge from "./DifficultyBadge"
@@ -24,7 +24,8 @@ export interface CaseStudy {
   status: CaseStatus
   career_tracks: string[]
   capabilities: string[]
-  assigned_by_mentor?: boolean
+  assignment_source?: "mentor" | "faculty" | "admin" | null
+  due_date?: string | null
 }
 
 interface CaseCardProps {
@@ -75,9 +76,14 @@ export default function CaseCard({ caseStudy }: CaseCardProps) {
         <DomainTag domain={caseStudy.domain} />
         <DifficultyBadge level={caseStudy.difficulty} />
         <StatusBadge status={caseStudy.status} />
-        {caseStudy.assigned_by_mentor ? (
+        {caseStudy.assignment_source === "mentor" ? (
           <span className="rounded-full bg-[#E9F7F1] px-3 py-1 text-xs font-semibold text-[#0F766E]">
             Assigned by Mentor
+          </span>
+        ) : null}
+        {caseStudy.assignment_source === "faculty" ? (
+          <span className="rounded-full bg-[#FFF7DF] px-3 py-1 text-xs font-semibold text-[#92702A]">
+            Assigned by Faculty
           </span>
         ) : null}
       </div>
@@ -115,6 +121,12 @@ export default function CaseCard({ caseStudy }: CaseCardProps) {
             {caseStudy.total_marks}/10 marks
           </span>
         ) : null}
+        {caseStudy.due_date && caseStudy.status !== "completed" ? (
+          <span className="inline-flex items-center gap-2">
+            <CalendarClock size={16} aria-hidden="true" />
+            Due {formatDueDate(caseStudy.due_date)}
+          </span>
+        ) : null}
       </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
@@ -139,4 +151,10 @@ export default function CaseCard({ caseStudy }: CaseCardProps) {
       </Link>
     </article>
   )
+}
+
+function formatDueDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date)
 }

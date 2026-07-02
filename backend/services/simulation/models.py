@@ -43,6 +43,8 @@ class CaseStudyResponse(BaseModel):
     created_by: Optional[int] = None
     tags: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: str
+    assignment_source: Optional[str] = None
+    due_date: Optional[str] = None
 
 
 class StartAttemptRequest(BaseModel):

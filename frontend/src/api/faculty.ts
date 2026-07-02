@@ -26,6 +26,48 @@ export interface FacultyCaseFilters {
   status?: string
 }
 
+export interface FacultySection {
+  id: number
+  name: string
+  academic_year: string | null
+  semester_number: number
+  semester_name: string
+  batch_name: string
+  course_name: string
+  subjects: string | null
+  student_count: number
+}
+
+export type FacultyStudentStatus = "on_track" | "at_risk" | "inactive" | "not_started"
+
+export interface FacultyStudent {
+  student_id: number
+  user_id: number
+  name: string
+  email: string
+  section_id: number
+  section_name: string
+  average_score: number
+  last_activity_at: string | null
+  assigned_count: number
+  completed_count: number
+  status: FacultyStudentStatus
+}
+
+export interface FacultyAssignedCase {
+  assignment_id: number
+  case_id: number
+  case_title: string
+  section_id: number
+  section_name: string
+  due_date: string | null
+  status: "active" | "closed"
+  instructions: string | null
+  assigned_at: string
+  total_assigned: number
+  completed_count: number
+}
+
 export type CaseSectionKey =
   | "situation"
   | "background"
@@ -272,5 +314,50 @@ export async function saveFacultyCaseRubric(caseId: number, payload: FacultyRubr
 
 export async function publishFacultyCase(caseId: number) {
   const response = await api.post<FacultyCaseEditor>(`/faculty/cases/${caseId}/publish`)
+  return response.data
+}
+
+export async function getFacultySections() {
+  const response = await api.get<{ items: FacultySection[]; total: number }>(
+    "/faculty/sections",
+  )
+  return response.data
+}
+
+export async function getFacultyStudents(sectionId?: number) {
+  const response = await api.get<{ items: FacultyStudent[]; total: number }>(
+    "/faculty/students",
+    { params: { section_id: sectionId || undefined } },
+  )
+  return response.data
+}
+
+export async function assignCaseToSections(
+  caseId: number,
+  payload: { section_ids: number[]; due_date?: string; instructions?: string },
+) {
+  const response = await api.post<{
+    case_id: number
+    assignments: Array<{
+      section_id: number
+      section_name: string
+      matched_students: number
+      newly_assigned: number
+    }>
+  }>(`/faculty/cases/${caseId}/assign-section`, payload)
+  return response.data
+}
+
+export async function getFacultyAssignedCases() {
+  const response = await api.get<{ items: FacultyAssignedCase[]; total: number }>(
+    "/faculty/cases/assigned",
+  )
+  return response.data
+}
+
+export async function closeFacultyCaseAssignment(assignmentId: number) {
+  const response = await api.patch<{ id: number; status: string }>(
+    `/faculty/case-assignments/${assignmentId}/close`,
+  )
   return response.data
 }

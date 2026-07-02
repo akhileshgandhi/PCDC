@@ -15,11 +15,17 @@ import { Link, useSearchParams } from "react-router-dom"
 
 import {
   createAdminUser,
+  getAdminCourseBatches,
+  getAdminCourses,
+  getAdminCourseSections,
   getAdminUsers,
   resetAdminUserPassword,
   updateAdminUserRole,
   updateAdminUserStatus,
   userImportTemplateUrl,
+  type AdminBatch,
+  type AdminCourse,
+  type AdminSection,
   type AdminUser,
   type AdminUserRole,
   type AdminUserStatus,
@@ -278,10 +284,11 @@ export default function AdminUsers() {
         ) : null}
 
         <section className="overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-sm">
-          <div className="hidden grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_1.1fr_1.2fr] gap-4 border-b border-[#dde4ec] bg-[#f5f7fa] px-5 py-3 text-xs font-semibold uppercase text-[#667085] lg:grid">
+          <div className="hidden grid-cols-[1.4fr_0.8fr_0.8fr_0.9fr_0.7fr_1.1fr_1.2fr] gap-4 border-b border-[#dde4ec] bg-[#f5f7fa] px-5 py-3 text-xs font-semibold uppercase text-[#667085] lg:grid">
             <span>Name</span>
             <span>Role</span>
             <span>Program</span>
+            <span>Course / Section</span>
             <span>Status</span>
             <span>Last Login</span>
             <span>Actions</span>
@@ -359,7 +366,7 @@ function UserRow({
   onRoleChange,
 }: UserRowProps) {
   return (
-    <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.4fr_0.8fr_0.8fr_0.7fr_1.1fr_1.2fr] lg:items-center">
+    <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.4fr_0.8fr_0.8fr_0.9fr_0.7fr_1.1fr_1.2fr] lg:items-center">
       <div className="min-w-0">
         <Link
           to={`/admin/user/${user.id}`}
@@ -390,6 +397,12 @@ function UserRow({
 
       <span className="text-sm font-medium text-[#17202a]">
         {user.program || user.specialization || "-"}
+      </span>
+
+      <span className="text-sm text-[#667085]">
+        {user.course_name && user.section_name
+          ? `${user.course_name} · ${user.section_name}`
+          : user.course_name || "-"}
       </span>
 
       <span>
@@ -459,6 +472,60 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
+  const [courses, setCourses] = useState<AdminCourse[]>([])
+  const [batches, setBatches] = useState<AdminBatch[]>([])
+  const [sections, setSections] = useState<AdminSection[]>([])
+  const [courseId, setCourseId] = useState("")
+  const [batchId, setBatchId] = useState("")
+  const [sectionId, setSectionId] = useState("")
+
+  useEffect(() => {
+    if (role !== "student") return
+    let isMounted = true
+    getAdminCourses()
+      .then((data) => {
+        if (isMounted) setCourses(data.items)
+      })
+      .catch(() => {
+        if (isMounted) setCourses([])
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [role])
+
+  useEffect(() => {
+    setBatchId("")
+    setSectionId("")
+    setBatches([])
+    setSections([])
+    if (!courseId) return
+    let isMounted = true
+    Promise.all([
+      getAdminCourseBatches(Number(courseId)),
+      getAdminCourseSections(Number(courseId)),
+    ])
+      .then(([batchData, sectionData]) => {
+        if (isMounted) {
+          setBatches(batchData.items)
+          setSections(sectionData.items)
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setBatches([])
+          setSections([])
+        }
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [courseId])
+
+  const sectionsForBatch = sections.filter(
+    (section) => batches.find((batch) => String(batch.id) === batchId)?.name === section.batch_name,
+  )
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsSaving(true)
@@ -471,6 +538,7 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
         program: program || undefined,
         specialization: specialization || undefined,
         admission_year: admissionYear ? Number(admissionYear) : undefined,
+        section_id: role === "student" && sectionId ? Number(sectionId) : undefined,
       })
       onCreated(`Created ${result.user.name}; welcome email queued.`)
     } catch {
@@ -560,6 +628,54 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
                 className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
               />
             </Field>
+            {role === "student" ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Course">
+                  <select
+                    value={courseId}
+                    onChange={(event) => setCourseId(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  >
+                    <option value="">No course</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Batch">
+                  <select
+                    value={batchId}
+                    onChange={(event) => setBatchId(event.target.value)}
+                    disabled={!courseId}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">Select batch</option>
+                    {batches.map((batch) => (
+                      <option key={batch.id} value={batch.id}>
+                        {batch.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Section">
+                  <select
+                    value={sectionId}
+                    onChange={(event) => setSectionId(event.target.value)}
+                    disabled={!batchId}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">Select section</option>
+                    {sectionsForBatch.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.name} ({section.semester_name})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            ) : null}
           </div>
 
           {error ? (

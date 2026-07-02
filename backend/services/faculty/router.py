@@ -137,6 +137,12 @@ class RubricRequest(BaseModel):
     case_specific_criteria: List[str] = Field(default_factory=list)
 
 
+class AssignCaseToSectionsRequest(BaseModel):
+    section_ids: List[int]
+    due_date: Optional[str] = None
+    instructions: Optional[str] = None
+
+
 def require_faculty(current_user: Dict[str, Any]) -> None:
     if current_user["role"] not in ["faculty", "admin"]:
         raise HTTPException(status_code=403, detail="Faculty access required")
@@ -1139,6 +1145,50 @@ def create_faculty_case(
     return case_editor_response(db, row)
 
 
+@faculty_router.get("/cases/assigned")
+def faculty_assigned_cases(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    rows = db.execute(
+        text("""
+            SELECT seca.id AS assignment_id, cse.id AS case_id, cse.title AS case_title,
+                   sec.id AS section_id, sec.name AS section_name, seca.due_date, seca.status,
+                   seca.instructions, seca.assigned_at,
+                   COUNT(ac.id) AS total_assigned,
+                   COUNT(ac.id) FILTER (WHERE ac.status = 'completed') AS completed_count
+            FROM case_section_assignments seca
+            JOIN case_studies cse ON cse.id = seca.case_study_id
+            JOIN class_sections sec ON sec.id = seca.section_id
+            LEFT JOIN assigned_cases ac ON ac.section_assignment_id = seca.id
+            WHERE seca.assigned_by = :faculty_id
+            GROUP BY seca.id, cse.id, cse.title, sec.id, sec.name
+            ORDER BY seca.assigned_at DESC
+        """),
+        {"faculty_id": current_user["id"]},
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "assignment_id": row.assignment_id,
+                "case_id": row.case_id,
+                "case_title": row.case_title,
+                "section_id": row.section_id,
+                "section_name": row.section_name,
+                "due_date": str(row.due_date) if row.due_date else None,
+                "status": row.status,
+                "instructions": row.instructions,
+                "assigned_at": str(row.assigned_at),
+                "total_assigned": int(row.total_assigned),
+                "completed_count": int(row.completed_count),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @faculty_router.get("/cases/{case_id}")
 def get_faculty_case(
     case_id: int,
@@ -1491,3 +1541,292 @@ def publish_faculty_case(
     updated_row = result.fetchone()
     db.commit()
     return case_editor_response(db, updated_row)
+
+
+@faculty_router.get("/sections")
+def faculty_sections(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    rows = db.execute(
+        text("""
+            SELECT cs.id, cs.name, cs.academic_year, se.semester_number, se.name AS semester_name,
+                   b.name AS batch_name, c.name AS course_name,
+                   string_agg(DISTINCT fs.subject, ', ') AS subjects,
+                   COUNT(DISTINCT ss.student_id) FILTER (WHERE ss.status = 'active') AS student_count
+            FROM faculty_sections fs
+            JOIN class_sections cs ON cs.id = fs.section_id
+            JOIN semesters se ON se.id = cs.semester_id
+            JOIN batches b ON b.id = cs.batch_id
+            JOIN courses c ON c.id = cs.course_id
+            LEFT JOIN student_sections ss ON ss.section_id = cs.id
+            WHERE fs.faculty_id = :faculty_id
+            GROUP BY cs.id, se.semester_number, se.name, b.name, c.name
+            ORDER BY se.semester_number, cs.name
+        """),
+        {"faculty_id": current_user["id"]},
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "academic_year": row.academic_year,
+                "semester_number": row.semester_number,
+                "semester_name": row.semester_name,
+                "batch_name": row.batch_name,
+                "course_name": row.course_name,
+                "subjects": row.subjects,
+                "student_count": int(row.student_count),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+def student_roster_status(
+    average_score: Optional[float], last_activity_at: Any, assigned_count: int
+) -> str:
+    if assigned_count == 0 and last_activity_at is None:
+        return "not_started"
+    if average_score is not None and average_score < 60:
+        return "at_risk"
+    if last_activity_at is None:
+        return "inactive"
+    return "on_track"
+
+
+@faculty_router.get("/students")
+def faculty_students_roster(
+    section_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    where_extra = "AND cs.id = :section_id" if section_id else ""
+    params: Dict[str, Any] = {"faculty_id": current_user["id"]}
+    if section_id:
+        params["section_id"] = section_id
+
+    rows = db.execute(
+        text(f"""
+            SELECT DISTINCT s.id AS student_id, u.id AS user_id, u.name, u.email,
+                   cs.id AS section_id, cs.name AS section_name,
+                   avg_scores.average_score,
+                   last_activity.last_activity_at,
+                   COALESCE(assignment_counts.assigned_count, 0) AS assigned_count,
+                   COALESCE(assignment_counts.completed_count, 0) AS completed_count
+            FROM faculty_sections fs
+            JOIN class_sections cs ON cs.id = fs.section_id
+            JOIN student_sections ss ON ss.section_id = cs.id AND ss.status = 'active'
+            JOIN students s ON s.id = ss.student_id
+            JOIN users u ON u.id = s.user_id
+            LEFT JOIN LATERAL (
+                SELECT AVG(current_score) AS average_score
+                FROM student_capabilities WHERE student_id = s.id
+            ) avg_scores ON true
+            LEFT JOIN LATERAL (
+                SELECT MAX(start_time) AS last_activity_at
+                FROM case_study_attempts WHERE student_id = u.id
+            ) last_activity ON true
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) AS assigned_count,
+                       COUNT(*) FILTER (WHERE ac.status = 'completed') AS completed_count
+                FROM assigned_cases ac
+                JOIN case_section_assignments seca ON seca.id = ac.section_assignment_id
+                WHERE ac.student_id = s.id AND seca.assigned_by = :faculty_id AND seca.section_id = cs.id
+            ) assignment_counts ON true
+            WHERE fs.faculty_id = :faculty_id {where_extra}
+            ORDER BY cs.name, u.name
+        """),
+        params,
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "student_id": row.student_id,
+                "user_id": row.user_id,
+                "name": row.name,
+                "email": row.email,
+                "section_id": row.section_id,
+                "section_name": row.section_name,
+                "average_score": round(float(row.average_score), 1) if row.average_score is not None else 0,
+                "last_activity_at": str(row.last_activity_at) if row.last_activity_at else None,
+                "assigned_count": int(row.assigned_count),
+                "completed_count": int(row.completed_count),
+                "status": student_roster_status(
+                    row.average_score, row.last_activity_at, row.assigned_count
+                ),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@faculty_router.post("/cases/{case_id}/assign-section")
+def assign_case_to_sections(
+    case_id: int,
+    data: AssignCaseToSectionsRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    if not data.section_ids:
+        raise HTTPException(status_code=400, detail="At least one section is required")
+    case_row = db.execute(
+        text("SELECT id, title FROM case_studies WHERE id = :case_id AND status = 'published'"),
+        {"case_id": case_id},
+    ).fetchone()
+    if not case_row:
+        raise HTTPException(status_code=404, detail="Published case not found")
+
+    results = []
+    for section_id in data.section_ids:
+        section_row = db.execute(
+            text("SELECT id, name FROM class_sections WHERE id = :section_id"),
+            {"section_id": section_id},
+        ).fetchone()
+        if not section_row:
+            raise HTTPException(status_code=404, detail=f"Section {section_id} not found")
+
+        existing_assignment = db.execute(
+            text("""
+                SELECT id FROM case_section_assignments
+                WHERE case_study_id = :case_id AND section_id = :section_id
+            """),
+            {"case_id": case_id, "section_id": section_id},
+        ).fetchone()
+        if existing_assignment:
+            assignment_id = existing_assignment.id
+            db.execute(
+                text("""
+                    UPDATE case_section_assignments
+                    SET due_date = :due_date, instructions = :instructions, status = 'active'
+                    WHERE id = :assignment_id
+                """),
+                {
+                    "due_date": data.due_date,
+                    "instructions": data.instructions,
+                    "assignment_id": assignment_id,
+                },
+            )
+        else:
+            assignment_row = db.execute(
+                text("""
+                    INSERT INTO case_section_assignments
+                        (case_study_id, section_id, assigned_by, due_date, instructions)
+                    VALUES (:case_id, :section_id, :assigned_by, :due_date, :instructions)
+                    RETURNING id
+                """),
+                {
+                    "case_id": case_id,
+                    "section_id": section_id,
+                    "assigned_by": current_user["id"],
+                    "due_date": data.due_date,
+                    "instructions": data.instructions,
+                },
+            ).fetchone()
+            assignment_id = assignment_row.id
+
+        students = db.execute(
+            text("""
+                SELECT s.id AS student_id, s.user_id
+                FROM student_sections ss
+                JOIN students s ON s.id = ss.student_id
+                WHERE ss.section_id = :section_id AND ss.status = 'active'
+            """),
+            {"section_id": section_id},
+        ).fetchall()
+
+        newly_assigned = 0
+        for student in students:
+            attempted = db.execute(
+                text("""
+                    SELECT id FROM case_study_attempts
+                    WHERE case_study_id = :case_id AND student_id = :student_user_id
+                """),
+                {"case_id": case_id, "student_user_id": student.user_id},
+            ).fetchone()
+            if attempted:
+                continue
+            existing_case = db.execute(
+                text("""
+                    SELECT id FROM assigned_cases
+                    WHERE student_id = :student_id AND case_study_id = :case_id
+                """),
+                {"student_id": student.student_id, "case_id": case_id},
+            ).fetchone()
+            if existing_case:
+                continue
+            db.execute(
+                text("""
+                    INSERT INTO assigned_cases (
+                        student_id, case_study_id, assigned_by, status,
+                        assignment_source, section_assignment_id, due_date
+                    )
+                    VALUES (
+                        :student_id, :case_id, :assigned_by, 'pending',
+                        'faculty', :section_assignment_id, :due_date
+                    )
+                """),
+                {
+                    "student_id": student.student_id,
+                    "case_id": case_id,
+                    "assigned_by": current_user["id"],
+                    "section_assignment_id": assignment_id,
+                    "due_date": data.due_date,
+                },
+            )
+            db.execute(
+                text("""
+                    INSERT INTO notification_log (
+                        recipient_user_id, event_type, channel, status, subject, body
+                    )
+                    VALUES (
+                        :recipient_user_id, 'case_assigned', 'email', 'pending',
+                        'New case study assigned', :body
+                    )
+                """),
+                {
+                    "recipient_user_id": student.user_id,
+                    "body": f'"{case_row.title}" has been assigned to your class.',
+                },
+            )
+            newly_assigned += 1
+
+        results.append(
+            {
+                "section_id": section_id,
+                "section_name": section_row.name,
+                "matched_students": len(students),
+                "newly_assigned": newly_assigned,
+            }
+        )
+
+    db.commit()
+    return {"case_id": case_id, "assignments": results}
+
+
+@faculty_router.patch("/case-assignments/{assignment_id}/close")
+def close_faculty_case_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    row = db.execute(
+        text("""
+            UPDATE case_section_assignments
+            SET status = 'closed'
+            WHERE id = :assignment_id AND assigned_by = :faculty_id
+            RETURNING id, status
+        """),
+        {"assignment_id": assignment_id, "faculty_id": current_user["id"]},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    db.commit()
+    return {"id": row.id, "status": row.status}

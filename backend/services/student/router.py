@@ -16,6 +16,44 @@ def require_student(current_user: Dict[str, Any]) -> None:
         raise HTTPException(status_code=403, detail="Student access required")
 
 
+@student_router.get("/profile")
+def student_profile(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_student(current_user)
+    row = db.execute(
+        text("""
+            SELECT s.id AS student_id, s.current_level,
+                   c.name AS course_name, b.name AS batch_name,
+                   cs.name AS section_name, se.semester_number, se.name AS semester_name,
+                   m.name AS mentor_name, ct.name AS career_track_name
+            FROM students s
+            LEFT JOIN courses c ON c.id = s.course_id
+            LEFT JOIN batches b ON b.id = s.batch_id
+            LEFT JOIN class_sections cs ON cs.id = s.current_section_id
+            LEFT JOIN semesters se ON se.id = cs.semester_id
+            LEFT JOIN users m ON m.id = s.mentor_id
+            LEFT JOIN career_tracks ct ON ct.id = s.career_track_id
+            WHERE s.user_id = :user_id
+        """),
+        {"user_id": current_user["id"]},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    return {
+        "student_id": row.student_id,
+        "current_level": row.current_level,
+        "course_name": row.course_name,
+        "batch_name": row.batch_name,
+        "section_name": row.section_name,
+        "semester_number": row.semester_number,
+        "semester_name": row.semester_name,
+        "mentor_name": row.mentor_name,
+        "career_track_name": row.career_track_name,
+    }
+
+
 @student_router.get("/dashboard/summary")
 def student_dashboard_summary(
     db: Session = Depends(get_db),

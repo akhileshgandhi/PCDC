@@ -23,7 +23,9 @@ import type { ReactNode } from "react"
 
 import {
   getStudentDashboardSummary,
+  getStudentProfile,
   type StudentDashboardSummary,
+  type StudentProfile,
 } from "../../api/student"
 import DashboardLayout from "../../layouts/DashboardLayout"
 import { getCurrentUser } from "../../utils/auth"
@@ -102,6 +104,7 @@ const attemptStages = ["Briefing", "Analysis", "AI Discussion", "Solution", "Def
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<StudentDashboardSummary>(defaultSummary)
+  const [profile, setProfile] = useState<StudentProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const currentUser = getCurrentUser()
@@ -112,9 +115,13 @@ export default function Dashboard() {
 
     async function loadDashboard() {
       try {
-        const data = await getStudentDashboardSummary()
+        const [summaryData, profileData] = await Promise.all([
+          getStudentDashboardSummary(),
+          getStudentProfile(),
+        ])
         if (isMounted) {
-          setSummary(data)
+          setSummary(summaryData)
+          setProfile(profileData)
           setError("")
         }
       } catch {
@@ -135,6 +142,12 @@ export default function Dashboard() {
     }
   }, [])
 
+  const identityLine = profile
+    ? [profile.course_name, profile.semester_name, profile.batch_name, profile.section_name]
+        .filter(Boolean)
+        .join(" · ")
+    : ""
+
   return (
     <DashboardLayout>
       <div className="space-y-5">
@@ -151,6 +164,12 @@ export default function Dashboard() {
             <h2 className="mt-7 text-3xl font-semibold leading-tight sm:text-4xl">
               Welcome back, {firstName}
             </h2>
+            {identityLine ? (
+              <p className="mt-2 text-sm font-medium text-white/70">
+                {identityLine}
+                {profile?.mentor_name ? ` · Mentor: ${profile.mentor_name}` : ""}
+              </p>
+            ) : null}
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/82 sm:text-base">
               Your next challenge is designed to strengthen strategic judgment
               and risk awareness. Keep sharpening.
