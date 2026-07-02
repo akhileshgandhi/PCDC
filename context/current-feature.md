@@ -85,9 +85,9 @@ SPEC_11 - Case Study Schema Gap Analysis
 - [x] `case_question_responses` table stores per-attempt written responses, word counts, AI marks, and feedback
 - [x] `rapid_fire_responses` table stores per-attempt rapid fire responses, correctness, and marks awarded
 - [x] `case_study_attempts` stores written marks, rapid fire marks, total marks, eligibility, and phase-specific time spent
-- [ ] Faculty Case Builder can create and edit all new metadata and instructional fields
-- [ ] Faculty Case Builder can create and edit three structured written questions
-- [ ] Faculty Case Builder can create and edit six rapid fire questions
+- [x] Faculty Case Builder can create and edit all new metadata and instructional fields
+- [x] Faculty Case Builder can create and edit three structured written questions
+- [x] Faculty Case Builder can create and edit six rapid fire questions
 - [ ] Admin Case Import can map/import the stakeholder case schema
 - [x] Student case library displays case code, subject, difficulty label, marks breakdown, and time breakdown
 - [ ] Student attempt flow supports reading, structured writing, and rapid fire phases
@@ -103,6 +103,27 @@ SPEC_11 - Case Study Schema Gap Analysis
 ---
 
 ## History
+
+- 2026-07-02: Continued SPEC_11 implementation on `main`. Added the
+  Faculty Case Builder UI for the stakeholder case schema: a Case Metadata
+  panel (case code, volume, subject, functional area, capability category,
+  difficulty label, target learners, Bloom's levels), a Time & Marks
+  Breakdown panel, a Student Instructions & Faculty Notes panel (8 fields),
+  a Structured Written Questions editor (3 fixed question cards with marks,
+  Bloom's level, word limits, instructions, model answer, alternative
+  answers, marking scheme), and a Rapid Fire Questions editor (6 Q&A
+  pairs). Wired Save Draft to persist all of it through the existing
+  backend PUT endpoint. Verified end-to-end with a headless-browser run
+  against the live dev server (login, draft creation, filling every new
+  panel, save, and DB read-back all confirmed) with zero console errors.
+  Frontend build passed.
+
+  Also drafted `context/features/SPEC_15_CASE_PUBLISHING_TARGETING.md`
+  covering the gap found while testing the intended admin-to-student
+  flow: faculty cohort targeting (department/program/class) at publish
+  time, publish-time notification, and a due-date/opt-in model for
+  assigned cases. Not yet implemented; queued to start after the rest of
+  SPEC_11.
 
 - 2026-07-02: Continued SPEC_10 dashboard work on `feature/case-builder`.
   Added a `student` backend service module with a live `GET

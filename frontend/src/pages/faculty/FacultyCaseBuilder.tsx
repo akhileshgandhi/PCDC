@@ -26,6 +26,12 @@ import {
   type FacultyCapability,
   type FacultyCaseGenerationJob,
   type FacultyCaseEditor,
+  type FacultyCaseInstructions,
+  type FacultyCaseMarks,
+  type FacultyCaseMetadata,
+  type FacultyCaseQuestion,
+  type FacultyCaseTiming,
+  type FacultyRapidFireQuestion,
 } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
@@ -64,6 +70,63 @@ const sectionDefinitions: Array<{ key: CaseSectionKey; label: string; required?:
 ]
 
 const arraySections = new Set<CaseSectionKey>(["reflection_questions", "learning_outcomes"])
+
+const bloomsLevels = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
+const difficultyLabels = ["Foundation", "Regular", "Pro", "Expert", "Champion"]
+const WRITTEN_QUESTION_COUNT = 3
+const RAPID_FIRE_QUESTION_COUNT = 6
+
+const emptyQuestion = (questionNumber: number): FacultyCaseQuestion => ({
+  question_number: questionNumber,
+  question_text: "",
+  marks: 0,
+  blooms_level: "",
+  word_limit_min: null,
+  word_limit_max: null,
+  instructions: "",
+  model_answer: "",
+  alternative_answers: [],
+  marking_scheme: "",
+})
+
+const emptyRapidFireQuestion = (sequence: number): FacultyRapidFireQuestion => ({
+  sequence,
+  question_text: "",
+  answer_text: "",
+})
+
+function padQuestions(questions: FacultyCaseQuestion[]): FacultyCaseQuestion[] {
+  const padded = [...questions]
+  while (padded.length < WRITTEN_QUESTION_COUNT) {
+    padded.push(emptyQuestion(padded.length + 1))
+  }
+  return padded.slice(0, WRITTEN_QUESTION_COUNT)
+}
+
+function padRapidFireQuestions(
+  questions: FacultyRapidFireQuestion[],
+): FacultyRapidFireQuestion[] {
+  const padded = [...questions]
+  while (padded.length < RAPID_FIRE_QUESTION_COUNT) {
+    padded.push(emptyRapidFireQuestion(padded.length + 1))
+  }
+  return padded.slice(0, RAPID_FIRE_QUESTION_COUNT)
+}
+
+function linesToList(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function normalizeCaseData(data: FacultyCaseEditor): FacultyCaseEditor {
+  return {
+    ...data,
+    questions: padQuestions(data.questions),
+    rapid_fire_questions: padRapidFireQuestions(data.rapid_fire_questions),
+  }
+}
 
 const fallbackCapabilities: FacultyCapability[] = [
   "Communication",
@@ -144,7 +207,7 @@ export default function FacultyCaseBuilder() {
       try {
         const data = await getFacultyCase(caseId)
         if (isMounted) {
-          setCaseData(data)
+          setCaseData(normalizeCaseData(data))
           setCoreForm(caseToCoreForm(data))
           setErrors([])
         }
@@ -184,7 +247,7 @@ export default function FacultyCaseBuilder() {
         }
         setGenerationJob(job)
         if (job.status === "succeeded" && job.case) {
-          setCaseData(job.case)
+          setCaseData(normalizeCaseData(job.case))
           setCoreForm(caseToCoreForm(job.case))
           setGeneratingSection(null)
           setNotice(job.scope === "section" ? "Section generated." : "Case draft generated.")
@@ -269,7 +332,7 @@ export default function FacultyCaseBuilder() {
         capabilities: coreForm.capabilities,
         expected_outcomes: coreForm.expected_outcomes,
       })
-      setCaseData(data)
+      setCaseData(normalizeCaseData(data))
       setErrors([])
       setNotice("Draft created.")
       navigate(`/faculty/case-builder/${data.id}`, { replace: true })
@@ -296,8 +359,14 @@ export default function FacultyCaseBuilder() {
         expected_outcomes: coreForm.expected_outcomes,
         sections: caseData.sections,
         section_meta: caseData.section_meta,
+        metadata: caseData.metadata,
+        timing: caseData.timing,
+        marks: caseData.marks,
+        instructions: caseData.instructions,
+        questions: caseData.questions,
+        rapid_fire_questions: caseData.rapid_fire_questions,
       })
-      setCaseData(data)
+      setCaseData(normalizeCaseData(data))
       setCoreForm(caseToCoreForm(data))
       setErrors([])
       setNotice("Draft saved.")
@@ -319,6 +388,66 @@ export default function FacultyCaseBuilder() {
         sections: { ...current.sections, [section]: nextValue },
         section_meta: { ...current.section_meta, [section]: value ? nextMeta : "manual" },
       }
+    })
+  }
+
+  function updateMetadata<K extends keyof FacultyCaseMetadata>(
+    field: K,
+    value: FacultyCaseMetadata[K],
+  ) {
+    setCaseData((current) => {
+      if (!current) return current
+      return { ...current, metadata: { ...current.metadata, [field]: value } }
+    })
+  }
+
+  function updateTiming<K extends keyof FacultyCaseTiming>(field: K, value: number | null) {
+    setCaseData((current) => {
+      if (!current) return current
+      return { ...current, timing: { ...current.timing, [field]: value } }
+    })
+  }
+
+  function updateMarks<K extends keyof FacultyCaseMarks>(field: K, value: number | null) {
+    setCaseData((current) => {
+      if (!current) return current
+      return { ...current, marks: { ...current.marks, [field]: value } }
+    })
+  }
+
+  function updateInstructions<K extends keyof FacultyCaseInstructions>(
+    field: K,
+    value: string,
+  ) {
+    setCaseData((current) => {
+      if (!current) return current
+      return { ...current, instructions: { ...current.instructions, [field]: value } }
+    })
+  }
+
+  function updateQuestion<K extends keyof FacultyCaseQuestion>(
+    index: number,
+    field: K,
+    value: FacultyCaseQuestion[K],
+  ) {
+    setCaseData((current) => {
+      if (!current) return current
+      const questions = [...current.questions]
+      questions[index] = { ...questions[index], [field]: value }
+      return { ...current, questions }
+    })
+  }
+
+  function updateRapidFireQuestion<K extends keyof FacultyRapidFireQuestion>(
+    index: number,
+    field: K,
+    value: FacultyRapidFireQuestion[K],
+  ) {
+    setCaseData((current) => {
+      if (!current) return current
+      const rapidFireQuestions = [...current.rapid_fire_questions]
+      rapidFireQuestions[index] = { ...rapidFireQuestions[index], [field]: value }
+      return { ...current, rapid_fire_questions: rapidFireQuestions }
     })
   }
 
@@ -366,7 +495,7 @@ export default function FacultyCaseBuilder() {
     setNotice("")
     try {
       const data = await publishFacultyCase(caseData.id)
-      setCaseData(data)
+      setCaseData(normalizeCaseData(data))
       setNotice("Case published.")
       setErrors([])
     } catch {
@@ -453,6 +582,12 @@ export default function FacultyCaseBuilder() {
             onCapabilityToggle={toggleCapability}
             onSectionChange={updateSection}
             onGenerate={handleGenerate}
+            onMetadataChange={updateMetadata}
+            onTimingChange={updateTiming}
+            onMarksChange={updateMarks}
+            onInstructionsChange={updateInstructions}
+            onQuestionChange={updateQuestion}
+            onRapidFireChange={updateRapidFireQuestion}
           />
         )}
       </div>
@@ -577,6 +712,26 @@ interface EditorStepProps {
   onCapabilityToggle: (capabilityName: string) => void
   onSectionChange: (section: CaseSectionKey, value: string) => void
   onGenerate: (section?: CaseSectionKey) => void
+  onMetadataChange: <K extends keyof FacultyCaseMetadata>(
+    field: K,
+    value: FacultyCaseMetadata[K],
+  ) => void
+  onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
+  onMarksChange: <K extends keyof FacultyCaseMarks>(field: K, value: number | null) => void
+  onInstructionsChange: <K extends keyof FacultyCaseInstructions>(
+    field: K,
+    value: string,
+  ) => void
+  onQuestionChange: <K extends keyof FacultyCaseQuestion>(
+    index: number,
+    field: K,
+    value: FacultyCaseQuestion[K],
+  ) => void
+  onRapidFireChange: <K extends keyof FacultyRapidFireQuestion>(
+    index: number,
+    field: K,
+    value: FacultyRapidFireQuestion[K],
+  ) => void
 }
 
 function EditorStep({
@@ -592,6 +747,12 @@ function EditorStep({
   onCapabilityToggle,
   onSectionChange,
   onGenerate,
+  onMetadataChange,
+  onTimingChange,
+  onMarksChange,
+  onInstructionsChange,
+  onQuestionChange,
+  onRapidFireChange,
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
@@ -639,6 +800,24 @@ function EditorStep({
           onCapabilityToggle={onCapabilityToggle}
         />
       </section>
+
+      <MetadataPanel metadata={caseData.metadata} onChange={onMetadataChange} />
+
+      <TimingMarksPanel
+        timing={caseData.timing}
+        marks={caseData.marks}
+        onTimingChange={onTimingChange}
+        onMarksChange={onMarksChange}
+      />
+
+      <InstructionsPanel instructions={caseData.instructions} onChange={onInstructionsChange} />
+
+      <QuestionsPanel questions={caseData.questions} onChange={onQuestionChange} />
+
+      <RapidFirePanel
+        questions={caseData.rapid_fire_questions}
+        onChange={onRapidFireChange}
+      />
 
       {publishBlockers.length > 0 ? (
         <section className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] p-4 text-sm text-[#b42318]">
@@ -804,6 +983,375 @@ function TextField({ label, value, type = "text", onChange }: TextFieldProps) {
         className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
       />
     </label>
+  )
+}
+
+interface NumberFieldProps {
+  label: string
+  value: number | null | undefined
+  onChange: (value: number | null) => void
+}
+
+function NumberField({ label, value, onChange }: NumberFieldProps) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+      {label}
+      <input
+        type="number"
+        value={value ?? ""}
+        onChange={(event) =>
+          onChange(event.target.value === "" ? null : Number(event.target.value))
+        }
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+      />
+    </label>
+  )
+}
+
+interface TextAreaFieldProps {
+  label: string
+  value: string
+  rows?: number
+  onChange: (value: string) => void
+}
+
+function TextAreaField({ label, value, rows = 3, onChange }: TextAreaFieldProps) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+      {label}
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+      />
+    </label>
+  )
+}
+
+interface SelectFieldProps {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}
+
+function SelectField({ label, value, options, onChange }: SelectFieldProps) {
+  return (
+    <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+      >
+        <option value="">Select...</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+interface MetadataPanelProps {
+  metadata: FacultyCaseMetadata
+  onChange: <K extends keyof FacultyCaseMetadata>(field: K, value: FacultyCaseMetadata[K]) => void
+}
+
+function MetadataPanel({ metadata, onChange }: MetadataPanelProps) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold">Case Metadata</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">
+        Identity and classification fields used for case codes, filtering, and search.
+      </p>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <TextField
+          label="Case Code"
+          value={metadata.case_code ?? ""}
+          onChange={(value) => onChange("case_code", value)}
+        />
+        <TextField
+          label="Volume"
+          value={metadata.volume ?? ""}
+          onChange={(value) => onChange("volume", value)}
+        />
+        <TextField
+          label="Subject"
+          value={metadata.subject ?? ""}
+          onChange={(value) => onChange("subject", value)}
+        />
+        <TextField
+          label="Functional Area"
+          value={metadata.functional_area ?? ""}
+          onChange={(value) => onChange("functional_area", value)}
+        />
+        <TextField
+          label="Capability Category"
+          value={metadata.capability_category ?? ""}
+          onChange={(value) => onChange("capability_category", value)}
+        />
+        <SelectField
+          label="Difficulty Label"
+          value={metadata.difficulty_label ?? ""}
+          options={difficultyLabels}
+          onChange={(value) => onChange("difficulty_label", value)}
+        />
+        <TextField
+          label="Target Learners"
+          value={metadata.target_learners ?? ""}
+          onChange={(value) => onChange("target_learners", value)}
+        />
+        <TextAreaField
+          label="Bloom's Levels (one per line)"
+          value={(metadata.blooms_levels ?? []).join("\n")}
+          rows={3}
+          onChange={(value) => onChange("blooms_levels", linesToList(value))}
+        />
+      </div>
+    </section>
+  )
+}
+
+interface TimingMarksPanelProps {
+  timing: FacultyCaseTiming
+  marks: FacultyCaseMarks
+  onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
+  onMarksChange: <K extends keyof FacultyCaseMarks>(field: K, value: number | null) => void
+}
+
+function TimingMarksPanel({
+  timing,
+  marks,
+  onTimingChange,
+  onMarksChange,
+}: TimingMarksPanelProps) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold">Time &amp; Marks Breakdown</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">
+        Reading, writing, and rapid fire time in minutes; marks out of 10 (7 written + 3 rapid fire).
+      </p>
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <NumberField
+          label="Reading Time (min)"
+          value={timing.reading_time_minutes}
+          onChange={(value) => onTimingChange("reading_time_minutes", value)}
+        />
+        <NumberField
+          label="Answer Writing Time (min)"
+          value={timing.answer_writing_time_minutes}
+          onChange={(value) => onTimingChange("answer_writing_time_minutes", value)}
+        />
+        <NumberField
+          label="Rapid Fire Time (min)"
+          value={timing.rapid_fire_time_minutes}
+          onChange={(value) => onTimingChange("rapid_fire_time_minutes", value)}
+        />
+        <NumberField
+          label="Total Marks"
+          value={marks.total_marks}
+          onChange={(value) => onMarksChange("total_marks", value)}
+        />
+        <NumberField
+          label="Written Marks"
+          value={marks.written_marks}
+          onChange={(value) => onMarksChange("written_marks", value)}
+        />
+        <NumberField
+          label="Rapid Fire Marks"
+          value={marks.rapid_fire_marks}
+          onChange={(value) => onMarksChange("rapid_fire_marks", value)}
+        />
+      </div>
+    </section>
+  )
+}
+
+interface InstructionsPanelProps {
+  instructions: FacultyCaseInstructions
+  onChange: <K extends keyof FacultyCaseInstructions>(field: K, value: string) => void
+}
+
+function InstructionsPanel({ instructions, onChange }: InstructionsPanelProps) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold">Student Instructions &amp; Faculty Notes</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">
+        Shown to students at each phase, plus discussion notes for faculty only.
+      </p>
+      <div className="mt-5 grid gap-4">
+        <TextAreaField
+          label="Student Instructions - Before Reading"
+          value={instructions.student_instructions_before ?? ""}
+          onChange={(value) => onChange("student_instructions_before", value)}
+        />
+        <TextAreaField
+          label="Student Instructions - While Answering"
+          value={instructions.student_instructions_during ?? ""}
+          onChange={(value) => onChange("student_instructions_during", value)}
+        />
+        <TextAreaField
+          label="Student Instructions - Submission"
+          value={instructions.student_instructions_submission ?? ""}
+          onChange={(value) => onChange("student_instructions_submission", value)}
+        />
+        <TextAreaField
+          label="Company Background"
+          value={instructions.company_background ?? ""}
+          onChange={(value) => onChange("company_background", value)}
+        />
+        <TextAreaField
+          label="Industry Background"
+          value={instructions.industry_background ?? ""}
+          onChange={(value) => onChange("industry_background", value)}
+        />
+        <TextAreaField
+          label="Faculty Notes - Common Mistakes"
+          value={instructions.faculty_common_mistakes ?? ""}
+          onChange={(value) => onChange("faculty_common_mistakes", value)}
+        />
+        <TextAreaField
+          label="Faculty Notes - Discussion Points"
+          value={instructions.faculty_discussion_points ?? ""}
+          onChange={(value) => onChange("faculty_discussion_points", value)}
+        />
+        <TextAreaField
+          label="Key Learning Points"
+          value={instructions.key_learning_points ?? ""}
+          onChange={(value) => onChange("key_learning_points", value)}
+        />
+      </div>
+    </section>
+  )
+}
+
+interface QuestionsPanelProps {
+  questions: FacultyCaseQuestion[]
+  onChange: <K extends keyof FacultyCaseQuestion>(
+    index: number,
+    field: K,
+    value: FacultyCaseQuestion[K],
+  ) => void
+}
+
+function QuestionsPanel({ questions, onChange }: QuestionsPanelProps) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold">Structured Written Questions</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">
+        Three questions with marks, word limits, model answers, and a marking scheme.
+      </p>
+      <div className="mt-5 grid gap-5">
+        {questions.map((question, index) => (
+          <article
+            key={question.question_number}
+            className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
+          >
+            <h3 className="text-lg font-semibold text-[#111827]">
+              Question {question.question_number}
+            </h3>
+            <div className="mt-3 grid gap-4">
+              <TextAreaField
+                label="Question Text"
+                value={question.question_text}
+                onChange={(value) => onChange(index, "question_text", value)}
+              />
+              <div className="grid gap-4 sm:grid-cols-4">
+                <NumberField
+                  label="Marks"
+                  value={question.marks}
+                  onChange={(value) => onChange(index, "marks", value ?? 0)}
+                />
+                <SelectField
+                  label="Bloom's Level"
+                  value={question.blooms_level ?? ""}
+                  options={bloomsLevels}
+                  onChange={(value) => onChange(index, "blooms_level", value)}
+                />
+                <NumberField
+                  label="Word Limit (Min)"
+                  value={question.word_limit_min}
+                  onChange={(value) => onChange(index, "word_limit_min", value)}
+                />
+                <NumberField
+                  label="Word Limit (Max)"
+                  value={question.word_limit_max}
+                  onChange={(value) => onChange(index, "word_limit_max", value)}
+                />
+              </div>
+              <TextAreaField
+                label="Per-Question Instructions"
+                value={question.instructions ?? ""}
+                onChange={(value) => onChange(index, "instructions", value)}
+              />
+              <TextAreaField
+                label="Model Answer"
+                value={question.model_answer ?? ""}
+                onChange={(value) => onChange(index, "model_answer", value)}
+              />
+              <TextAreaField
+                label="Alternative Answers (one per line)"
+                value={(question.alternative_answers ?? []).join("\n")}
+                onChange={(value) => onChange(index, "alternative_answers", linesToList(value))}
+              />
+              <TextAreaField
+                label="Marking Scheme"
+                value={question.marking_scheme ?? ""}
+                onChange={(value) => onChange(index, "marking_scheme", value)}
+              />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+interface RapidFirePanelProps {
+  questions: FacultyRapidFireQuestion[]
+  onChange: <K extends keyof FacultyRapidFireQuestion>(
+    index: number,
+    field: K,
+    value: FacultyRapidFireQuestion[K],
+  ) => void
+}
+
+function RapidFirePanel({ questions, onChange }: RapidFirePanelProps) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold">Rapid Fire Questions</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">
+        Six quick question/answer pairs shown after the written submission.
+      </p>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {questions.map((question, index) => (
+          <article
+            key={question.sequence}
+            className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
+          >
+            <h3 className="text-sm font-semibold text-[#111827]">Q{question.sequence}</h3>
+            <div className="mt-3 grid gap-3">
+              <TextAreaField
+                label="Question"
+                value={question.question_text}
+                rows={2}
+                onChange={(value) => onChange(index, "question_text", value)}
+              />
+              <TextAreaField
+                label="Answer"
+                value={question.answer_text ?? ""}
+                rows={2}
+                onChange={(value) => onChange(index, "answer_text", value)}
+              />
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   )
 }
 
