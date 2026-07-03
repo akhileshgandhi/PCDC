@@ -98,6 +98,7 @@ class CaseCoreFields(BaseModel):
     timing: Optional[Dict[str, Any]] = None
     marks: Optional[Dict[str, Any]] = None
     instructions: Optional[Dict[str, Any]] = None
+    recommendation: Optional[Dict[str, Any]] = None
 
 
 class CaseUpdateRequest(BaseModel):
@@ -115,6 +116,7 @@ class CaseUpdateRequest(BaseModel):
     instructions: Optional[Dict[str, Any]] = None
     questions: Optional[List[Dict[str, Any]]] = None
     rapid_fire_questions: Optional[List[Dict[str, Any]]] = None
+    recommendation: Optional[Dict[str, Any]] = None
 
 
 class GenerateCaseRequest(BaseModel):
@@ -301,6 +303,38 @@ def normalize_case_instructions(data: Optional[Dict[str, Any]]) -> Dict[str, Any
         "faculty_common_mistakes": text_value(data.get("faculty_common_mistakes")),
         "faculty_discussion_points": text_value(data.get("faculty_discussion_points")),
         "key_learning_points": text_value(data.get("key_learning_points")),
+    }
+
+
+def normalize_int_list(value: Any) -> str:
+    if not isinstance(value, list):
+        return "[]"
+    cleaned = []
+    for item in value:
+        try:
+            cleaned.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return json.dumps(cleaned)
+
+
+def normalize_case_recommendation(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    data = data or {}
+    return {
+        "recommended_semesters": normalize_int_list(data.get("recommended_semesters")),
+        "recommended_course_ids": normalize_int_list(data.get("recommended_course_ids")),
+    }
+
+
+def recommendation_from_row(row: Any) -> Dict[str, Any]:
+    values = safe_mapping(row)
+    return {
+        "recommended_semesters": [
+            int(item) for item in parse_json_or_lines(values.get("recommended_semesters"))
+        ],
+        "recommended_course_ids": [
+            int(item) for item in parse_json_or_lines(values.get("recommended_course_ids"))
+        ],
     }
 
 
@@ -536,7 +570,8 @@ CASE_EDITOR_COLUMNS = """
     written_marks, rapid_fire_marks, student_instructions_before,
     student_instructions_during, student_instructions_submission,
     company_background, industry_background, faculty_common_mistakes,
-    faculty_discussion_points, key_learning_points, created_at, updated_at
+    faculty_discussion_points, key_learning_points, recommended_semesters,
+    recommended_course_ids, created_at, updated_at
 """
 
 
@@ -673,6 +708,7 @@ def case_editor_response(db: Session, row: Any) -> Dict[str, Any]:
         "timing": timing_from_row(row),
         "marks": marks_from_row(row),
         "instructions": instructions_from_row(row),
+        "recommendation": recommendation_from_row(row),
         "questions": get_case_questions(db, row.id),
         "rapid_fire_questions": get_rapid_fire_questions(db, row.id),
         "status": row.status,
@@ -1046,6 +1082,129 @@ def faculty_cases(
     ]
 
 
+@faculty_router.get("/analytics/summary")
+def faculty_analytics_summary(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    faculty_id = current_user["id"]
+    rows = db.execute(
+        text("""
+            SELECT
+                cs.id AS section_id,
+                cs.name AS section_name,
+                co.name AS course_name,
+                se.name AS semester_name,
+                (
+                    SELECT COUNT(*) FROM student_sections ss
+                    WHERE ss.section_id = cs.id AND ss.status = 'active'
+                ) AS student_count,
+                (
+                    SELECT COALESCE(AVG(sc.current_score), 0)
+                    FROM student_sections ss
+                    JOIN student_capabilities sc ON sc.student_id = ss.student_id
+                    WHERE ss.section_id = cs.id AND ss.status = 'active'
+                ) AS average_score,
+                (
+                    SELECT COUNT(*) FROM case_section_assignments seca
+                    WHERE seca.section_id = cs.id AND seca.assigned_by = :faculty_id
+                ) AS cases_assigned,
+                (
+                    SELECT COUNT(*) FROM assigned_cases ac
+                    JOIN case_section_assignments seca ON seca.id = ac.section_assignment_id
+                    WHERE seca.section_id = cs.id AND seca.assigned_by = :faculty_id
+                ) AS total_assigned,
+                (
+                    SELECT COUNT(*) FROM assigned_cases ac
+                    JOIN case_section_assignments seca ON seca.id = ac.section_assignment_id
+                    WHERE seca.section_id = cs.id AND seca.assigned_by = :faculty_id
+                          AND ac.status = 'completed'
+                ) AS completed_count
+            FROM faculty_sections fs
+            JOIN class_sections cs ON cs.id = fs.section_id
+            JOIN courses co ON co.id = cs.course_id
+            JOIN semesters se ON se.id = cs.semester_id
+            WHERE fs.faculty_id = :faculty_id
+            GROUP BY cs.id, cs.name, co.name, se.name
+            ORDER BY cs.name
+        """),
+        {"faculty_id": faculty_id},
+    ).fetchall()
+
+    sections = []
+    total_students = 0
+    total_assigned_all = 0
+    total_completed_all = 0
+    weighted_score_sum = 0.0
+    for row in rows:
+        student_count = int(row.student_count)
+        total_assigned = int(row.total_assigned)
+        completed_count = int(row.completed_count)
+        average_score = round(float(row.average_score), 1)
+        sections.append({
+            "section_id": row.section_id,
+            "section_name": row.section_name,
+            "course_name": row.course_name,
+            "semester_name": row.semester_name,
+            "student_count": student_count,
+            "average_score": average_score,
+            "cases_assigned": int(row.cases_assigned),
+            "total_assigned": total_assigned,
+            "completed_count": completed_count,
+            "completion_rate": (
+                round((completed_count / total_assigned) * 100, 1) if total_assigned > 0 else 0
+            ),
+        })
+        total_students += student_count
+        total_assigned_all += total_assigned
+        total_completed_all += completed_count
+        weighted_score_sum += average_score * student_count
+
+    return {
+        "sections": sections,
+        "totals": {
+            "section_count": len(sections),
+            "student_count": total_students,
+            "average_score": (
+                round(weighted_score_sum / total_students, 1) if total_students > 0 else 0
+            ),
+            "completion_rate": (
+                round((total_completed_all / total_assigned_all) * 100, 1)
+                if total_assigned_all > 0
+                else 0
+            ),
+        },
+    }
+
+
+@faculty_router.get("/courses")
+def faculty_courses(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    rows = db.execute(
+        text("""
+            SELECT id, name, code, total_semesters
+            FROM courses
+            WHERE status = 'active'
+            ORDER BY name
+        """)
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "code": row.code,
+                "total_semesters": row.total_semesters,
+            }
+            for row in rows
+        ]
+    }
+
+
 @faculty_router.get("/capabilities")
 def faculty_capabilities(
     db: Session = Depends(get_db),
@@ -1090,6 +1249,7 @@ def create_faculty_case(
     timing = normalize_case_timing(data.timing)
     marks = normalize_case_marks(data.marks)
     instructions = normalize_case_instructions(data.instructions)
+    recommendation = normalize_case_recommendation(data.recommendation)
 
     result = db.execute(
         text("""
@@ -1104,7 +1264,8 @@ def create_faculty_case(
                 student_instructions_before, student_instructions_during,
                 student_instructions_submission, company_background,
                 industry_background, faculty_common_mistakes,
-                faculty_discussion_points, key_learning_points
+                faculty_discussion_points, key_learning_points,
+                recommended_semesters, recommended_course_ids
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty,
@@ -1117,7 +1278,8 @@ def create_faculty_case(
                 :student_instructions_before, :student_instructions_during,
                 :student_instructions_submission, :company_background,
                 :industry_background, :faculty_common_mistakes,
-                :faculty_discussion_points, :key_learning_points
+                :faculty_discussion_points, :key_learning_points,
+                :recommended_semesters, :recommended_course_ids
             )
             RETURNING """ + CASE_EDITOR_COLUMNS + """
         """),
@@ -1137,6 +1299,7 @@ def create_faculty_case(
                 marks["rapid_fire_marks"] if marks["rapid_fire_marks"] is not None else 3
             ),
             **instructions,
+            **recommendation,
         },
     )
     row = result.fetchone()
@@ -1345,6 +1508,14 @@ def update_faculty_case(
             ]
         }
     )
+    recommendation = (
+        normalize_case_recommendation(data.recommendation)
+        if data.recommendation is not None
+        else {
+            "recommended_semesters": existing_values.get("recommended_semesters") or "[]",
+            "recommended_course_ids": existing_values.get("recommended_course_ids") or "[]",
+        }
+    )
 
     result = db.execute(
         text("""
@@ -1379,6 +1550,8 @@ def update_faculty_case(
                 faculty_common_mistakes = :faculty_common_mistakes,
                 faculty_discussion_points = :faculty_discussion_points,
                 key_learning_points = :key_learning_points,
+                recommended_semesters = :recommended_semesters,
+                recommended_course_ids = :recommended_course_ids,
                 updated_at = NOW()
             WHERE id = :case_id AND created_by = :faculty_id
             RETURNING """ + CASE_EDITOR_COLUMNS + """
@@ -1402,6 +1575,7 @@ def update_faculty_case(
                 marks["rapid_fire_marks"] if marks["rapid_fire_marks"] is not None else 3
             ),
             **instructions,
+            **recommendation,
         },
     )
     row = result.fetchone()

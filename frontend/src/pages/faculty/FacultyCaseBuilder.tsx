@@ -19,6 +19,7 @@ import {
   getFacultyCaseGenerationJob,
   getFacultyCapabilities,
   getFacultyCase,
+  getFacultyCourses,
   publishFacultyCase,
   updateFacultyCase,
   type CaseSectionKey,
@@ -30,7 +31,9 @@ import {
   type FacultyCaseMarks,
   type FacultyCaseMetadata,
   type FacultyCaseQuestion,
+  type FacultyCaseRecommendation,
   type FacultyCaseTiming,
+  type FacultyCourseOption,
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
@@ -155,6 +158,7 @@ export default function FacultyCaseBuilder() {
   const [mode, setMode] = useState<BuilderMode | null>(caseId ? "scratch" : null)
   const [coreForm, setCoreForm] = useState<CoreFormState>(emptyCoreForm)
   const [capabilities, setCapabilities] = useState<FacultyCapability[]>([])
+  const [courses, setCourses] = useState<FacultyCourseOption[]>([])
   const [caseData, setCaseData] = useState<FacultyCaseEditor | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [notice, setNotice] = useState("")
@@ -191,6 +195,20 @@ export default function FacultyCaseBuilder() {
 
     loadCapabilities()
 
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    getFacultyCourses()
+      .then((data) => {
+        if (isMounted) setCourses(data.items)
+      })
+      .catch(() => {
+        if (isMounted) setCourses([])
+      })
     return () => {
       isMounted = false
     }
@@ -365,6 +383,7 @@ export default function FacultyCaseBuilder() {
         instructions: caseData.instructions,
         questions: caseData.questions,
         rapid_fire_questions: caseData.rapid_fire_questions,
+        recommendation: caseData.recommendation,
       })
       setCaseData(normalizeCaseData(data))
       setCoreForm(caseToCoreForm(data))
@@ -398,6 +417,16 @@ export default function FacultyCaseBuilder() {
     setCaseData((current) => {
       if (!current) return current
       return { ...current, metadata: { ...current.metadata, [field]: value } }
+    })
+  }
+
+  function updateRecommendation<K extends keyof FacultyCaseRecommendation>(
+    field: K,
+    value: FacultyCaseRecommendation[K],
+  ) {
+    setCaseData((current) => {
+      if (!current) return current
+      return { ...current, recommendation: { ...current.recommendation, [field]: value } }
     })
   }
 
@@ -588,6 +617,8 @@ export default function FacultyCaseBuilder() {
             onInstructionsChange={updateInstructions}
             onQuestionChange={updateQuestion}
             onRapidFireChange={updateRapidFireQuestion}
+            courses={courses}
+            onRecommendationChange={updateRecommendation}
           />
         )}
       </div>
@@ -732,6 +763,11 @@ interface EditorStepProps {
     field: K,
     value: FacultyRapidFireQuestion[K],
   ) => void
+  courses: FacultyCourseOption[]
+  onRecommendationChange: <K extends keyof FacultyCaseRecommendation>(
+    field: K,
+    value: FacultyCaseRecommendation[K],
+  ) => void
 }
 
 function EditorStep({
@@ -753,6 +789,8 @@ function EditorStep({
   onInstructionsChange,
   onQuestionChange,
   onRapidFireChange,
+  courses,
+  onRecommendationChange,
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
@@ -802,6 +840,12 @@ function EditorStep({
       </section>
 
       <MetadataPanel metadata={caseData.metadata} onChange={onMetadataChange} />
+
+      <RecommendationPanel
+        recommendation={caseData.recommendation}
+        courses={courses}
+        onChange={onRecommendationChange}
+      />
 
       <TimingMarksPanel
         timing={caseData.timing}
@@ -1111,6 +1155,92 @@ function MetadataPanel({ metadata, onChange }: MetadataPanelProps) {
           rows={3}
           onChange={(value) => onChange("blooms_levels", linesToList(value))}
         />
+      </div>
+    </section>
+  )
+}
+
+const recommendableSemesters = Array.from({ length: 12 }, (_, index) => index + 1)
+
+interface RecommendationPanelProps {
+  recommendation: FacultyCaseRecommendation
+  courses: FacultyCourseOption[]
+  onChange: <K extends keyof FacultyCaseRecommendation>(
+    field: K,
+    value: FacultyCaseRecommendation[K],
+  ) => void
+}
+
+function RecommendationPanel({ recommendation, courses, onChange }: RecommendationPanelProps) {
+  function toggleSemester(semester: number) {
+    const current = recommendation.recommended_semesters
+    onChange(
+      "recommended_semesters",
+      current.includes(semester)
+        ? current.filter((value) => value !== semester)
+        : [...current, semester].sort((a, b) => a - b),
+    )
+  }
+
+  function toggleCourse(courseId: number) {
+    const current = recommendation.recommended_course_ids
+    onChange(
+      "recommended_course_ids",
+      current.includes(courseId)
+        ? current.filter((value) => value !== courseId)
+        : [...current, courseId],
+    )
+  }
+
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <h2 className="text-2xl font-semibold">Recommended Course &amp; Semester</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">
+        Optional soft tags to help faculty find this case when browsing by course or semester.
+        These do not restrict who can be assigned this case.
+      </p>
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div>
+          <p className="text-sm font-semibold text-[#111827]">Recommended Semesters</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {recommendableSemesters.map((semester) => (
+              <button
+                key={semester}
+                type="button"
+                onClick={() => toggleSemester(semester)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  recommendation.recommended_semesters.includes(semester)
+                    ? "border-[#c9a227] bg-[#fff7df] text-[#92702a]"
+                    : "border-[#e6e8eb] text-[#6b7280] hover:border-[#c9a227]"
+                }`}
+              >
+                Sem {semester}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-[#111827]">Recommended Courses</p>
+          <div className="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-md border border-[#e6e8eb] p-3">
+            {courses.length === 0 ? (
+              <p className="text-sm text-[#6b7280]">No courses configured yet.</p>
+            ) : (
+              courses.map((course) => (
+                <label key={course.id} className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={recommendation.recommended_course_ids.includes(course.id)}
+                    onChange={() => toggleCourse(course.id)}
+                    className="size-4"
+                  />
+                  <span>
+                    {course.name} ({course.code})
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </section>
   )

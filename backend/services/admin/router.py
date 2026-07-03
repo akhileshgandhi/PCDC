@@ -3,7 +3,7 @@ import io
 import secrets
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -586,6 +586,19 @@ def create_admin_user(
     }
 
 
+USER_IMPORT_COLUMNS = [
+    "Name",
+    "Email",
+    "Role",
+    "Program",
+    "AdmissionYear",
+    "CourseCode",
+    "BatchName",
+    "SectionName",
+    "MentorID",
+]
+
+
 @admin_router.get("/users/import/template")
 def download_user_import_template(
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -593,12 +606,175 @@ def download_user_import_template(
     require_admin(current_user)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Name", "Email", "Role", "Program", "Batch", "MentorID"])
+    writer.writerow(USER_IMPORT_COLUMNS)
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=pcdc-user-import-template.csv"},
     )
+
+
+@admin_router.post("/users/import")
+async def import_admin_users(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    raw = await file.read()
+    try:
+        decoded = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded CSV")
+
+    reader = csv.DictReader(io.StringIO(decoded))
+    fieldnames = {(name or "").strip() for name in (reader.fieldnames or [])}
+    if not {"Name", "Email", "Role"}.issubset(fieldnames):
+        raise HTTPException(
+            status_code=400, detail="CSV must include Name, Email, and Role columns"
+        )
+
+    created: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+
+    for line_number, raw_row in enumerate(reader, start=2):
+        row = {(key or "").strip(): (value or "").strip() for key, value in raw_row.items()}
+        name = row.get("Name", "")
+        email = row.get("Email", "").lower()
+        try:
+            with db.begin_nested():
+                if not name:
+                    raise ValueError("Name is required")
+                if not email:
+                    raise ValueError("Email is required")
+                role = normalize_role(row.get("Role") or "student")
+
+                existing = db.execute(
+                    text("SELECT id FROM users WHERE email = :email"), {"email": email}
+                ).fetchone()
+                if existing:
+                    raise ValueError("Email already registered")
+
+                mentor_id = None
+                mentor_id_raw = row.get("MentorID")
+                if mentor_id_raw:
+                    if not mentor_id_raw.isdigit():
+                        raise ValueError("MentorID must be numeric")
+                    mentor_id = int(mentor_id_raw)
+                    ensure_active_mentor(db, mentor_id)
+
+                section_id = None
+                course_code = row.get("CourseCode")
+                batch_name = row.get("BatchName")
+                section_name = row.get("SectionName")
+                if role == "student" and course_code:
+                    course_row = db.execute(
+                        text("SELECT id FROM courses WHERE code = :code"),
+                        {"code": course_code},
+                    ).fetchone()
+                    if not course_row:
+                        raise ValueError(f"Course code '{course_code}' not found")
+                    if batch_name:
+                        batch_row = db.execute(
+                            text("""
+                                SELECT id FROM batches
+                                WHERE course_id = :course_id AND name = :name
+                            """),
+                            {"course_id": course_row.id, "name": batch_name},
+                        ).fetchone()
+                        if not batch_row:
+                            raise ValueError(
+                                f"Batch '{batch_name}' not found for course '{course_code}'"
+                            )
+                        if section_name:
+                            section_row = db.execute(
+                                text("""
+                                    SELECT id FROM class_sections
+                                    WHERE course_id = :course_id AND batch_id = :batch_id
+                                          AND name = :name
+                                """),
+                                {
+                                    "course_id": course_row.id,
+                                    "batch_id": batch_row.id,
+                                    "name": section_name,
+                                },
+                            ).fetchone()
+                            if not section_row:
+                                raise ValueError(
+                                    f"Section '{section_name}' not found for batch '{batch_name}'"
+                                )
+                            section_id = section_row.id
+
+                admission_year_raw = row.get("AdmissionYear")
+                admission_year = (
+                    int(admission_year_raw)
+                    if admission_year_raw and admission_year_raw.isdigit()
+                    else None
+                )
+
+                temporary_secret = secrets.token_urlsafe(32)
+                inserted = db.execute(
+                    text("""
+                        INSERT INTO users (
+                            name, email, password_hash, role, program,
+                            admission_year, status, updated_at
+                        )
+                        VALUES (
+                            :name, :email, :password_hash, :role, :program,
+                            :admission_year, 'active', NOW()
+                        )
+                        RETURNING id
+                    """),
+                    {
+                        "name": name,
+                        "email": email,
+                        "password_hash": hash_password(temporary_secret),
+                        "role": role,
+                        "program": row.get("Program") or None,
+                        "admission_year": admission_year,
+                    },
+                ).fetchone()
+
+                student_id = ensure_role_profile(
+                    db,
+                    inserted.id,
+                    role,
+                    mentor_id=mentor_id if role == "student" else None,
+                )
+                if role == "student" and section_id is not None and student_id is not None:
+                    enroll_student_in_section(db, student_id, section_id, current_user["id"])
+
+                db.execute(
+                    text("""
+                        INSERT INTO notification_log (
+                            recipient_user_id, event_type, channel, status, subject, body
+                        )
+                        VALUES (
+                            :recipient_user_id, 'welcome_email', 'email', 'pending',
+                            'Welcome to PCDC', 'Account created via CSV import.'
+                        )
+                    """),
+                    {"recipient_user_id": inserted.id},
+                )
+            created.append({"row": line_number, "name": name, "email": email, "user_id": inserted.id})
+        except (ValueError, HTTPException) as exc:
+            detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            errors.append({"row": line_number, "email": email, "error": detail})
+
+    if created:
+        record_system_event(
+            db,
+            current_user["id"],
+            "users_imported",
+            f"Imported {len(created)} user(s) via CSV ({len(errors)} error(s))",
+        )
+    db.commit()
+    return {
+        "created": created,
+        "created_count": len(created),
+        "errors": errors,
+        "error_count": len(errors),
+    }
 
 
 @admin_router.patch("/users/{user_id}/status")

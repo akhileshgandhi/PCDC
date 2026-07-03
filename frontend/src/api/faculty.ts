@@ -110,6 +110,18 @@ export interface FacultyCaseMarks {
   rapid_fire_marks?: number | null
 }
 
+export interface FacultyCaseRecommendation {
+  recommended_semesters: number[]
+  recommended_course_ids: number[]
+}
+
+export interface FacultyCourseOption {
+  id: number
+  name: string
+  code: string
+  total_semesters: number
+}
+
 export interface FacultyCaseInstructions {
   student_instructions_before?: string | null
   student_instructions_during?: string | null
@@ -152,6 +164,7 @@ export interface FacultyCaseEditor {
   timing: FacultyCaseTiming
   marks: FacultyCaseMarks
   instructions: FacultyCaseInstructions
+  recommendation: FacultyCaseRecommendation
   questions: FacultyCaseQuestion[]
   rapid_fire_questions: FacultyRapidFireQuestion[]
   status: "draft" | "published" | "archived"
@@ -176,6 +189,7 @@ export interface CreateFacultyCasePayload {
   timing?: FacultyCaseTiming
   marks?: FacultyCaseMarks
   instructions?: FacultyCaseInstructions
+  recommendation?: FacultyCaseRecommendation
 }
 
 export interface UpdateFacultyCasePayload {
@@ -193,6 +207,7 @@ export interface UpdateFacultyCasePayload {
   instructions?: FacultyCaseInstructions
   questions?: FacultyCaseQuestion[]
   rapid_fire_questions?: FacultyRapidFireQuestion[]
+  recommendation?: FacultyCaseRecommendation
 }
 
 export interface GenerateFacultyCasePayload {
@@ -263,6 +278,11 @@ export async function getFacultyCases(filters: FacultyCaseFilters = {}) {
 
 export async function getFacultyCapabilities() {
   const response = await api.get<FacultyCapability[]>("/faculty/capabilities")
+  return response.data
+}
+
+export async function getFacultyCourses() {
+  const response = await api.get<{ items: FacultyCourseOption[] }>("/faculty/courses")
   return response.data
 }
 
@@ -359,5 +379,33 @@ export async function closeFacultyCaseAssignment(assignmentId: number) {
   const response = await api.patch<{ id: number; status: string }>(
     `/faculty/case-assignments/${assignmentId}/close`,
   )
+  return response.data
+}
+
+export interface FacultyAnalyticsSection {
+  section_id: number
+  section_name: string
+  course_name: string
+  semester_name: string
+  student_count: number
+  average_score: number
+  cases_assigned: number
+  total_assigned: number
+  completed_count: number
+  completion_rate: number
+}
+
+export interface FacultyAnalyticsSummary {
+  sections: FacultyAnalyticsSection[]
+  totals: {
+    section_count: number
+    student_count: number
+    average_score: number
+    completion_rate: number
+  }
+}
+
+export async function getFacultyAnalyticsSummary() {
+  const response = await api.get<FacultyAnalyticsSummary>("/faculty/analytics/summary")
   return response.data
 }

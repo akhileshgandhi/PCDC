@@ -7,10 +7,11 @@ import {
   Search,
   ShieldOff,
   ShieldCheck,
+  Upload,
   UserCog,
 } from "lucide-react"
-import type { FormEvent, ReactNode } from "react"
-import { useEffect, useMemo, useState } from "react"
+import type { ChangeEvent, FormEvent, ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
 import {
@@ -19,6 +20,7 @@ import {
   getAdminCourses,
   getAdminCourseSections,
   getAdminUsers,
+  importAdminUsers,
   resetAdminUserPassword,
   updateAdminUserRole,
   updateAdminUserStatus,
@@ -27,6 +29,7 @@ import {
   type AdminCourse,
   type AdminSection,
   type AdminUser,
+  type AdminUserImportResult,
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../api/admin"
@@ -63,6 +66,9 @@ export default function AdminUsers() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [showAddUser, setShowAddUser] = useState(searchParams.get("action") === "add")
+  const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<AdminUserImportResult | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showingStart = total === 0 ? 0 : (page - 1) * pageSize + 1
@@ -148,6 +154,33 @@ export default function AdminUsers() {
     }
   }
 
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) {
+      return
+    }
+    setIsImporting(true)
+    setError("")
+    setImportResult(null)
+    try {
+      const result = await importAdminUsers(file)
+      setImportResult(result)
+      setNotice(
+        `Imported ${result.created_count} user(s)${
+          result.error_count > 0 ? `; ${result.error_count} row(s) failed` : ""
+        }.`,
+      )
+      if (result.created_count > 0) {
+        await loadUsers(1)
+      }
+    } catch {
+      setError("Unable to import this CSV file.")
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
   async function handleRoleChange(user: AdminUser, nextRole: AdminUserRole) {
     if (nextRole === user.role) {
       return
@@ -185,6 +218,22 @@ export default function AdminUsers() {
                 <Download size={17} aria-hidden="true" />
                 Template
               </a>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] bg-white px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Upload size={17} aria-hidden="true" />
+                {isImporting ? "Importing..." : "Import CSV"}
+              </button>
               <button
                 type="button"
                 onClick={openAddUser}
@@ -281,6 +330,21 @@ export default function AdminUsers() {
           <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
             {error}
           </div>
+        ) : null}
+
+        {importResult && importResult.errors.length > 0 ? (
+          <section className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] p-4">
+            <h2 className="text-sm font-semibold text-[#b42318]">
+              {importResult.errors.length} row(s) could not be imported
+            </h2>
+            <ul className="mt-2 space-y-1 text-sm text-[#b42318]">
+              {importResult.errors.map((item) => (
+                <li key={item.row}>
+                  Row {item.row} ({item.email || "no email"}): {item.error}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         <section className="overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-sm">

@@ -8,3 +8,4 @@ anthropic
 openai
 python-jose
 bcrypt
+python-multipart

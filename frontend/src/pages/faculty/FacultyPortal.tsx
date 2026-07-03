@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import FacultyAnalytics from "./FacultyAnalytics"
 import FacultyCaseBuilder from "./FacultyCaseBuilder"
 import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
@@ -29,15 +30,7 @@ export default function FacultyPortal() {
         element={<FacultyRubricBuilder />}
       />
       <Route path="/students" element={<FacultyStudents />} />
-      <Route
-        path="/analytics"
-        element={
-          <FacultyModulePlaceholder
-            title="Analytics"
-            description="Cohort capability distributions, per-case averages, weak areas, and trends will land here after case data stabilizes."
-          />
-        }
-      />
+      <Route path="/analytics" element={<FacultyAnalytics />} />
       <Route
         path="/reports"
         element={

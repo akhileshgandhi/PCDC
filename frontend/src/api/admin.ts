@@ -268,3 +268,19 @@ export async function advanceBatchSemester(batchId: number) {
   )
   return response.data
 }
+
+export interface AdminUserImportResult {
+  created: Array<{ row: number; name: string; email: string; user_id: number }>
+  created_count: number
+  errors: Array<{ row: number; email: string; error: string }>
+  error_count: number
+}
+
+export async function importAdminUsers(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  const response = await api.post<AdminUserImportResult>("/admin/users/import", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  })
+  return response.data
+}

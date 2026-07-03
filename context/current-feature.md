@@ -2,7 +2,7 @@
 
 ## Status
 
-In Progress
+Completed
 
 ## Feature
 
@@ -83,14 +83,14 @@ SPEC_12 - Courses, Faculty Management, Student Management & Case Assignment
 - [x] `assigned_cases` gains `assignment_source` and `section_assignment_id`
 - [x] Admin can create courses and batches; creating a course seeds semesters (course rename/status edit exists; batch edit does not)
 - [x] Admin can create class sections and assign faculty and students to them (individual and bulk-by-selection)
-- [ ] Admin Users CSV import (file upload) supports course/batch/section columns — deferred: no CSV upload/parse endpoint exists anywhere in the codebase yet (only template download), so this wasn't built as part of this pass. Admin Users list and the manual creation drawer do support course/batch/section.
+- [x] Admin Users CSV import (file upload) supports course/batch/section columns — `POST /admin/users/import` parses a CSV (Name, Email, Role, Program, AdmissionYear, CourseCode, BatchName, SectionName, MentorID), creates each user with per-row error isolation (a savepoint per row), and enrolls students into the resolved section. Template download updated to match.
 - [x] Admin can run a bulk semester-advancement action per batch
 - [x] Faculty Dashboard shows section count and student count drawn from real sections (a dedicated "cases assigned" tile was not added)
 - [x] Faculty Students page lists the full class roster grouped by section, including students with zero attempts
 - [x] Faculty can assign a published case to one or more sections via "Assign to Class"
-- [ ] Faculty can view per-section assigned-case completion rates and close an assignment — backend endpoints exist (`GET /faculty/cases/assigned`, `PATCH /faculty/case-assignments/{id}/close`) and are tested, but no frontend screen was built to display them
-- [ ] Faculty Case Builder supports recommended course/semester tagging — deprioritized, not started
-- [ ] Faculty Analytics includes a section dimension — deprioritized, Analytics page remains the pre-existing placeholder
+- [x] Faculty can view per-section assigned-case completion rates and close an assignment — new "Class Assignments" section on the Case Library page consumes the existing `GET /faculty/cases/assigned` / `PATCH /faculty/case-assignments/{id}/close` endpoints with a completion-rate bar and Close button
+- [x] Faculty Case Builder supports recommended course/semester tagging — new "Recommended Course & Semester" panel (semester chips 1-12, course checkboxes from a new `GET /faculty/courses` endpoint), persisted via new `case_studies.recommended_semesters`/`recommended_course_ids` read/write path; soft tag only, does not restrict assignment
+- [x] Faculty Analytics includes a section dimension — new `GET /faculty/analytics/summary` endpoint (per-section student count, average capability score, cases assigned, completion rate) backing a real Analytics page with a bar chart and per-section table, replacing the placeholder
 - [x] Student Dashboard shows course/semester/batch/section identity
 - [x] Student case list separates faculty-assigned (by section) from mentor-assigned cases, with a Completed tab
 - [x] Frontend build and relevant backend checks pass
@@ -98,6 +98,41 @@ SPEC_12 - Courses, Faculty Management, Student Management & Case Assignment
 ---
 
 ## History
+
+- 2026-07-03: Finished the 4 remaining SPEC_12 items on `main`, closing
+  out every unchecked box in the Definition of Done. Admin Users CSV
+  import: added `POST /admin/users/import` (multipart file upload,
+  `Name/Email/Role/Program/AdmissionYear/CourseCode/BatchName/SectionName/MentorID`
+  columns, per-row savepoint isolation so one bad row doesn't roll back
+  earlier successful rows, course/batch/section resolved by name) plus
+  a matching "Import CSV" button and inline error-report panel on the
+  Admin Users page; updated the template download to the new columns.
+  Faculty completion-rate view: added a "Class Assignments" section to
+  the Case Library page consuming the existing (previously
+  frontend-less) `GET /faculty/cases/assigned` and `PATCH
+  /faculty/case-assignments/{id}/close` endpoints, with a per-assignment
+  completion-rate bar and Close button. Faculty Case Builder tagging:
+  added `case_studies.recommended_semesters`/`recommended_course_ids`
+  read/write support (new `recommendation` field alongside
+  metadata/timing/marks), a new `GET /faculty/courses` endpoint, and a
+  "Recommended Course & Semester" panel (semester chips, course
+  checkboxes) in the case builder; soft tag only, does not restrict
+  assignment. Faculty Analytics: added `GET /faculty/analytics/summary`
+  (per-section student count, average capability score, cases assigned,
+  completion rate, plus faculty-wide totals) and replaced the Analytics
+  placeholder page with a real bar chart (Recharts) and per-section
+  table. Also installed the missing `python-multipart` dependency
+  (required by FastAPI for file uploads) and added it to
+  requirements.txt. Verified all four backend endpoints end-to-end
+  against the live dev database via direct API calls (CSV import with
+  valid/invalid/duplicate rows, section enrollment resolution,
+  recommendation save/reload, assignment close/reopen, analytics
+  aggregation correctness), then cleaned up all test data created
+  during verification. Frontend build passed
+  (`tsc -b && vite build`); could not visually drive the new UI in a
+  browser because no headless-browser tool was available in this
+  environment, so UI correctness rests on the passing TypeScript build
+  plus the verified backend contracts.
 
 - 2026-07-02: Implemented the core of SPEC_12 on
   `feature/courses-faculty-student-management`. Added migration 0008

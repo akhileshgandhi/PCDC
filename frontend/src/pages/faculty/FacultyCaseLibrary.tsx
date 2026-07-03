@@ -1,12 +1,15 @@
-import { Archive, Edit3, Eye, Plus, Search, Send } from "lucide-react"
+import { Archive, CircleX, Edit3, Eye, Plus, Search, Send } from "lucide-react"
 import type { FormEvent } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import {
   assignCaseToSections,
+  closeFacultyCaseAssignment,
+  getFacultyAssignedCases,
   getFacultyCases,
   getFacultySections,
+  type FacultyAssignedCase,
   type FacultyCase,
   type FacultySection,
 } from "../../api/faculty"
@@ -41,6 +44,42 @@ export default function FacultyCaseLibrary() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [assigningCase, setAssigningCase] = useState<FacultyCase | null>(null)
+  const [assignedCases, setAssignedCases] = useState<FacultyAssignedCase[]>([])
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(true)
+  const [closingAssignmentId, setClosingAssignmentId] = useState<number | null>(null)
+
+  const loadAssignedCases = useCallback(async () => {
+    setIsLoadingAssignments(true)
+    try {
+      const data = await getFacultyAssignedCases()
+      setAssignedCases(data.items)
+    } catch {
+      setAssignedCases([])
+    } finally {
+      setIsLoadingAssignments(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAssignedCases()
+  }, [loadAssignedCases])
+
+  async function handleCloseAssignment(assignmentId: number) {
+    setClosingAssignmentId(assignmentId)
+    try {
+      await closeFacultyCaseAssignment(assignmentId)
+      setAssignedCases((current) =>
+        current.map((item) =>
+          item.assignment_id === assignmentId ? { ...item, status: "closed" } : item,
+        ),
+      )
+      setNotice("Assignment closed.")
+    } catch {
+      setError("Unable to close this assignment.")
+    } finally {
+      setClosingAssignmentId(null)
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -233,6 +272,87 @@ export default function FacultyCaseLibrary() {
             </div>
           )}
         </section>
+
+        <section className="overflow-hidden rounded-lg border border-[#e6e8eb] bg-white shadow-sm">
+          <div className="border-b border-[#e6e8eb] bg-[#f6f7fb] px-5 py-3">
+            <h2 className="text-sm font-semibold uppercase text-[#6b7280]">Class Assignments</h2>
+          </div>
+
+          {isLoadingAssignments ? (
+            <div className="px-5 py-10 text-center text-sm font-medium text-[#6b7280]">
+              Loading class assignments...
+            </div>
+          ) : assignedCases.length > 0 ? (
+            <div className="divide-y divide-[#e6e8eb]">
+              {assignedCases.map((assignment) => {
+                const completionRate =
+                  assignment.total_assigned > 0
+                    ? Math.round(
+                        (assignment.completed_count / assignment.total_assigned) * 100,
+                      )
+                    : 0
+                return (
+                  <article
+                    key={assignment.assignment_id}
+                    className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center lg:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#111827]">
+                        {assignment.case_title}
+                      </p>
+                      <p className="mt-1 text-sm text-[#6b7280]">
+                        {assignment.section_name}
+                        {assignment.due_date
+                          ? ` · Due ${formatDate(assignment.due_date)}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-40">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-[#f2f4f7]">
+                          <div
+                            className="h-2 rounded-full bg-[#c9a227]"
+                            style={{ width: `${completionRate}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-xs font-medium text-[#6b7280]">
+                          {assignment.completed_count}/{assignment.total_assigned} completed (
+                          {completionRate}%)
+                        </p>
+                      </div>
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                          assignment.status === "active"
+                            ? "bg-[#ecfdf3] text-[#027a48]"
+                            : "bg-[#f2f4f7] text-[#475467]"
+                        }`}
+                      >
+                        {titleCase(assignment.status)}
+                      </span>
+                      {assignment.status === "active" ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCloseAssignment(assignment.assignment_id)}
+                          disabled={closingAssignmentId === assignment.assignment_id}
+                          className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#b42318] hover:text-[#b42318] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <CircleX size={14} aria-hidden="true" />
+                          {closingAssignmentId === assignment.assignment_id
+                            ? "Closing..."
+                            : "Close"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="px-5 py-10 text-center text-sm text-[#6b7280]">
+              No cases have been assigned to a class section yet.
+            </div>
+          )}
+        </section>
       </div>
 
       {assigningCase ? (
@@ -243,6 +363,7 @@ export default function FacultyCaseLibrary() {
             setAssigningCase(null)
             setNotice(message)
             setError("")
+            loadAssignedCases()
           }}
         />
       ) : null}
@@ -525,4 +646,10 @@ function titleCase(value: string) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ")
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(
+    new Date(value),
+  )
 }
