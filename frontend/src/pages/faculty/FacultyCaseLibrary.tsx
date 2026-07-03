@@ -401,7 +401,7 @@ function CaseRow({ caseStudy, onAssign }: CaseRowProps) {
       <span className="hidden text-sm font-semibold text-[#111827] lg:block">
         {caseStudy.attempts_count}
       </span>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {caseStudy.status === "published" ? (
           <button
             type="button"
@@ -414,30 +414,32 @@ function CaseRow({ caseStudy, onAssign }: CaseRowProps) {
             Assign to Class
           </button>
         ) : null}
-        <Link
-          to={`/faculty/case-builder/${caseStudy.id}`}
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
-          aria-label={`Edit ${caseStudy.title}`}
-          title="Edit"
-        >
-          <Edit3 size={16} aria-hidden="true" />
-        </Link>
-        <Link
-          to={`/faculty/case-library?case=${caseStudy.id}`}
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
-          aria-label={`View attempts for ${caseStudy.title}`}
-          title="View attempts"
-        >
-          <Eye size={16} aria-hidden="true" />
-        </Link>
-        <button
-          type="button"
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
-          aria-label={`Archive ${caseStudy.title}`}
-          title="Archive"
-        >
-          <Archive size={16} aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/faculty/case-builder/${caseStudy.id}`}
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+            aria-label={`Edit ${caseStudy.title}`}
+            title="Edit"
+          >
+            <Edit3 size={16} aria-hidden="true" />
+          </Link>
+          <Link
+            to={`/faculty/case-library?case=${caseStudy.id}`}
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+            aria-label={`View attempts for ${caseStudy.title}`}
+            title="View attempts"
+          >
+            <Eye size={16} aria-hidden="true" />
+          </Link>
+          <button
+            type="button"
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+            aria-label={`Archive ${caseStudy.title}`}
+            title="Archive"
+          >
+            <Archive size={16} aria-hidden="true" />
+          </button>
+        </div>
       </div>
     </article>
   )
