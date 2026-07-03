@@ -12,12 +12,24 @@ export interface StudentUpcomingSession {
   mentor_name: string
 }
 
+export interface StudentActiveCase {
+  case_id: number
+  title: string
+  domain: string
+  difficulty: number
+  case_code: string | null
+  subject: string | null
+  difficulty_label: string | null
+  due_date: string | null
+}
+
 export interface StudentDashboardSummary {
   overall_capability_score: number
   capability_scores: StudentCapabilityScore[]
   pending_simulations: number
   completed_simulations: number
   current_level: number | null
+  active_case: StudentActiveCase | null
   upcoming_session: StudentUpcomingSession | null
 }
 

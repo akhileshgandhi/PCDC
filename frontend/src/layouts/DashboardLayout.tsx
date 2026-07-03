@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { useEffect, useState } from "react"
 import {
   Bell,
   BookOpen,
@@ -19,7 +20,8 @@ import {
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
 
-import { clearToken } from "../utils/auth"
+import { getStudentProfile, type StudentProfile } from "../api/student"
+import { clearToken, getCurrentUser } from "../utils/auth"
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -38,6 +40,26 @@ const navigationItems = [
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate()
+  const currentUser = getCurrentUser()
+  const [profile, setProfile] = useState<StudentProfile | null>(null)
+
+  useEffect(() => {
+    let isMounted = true
+    getStudentProfile()
+      .then((data) => {
+        if (isMounted) setProfile(data)
+      })
+      .catch(() => {
+        if (isMounted) setProfile(null)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const identitySubtitle = profile?.career_track_name
+    ? `Career Track: ${profile.career_track_name}`
+    : profile?.course_name || null
 
   function handleLogout() {
     clearToken()
@@ -152,11 +174,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
               <div className="hidden min-w-36 sm:block">
                 <p className="truncate text-sm font-semibold text-[#111827]">
-                  Sanjay Mehta, MBA
+                  {currentUser?.name ?? "PCDC User"}
+                  {profile?.course_name ? `, ${profile.course_name}` : ""}
                 </p>
-                <p className="truncate text-xs text-[#6b7280]">
-                  Career Track: Management Consulting
-                </p>
+                {identitySubtitle ? (
+                  <p className="truncate text-xs text-[#6b7280]">{identitySubtitle}</p>
+                ) : null}
               </div>
             </div>
           </div>

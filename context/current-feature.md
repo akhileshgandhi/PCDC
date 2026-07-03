@@ -2,66 +2,112 @@
 
 ## Status
 
-In Progress (implementation complete, pending review/merge)
+In Progress
 
 ## Feature
 
-SPEC_13 - Student Dashboard Capability Matrix Component
+Bug Fixes — Red/Hardcoded Functionality Cleanup (Round 1: Student Dashboard)
 
 ## Spec File
 
-`context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md`
+No dedicated spec file — working directly off the 🔴 findings in `context/features/SPEC_14_PLATFORM_AUDIT.md` Section 2a (Student Dashboard), page by page, on the `Bugs-fixes` branch.
 
 ## Goals
 
-- Fix the blank Capability Matrix section on the student dashboard (`/student/dashboard`) — it currently renders only the heading and subtitle with no content below
-- Build a 2x2 grid of 4 category boxes (Cognitive, Leadership, Entrepreneurial, Professional Capabilities), each showing the category label and an aggregate score
-- Build a single shared accordion panel below the grid that opens on box click and shows the 5 sub-capabilities for the selected category (name, progress bar, numeric score)
-- Toggle behavior: clicking the active box closes the panel; clicking a different box switches panel content without closing it
-- Use hardcoded data only (the exact data object from the spec) — no API wiring in this pass, that comes later
-- Match existing dashboard styling exactly: dark navy hero card left untouched, gold accent for active state/progress fill, no new color values introduced
-- Extract as `frontend/src/components/student/CapabilityMatrix.jsx` if complex enough; touch no other dashboard section
+- Go through the platform one page at a time, per SPEC_14's audit, and fix the 🔴 (hardcoded/fake-data) items first before moving to lower-priority gaps
+- Round 1 = `/student/dashboard`. Explicitly in scope (confirmed fixable without unblocking bigger epics first): the hardcoded header identity, the generic dashboard error banner (plus its root cause), and the fully-mock "Continue Active Case" button / "Active Case Study" card
+- Explicitly deferred for this page (per user decision): the Capability Matrix (blocked on the whole Case Attempt Flow being wired up — SPEC_14 Group 2 — plus a taxonomy mismatch between SPEC_13's hardcoded 4-category/20-item UI and the real flat 8-capability backend) and the static "Your next challenge" copy / "Active" status badge (treated as intentional UX copy, not fake data)
+- Each round should get its own History entry; this file's Goals/DoD will be rewritten per round as we move to the next page
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md`
+- `context/features/SPEC_14_PLATFORM_AUDIT.md` (Section 2a specifically for this round)
 
 ## Answered Questions
 
-- Data is fully hardcoded per the spec's exact data object; no API endpoint is wired in this pass
-- Layout is a 2x2 grid plus one shared accordion panel (not 4 independent accordions)
-- Selecting a different category switches the panel's content in place; only re-clicking the already-active category closes it
+- Capability Matrix: defer it rather than reshape it to partial real data now — pick it up once the Attempt Flow is wired and produces real scores
+- "Your next challenge" text and the "Active" status badge: leave both as-is, treated as intentional static UX copy rather than bugs
 
-## Implementation Order
+## Implementation Order (Round 1: Student Dashboard)
 
-1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md`
-3. Locate the existing blank Capability Matrix section in the student dashboard component
-4. Build the 2x2 category grid (label + aggregate score per box) using the hardcoded `capabilityData` object
-5. Build the shared accordion panel (sub-capability name, progress bar, score) driven by a single `activeCategory` state value
-6. Wire click/toggle interaction logic (same box closes, different box switches)
-7. Apply active/selected styling (gold border/highlight) and progress bar fill using only existing Tailwind/CSS tokens
-8. Confirm no other dashboard sections are modified or broken
-9. Run frontend build and visually verify in a browser
+1. Fix the hardcoded header identity in `DashboardLayout.tsx` ("Sanjay Mehta, MBA" / fake career track) — wire to real `GET /student/profile` data
+2. Fix the dashboard's generic "Unable to load your dashboard right now" error banner to surface the real error
+3. Close the root cause: the unguarded `POST /auth/register` path created `users` rows with no matching `students` row (404 on every dashboard load) — wire it to create a real student profile + seed capabilities, matching what Admin-driven creation already does
+4. Wire the "Continue Active Case" hero button and "Active Case Study" card to a real in-progress assignment (new `active_case` field on `GET /student/dashboard/summary`), with a real empty state when there isn't one
+5. Run frontend build and verify backend endpoints end-to-end against the live dev DB
 
-## Definition of Done
+## Definition of Done (Round 1: Student Dashboard)
 
-- [x] 4 category boxes visible in a 2x2 grid on the student dashboard
-- [x] Each box shows category label + aggregate score
-- [x] Clicking a box opens the accordion panel below the grid
-- [x] Panel shows all 5 sub-capabilities with progress bars and scores
-- [x] Clicking the same active box closes the panel
-- [x] Clicking a different box switches the panel content without closing it
-- [x] Active box has a visible selected state (border or background highlight)
-- [x] Scores and names match the hardcoded data exactly
-- [x] No API calls made — purely hardcoded data for now
-- [x] No existing dashboard sections are affected or broken
-- [x] Frontend build and relevant checks pass
+- [x] Header shows the real logged-in user's name and career track/course (or nothing, not a fake identity) across all student pages
+- [x] Dashboard error banner surfaces the real failure reason instead of one generic string
+- [x] `/auth/register` no longer produces a profile-less student (creates `students` row + seeds capabilities, mirroring Admin's user-creation path)
+- [x] "Continue Active Case" / "Active Case Study" show a real in-progress case when one exists, and a real empty state when it doesn't
+- [x] Capability Matrix and the two static-copy items explicitly left untouched per the above decisions
+- [x] Frontend build passes; backend endpoints verified end-to-end against the live dev DB, including a live reproduction of the original bug and its fix
 
 ---
 
 ## History
+
+- 2026-07-03: Started the "Bugs-fixes" initiative on branch `Bugs-fixes`
+  (branched from `main`, separate from the not-yet-merged
+  `feature/platform-audit` docs branch), working page-by-page through
+  SPEC_14's 🔴 findings. Round 1 (`/student/dashboard`): fixed the
+  hardcoded header identity by wiring `DashboardLayout.tsx` to real
+  `GET /student/profile` data (name from the decoded JWT, career
+  track/course from the profile call) — this layout is shared across
+  every student page, so the fix applies everywhere, not just the
+  dashboard. Replaced the dashboard's generic "Unable to load your
+  dashboard right now" catch-all with a `describeDashboardError()`
+  helper that surfaces the real HTTP status/detail. Fixed the actual
+  root cause identified by the audit: `register_user()` in
+  `backend/services/auth/service.py` now creates a `students` row and
+  seeds all capability rows at 0 for `role="student"` (and a `mentors`
+  row for `role="mentor"`), mirroring what Admin-driven user creation
+  already does, so `/auth/register` can no longer produce a
+  profile-less account that 404s on every dashboard load. Added a new
+  `active_case` field to `GET /student/dashboard/summary`
+  (`backend/services/student/router.py`) sourced from the first
+  `assigned_cases` row with `status='active'`, and wired the hero
+  "Continue Active Case" button and the "Active Case Study" card to it
+  — real case title/domain/difficulty/due-date when one exists, a real
+  empty state with a "Browse Case Studies" link when there isn't one;
+  removed the fully-fabricated 6-stage progress indicator and fake
+  "45 min / Progress 50%" line since no real per-stage attempt data is
+  available yet. Also fixed the "View Capability Profile" button,
+  which had no link at all.
+
+  Incidental but significant finding during verification: the standard
+  seed test accounts (`student@pcdc.com`, `student2@pcdc.com` in
+  `backend/seeds/seed_users.py`) have been missing `students` rows
+  since project init — `insert_seed_user()` only ever inserted into
+  `users`. This is almost certainly the exact account/scenario behind
+  the original bug report. Fixed the seed script the same way as
+  `register_user()`, and backfilled the two already-existing broken
+  accounts directly in the dev DB (created their `students` rows +
+  seeded capabilities) so they're usable immediately without a full
+  reseed.
+
+  Deferred per explicit user decision: the Capability Matrix (blocked
+  on the Attempt Flow being wired up, plus a taxonomy mismatch between
+  SPEC_13's hardcoded categories and the real backend's flat capability
+  list) and the static "Your next challenge" text / "Active" status
+  badge (intentional UX copy, not fake data). The Mentor
+  Support/Career Pathway/AI Coaches/Achievements/Recent Evaluations
+  cards that also appear on this same dashboard page were left
+  untouched — those belong to SPEC_14 Sections 2e-2h, which are later,
+  lower-priority rounds, not this one.
+
+  Verified end-to-end against the live dev DB: registered a fresh
+  student via `/auth/register` and confirmed dashboard/profile now
+  return 200 (previously 404); confirmed `student@pcdc.com` (broken
+  since init) now loads correctly after the seed backfill; inserted
+  and then removed a temporary `assigned_cases` row to confirm
+  `active_case` populates with real data and clears correctly. All
+  test data cleaned up afterward. Frontend build (`tsc -b && vite
+  build`) passed; could not visually screenshot the page since no
+  headless-browser tool is available in this environment.
 
 - 2026-07-03: Implemented SPEC_13 on `feature/capability-matrix-component`.
   Added `frontend/src/components/student/CapabilityMatrix.tsx` (a

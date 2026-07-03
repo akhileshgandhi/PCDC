@@ -43,8 +43,35 @@ def register_user(db: Session, name: str, email: str, password: str, role: str =
         VALUES (:name, :email, :password_hash, :role, :program, :specialization)
         RETURNING id, name, email, role, created_at
     """), {"name": name, "email": email, "password_hash": hashed, "role": role, "program": program, "specialization": specialization})
-    db.commit()
     row = result.fetchone()
+    if role == "student":
+        student_row = db.execute(
+            text("""
+                INSERT INTO students (user_id, current_level)
+                VALUES (:user_id, 1)
+                RETURNING id
+            """),
+            {"user_id": row[0]},
+        ).fetchone()
+        capability_rows = db.execute(text("SELECT id FROM capabilities")).fetchall()
+        for capability in capability_rows:
+            db.execute(
+                text("""
+                    INSERT INTO student_capabilities (student_id, capability_id, current_score)
+                    VALUES (:student_id, :capability_id, 0)
+                    ON CONFLICT DO NOTHING
+                """),
+                {"student_id": student_row.id, "capability_id": capability.id},
+            )
+    elif role == "mentor":
+        db.execute(
+            text("""
+                INSERT INTO mentors (user_id, max_students)
+                VALUES (:user_id, 25)
+            """),
+            {"user_id": row[0]},
+        )
+    db.commit()
     return {"id": row[0], "name": row[1], "email": row[2], "role": row[3], "created_at": str(row[4])}
 
 def login_user(db: Session, email: str, password: str):

@@ -79,13 +79,14 @@ def insert_seed_user(conn: Any, user: Dict[str, Optional[str]]) -> None:
         print(f"SKIP  {user['email']} - already exists")
         return
 
-    conn.execute(
+    result = conn.execute(
         text(
             """
             INSERT INTO users
               (name, email, password_hash, role, program, specialization)
             VALUES
               (:name, :email, :password_hash, :role, :program, :specialization)
+            RETURNING id
             """
         ),
         {
@@ -97,6 +98,31 @@ def insert_seed_user(conn: Any, user: Dict[str, Optional[str]]) -> None:
             "specialization": user.get("specialization"),
         },
     )
+    user_id = result.fetchone().id
+
+    if user["role"] == "student":
+        student_row = conn.execute(
+            text("INSERT INTO students (user_id, current_level) VALUES (:user_id, 1) RETURNING id"),
+            {"user_id": user_id},
+        ).fetchone()
+        capability_rows = conn.execute(text("SELECT id FROM capabilities")).fetchall()
+        for capability in capability_rows:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO student_capabilities (student_id, capability_id, current_score)
+                    VALUES (:student_id, :capability_id, 0)
+                    ON CONFLICT DO NOTHING
+                    """
+                ),
+                {"student_id": student_row.id, "capability_id": capability.id},
+            )
+    elif user["role"] == "mentor":
+        conn.execute(
+            text("INSERT INTO mentors (user_id, max_students) VALUES (:user_id, 25)"),
+            {"user_id": user_id},
+        )
+
     print(f"OK    {user['email']} ({user['role']})")
 
 

@@ -1,10 +1,10 @@
+import axios from "axios"
 import {
   ArrowRight,
   Award,
   BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
-  Clock3,
   Compass,
   Flame,
   Lightbulb,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
 
 import {
   getStudentDashboardSummary,
@@ -52,7 +53,25 @@ const defaultSummary: StudentDashboardSummary = {
   pending_simulations: 0,
   completed_simulations: 0,
   current_level: null,
+  active_case: null,
   upcoming_session: null,
+}
+
+function describeDashboardError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      return "Unable to connect to the server. Check your connection and try again."
+    }
+    if (error.response.status === 404) {
+      return "Your student profile hasn't been set up yet. Contact an administrator to get started."
+    }
+    const detail = error.response.data?.detail
+    if (typeof detail === "string") {
+      return detail
+    }
+    return `Unable to load your dashboard right now (error ${error.response.status}).`
+  }
+  return "Unable to load your dashboard right now."
 }
 
 function formatSessionTime(scheduledAt: string) {
@@ -65,6 +84,19 @@ function formatSessionTime(scheduledAt: string) {
     hour: "numeric",
     minute: "2-digit",
   })
+}
+
+function formatDueDate(dueDate: string) {
+  const date = new Date(dueDate)
+  if (Number.isNaN(date.getTime())) return dueDate
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date)
+}
+
+function titleCase(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
 }
 
 const coaches: CoachItem[] = [
@@ -86,8 +118,6 @@ const pathwayItems: PathwayItem[] = [
   { title: "Problem Structuring Drill", level: "Level 3" },
   { title: "Executive Communication Practice", level: "Level 2" },
 ]
-
-const attemptStages = ["Briefing", "Analysis", "AI Discussion", "Solution", "Defense", "Evaluation"]
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<StudentDashboardSummary>(defaultSummary)
@@ -111,9 +141,9 @@ export default function Dashboard() {
           setProfile(profileData)
           setError("")
         }
-      } catch {
+      } catch (err) {
         if (isMounted) {
-          setError("Unable to load your dashboard right now.")
+          setError(describeDashboardError(err))
         }
       } finally {
         if (isMounted) {
@@ -162,19 +192,23 @@ export default function Dashboard() {
               and risk awareness. Keep sharpening.
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
+              <Link
+                to={
+                  summary.active_case
+                    ? `/student/case-studies/${summary.active_case.case_id}/attempt`
+                    : "/student/case-studies"
+                }
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e0b84e]"
               >
-                Continue Active Case
+                {summary.active_case ? "Continue Active Case" : "Browse Case Studies"}
                 <ArrowRight size={17} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
+              </Link>
+              <Link
+                to="/student/capability-profile"
                 className="inline-flex items-center justify-center rounded-md border border-[#c9a227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 View Capability Profile
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -219,49 +253,44 @@ export default function Dashboard() {
 
         <section className="grid gap-5 xl:grid-cols-3">
           <Card title="Active Case Study">
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold">Q3 Market Entry Strategy</h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge>Business Strategy</Badge>
-                  <Badge>Level 3</Badge>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#6b7280]">Current Stage</p>
-                <p className="mt-1 text-sm font-semibold text-[#16a34a]">AI Discussion</p>
-              </div>
-              <div className="grid grid-cols-6 gap-2">
-                {attemptStages.map((stage, index) => (
-                  <div key={stage} className="text-center">
-                    <div
-                      className={`mx-auto grid size-7 place-items-center rounded-full border text-xs font-semibold ${
-                        index === 2
-                          ? "border-[#c9a227] bg-[#c9a227] text-white"
-                          : "border-[#d1d5db] bg-white text-[#6b7280]"
-                      }`}
-                    >
-                      {index + 1}
-                    </div>
-                    <p className="mt-2 text-[10px] leading-tight text-[#6b7280]">{stage}</p>
+            {summary.active_case ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold">{summary.active_case.title}</h3>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge>{titleCase(summary.active_case.domain)}</Badge>
+                    <Badge>
+                      {summary.active_case.difficulty_label ||
+                        `Level ${summary.active_case.difficulty}`}
+                    </Badge>
                   </div>
-                ))}
+                </div>
+                {summary.active_case.due_date ? (
+                  <p className="text-xs font-semibold text-[#6b7280]">
+                    Due {formatDueDate(summary.active_case.due_date)}
+                  </p>
+                ) : null}
+                <Link
+                  to={`/student/case-studies/${summary.active_case.case_id}/attempt`}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
+                >
+                  Continue Attempt
+                  <ArrowRight size={17} aria-hidden="true" />
+                </Link>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="inline-flex items-center gap-2 font-medium">
-                  <Clock3 size={17} aria-hidden="true" />
-                  45 min
-                </span>
-                <span className="font-medium">Progress 50%</span>
+            ) : (
+              <div className="space-y-3 py-2 text-center">
+                <p className="text-sm font-medium text-[#6b7280]">
+                  {isLoading ? "Loading..." : "No case study in progress right now."}
+                </p>
+                <Link
+                  to="/student/case-studies"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+                >
+                  Browse Case Studies
+                </Link>
               </div>
-              <button
-                type="button"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
-              >
-                Continue Attempt
-                <ArrowRight size={17} aria-hidden="true" />
-              </button>
-            </div>
+            )}
           </Card>
 
           <Card title="AI Coaches">

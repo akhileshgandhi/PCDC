@@ -112,6 +112,19 @@ def student_dashboard_summary(
         {"user_id": user_id},
     ).scalar() or 0
 
+    active_case_row = db.execute(
+        text("""
+            SELECT cs.id AS case_id, cs.title, cs.domain, cs.difficulty,
+                   cs.case_code, cs.subject, cs.difficulty_label, ac.due_date
+            FROM assigned_cases ac
+            JOIN case_studies cs ON cs.id = ac.case_study_id
+            WHERE ac.student_id = :student_id AND ac.status = 'active'
+            ORDER BY ac.assigned_at DESC
+            LIMIT 1
+        """),
+        {"student_id": student_id},
+    ).fetchone()
+
     upcoming_session_row = db.execute(
         text("""
             SELECT se.id, se.session_type, se.scheduled_at, u.name AS mentor_name
@@ -136,6 +149,16 @@ def student_dashboard_summary(
         "pending_simulations": int(pending_simulations),
         "completed_simulations": int(completed_simulations),
         "current_level": student_row.current_level,
+        "active_case": {
+            "case_id": active_case_row.case_id,
+            "title": active_case_row.title,
+            "domain": active_case_row.domain,
+            "difficulty": active_case_row.difficulty,
+            "case_code": active_case_row.case_code,
+            "subject": active_case_row.subject,
+            "difficulty_label": active_case_row.difficulty_label,
+            "due_date": str(active_case_row.due_date) if active_case_row.due_date else None,
+        } if active_case_row else None,
         "upcoming_session": {
             "id": upcoming_session_row.id,
             "session_type": upcoming_session_row.session_type,
