@@ -1,10 +1,8 @@
 import {
   ArrowRight,
   Award,
-  BarChart3,
   BriefcaseBusiness,
   CalendarDays,
-  CheckCircle2,
   ChevronRight,
   Clock3,
   Compass,
@@ -13,7 +11,6 @@ import {
   MessageCircle,
   ShieldCheck,
   Sparkles,
-  Target,
   Trophy,
   Users,
   type LucideIcon,
@@ -27,6 +24,7 @@ import {
   type StudentDashboardSummary,
   type StudentProfile,
 } from "../../api/student"
+import CapabilityMatrix from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
 import { getCurrentUser } from "../../utils/auth"
 
@@ -46,17 +44,6 @@ interface EvaluationItem {
 interface PathwayItem {
   title: string
   level: string
-}
-
-const CAPABILITY_ICONS: Record<string, LucideIcon> = {
-  Communication: MessageCircle,
-  Leadership: Users,
-  "Problem Solving": Target,
-  "Decision Making": BriefcaseBusiness,
-  Innovation: Lightbulb,
-  "Strategic Thinking": CheckCircle2,
-  Entrepreneurship: BarChart3,
-  Professionalism: ShieldCheck,
 }
 
 const defaultSummary: StudentDashboardSummary = {
@@ -227,35 +214,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {(isLoading ? [] : summary.capability_scores).map((metric) => {
-              const Icon = CAPABILITY_ICONS[metric.capability] ?? Sparkles
-
-              return (
-                <article
-                  key={metric.capability}
-                  className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="grid size-8 place-items-center rounded-md bg-[#f6f7fb] text-[#081d3a]">
-                      <Icon size={17} aria-hidden="true" />
-                    </div>
-                  </div>
-                  <h3 className="mt-4 text-sm font-semibold">{metric.capability}</h3>
-                  <div className="mt-3 flex items-end gap-1">
-                    <span className="text-2xl font-semibold">{metric.score}</span>
-                    <span className="pb-1 text-xs text-[#6b7280]">/ 100</span>
-                  </div>
-                  <div className="mt-4 h-2 rounded-full bg-[#e6e8eb]">
-                    <div
-                      className="h-2 rounded-full bg-[#081d3a]"
-                      style={{ width: `${Math.min(100, Math.max(0, metric.score))}%` }}
-                    />
-                  </div>
-                </article>
-              )
-            })}
-          </div>
+          <CapabilityMatrix />
         </section>
 
         <section className="grid gap-5 xl:grid-cols-3">

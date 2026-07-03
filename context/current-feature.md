@@ -2,102 +2,96 @@
 
 ## Status
 
-Completed
+In Progress (implementation complete, pending review/merge)
 
 ## Feature
 
-SPEC_12 - Courses, Faculty Management, Student Management & Case Assignment
+SPEC_13 - Student Dashboard Capability Matrix Component
 
 ## Spec File
 
-`context/features/SPEC_12_COURSES_FACULTY_STUDENT_MANAGEMENT.md`
+`context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md`
 
 ## Goals
 
-- Introduce a real academic structure: courses, semesters, batches, and class sections
-- Link faculty to the class sections they teach (`faculty_sections`)
-- Link students to the one class section they are enrolled in (`student_sections`)
-- Let faculty assign a published case study to an entire class section at once (`case_section_assignments`), alongside the existing mentor per-student assignment path
-- Extend `assigned_cases` with `assignment_source` and `section_assignment_id` to distinguish section-based (faculty) assignments from mentor assignments
-- Add Admin Course & Section Management: create courses (auto-seeds semesters), add batches, create class sections, assign faculty and students to sections (individual, bulk, and CSV import)
-- Add an admin bulk "advance semester" action per batch
-- Update Admin Users list/CSV import/user creation to capture course, batch, and section
-- Update Faculty Dashboard to show real section counts, student counts, and cases assigned
-- Update Faculty Students page to show the full class roster by section, including students with zero attempts (not just students who've attempted a case)
-- Add Faculty "Assign to Class" flow on the case library, with due date and instructions, plus a per-section completion-rate view and close-assignment action
-- Update Faculty Case Builder with recommended course/semester tagging (soft, non-restrictive)
-- Update Faculty Analytics with a section dimension
-- Update Student Dashboard to show course/semester/batch/section identity
-- Update Student case list to separate faculty-assigned (by section) from mentor-assigned cases, with a Completed tab
-- One-time admin-driven migration of existing students into course/section data (no automated migration)
+- Fix the blank Capability Matrix section on the student dashboard (`/student/dashboard`) — it currently renders only the heading and subtitle with no content below
+- Build a 2x2 grid of 4 category boxes (Cognitive, Leadership, Entrepreneurial, Professional Capabilities), each showing the category label and an aggregate score
+- Build a single shared accordion panel below the grid that opens on box click and shows the 5 sub-capabilities for the selected category (name, progress bar, numeric score)
+- Toggle behavior: clicking the active box closes the panel; clicking a different box switches panel content without closing it
+- Use hardcoded data only (the exact data object from the spec) — no API wiring in this pass, that comes later
+- Match existing dashboard styling exactly: dark navy hero card left untouched, gold accent for active state/progress fill, no new color values introduced
+- Extract as `frontend/src/components/student/CapabilityMatrix.jsx` if complex enough; touch no other dashboard section
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_12_COURSES_FACULTY_STUDENT_MANAGEMENT.md`
-- `context/features/SPEC_08_ADMIN_PORTAL.md`
-- `context/features/SPEC_10_DYNAMIC_DATA_MAPPING.md`
-- `context/features/SPEC_11_CASE_SCHEMA_GAP_ANALYSIS.md`
-- `context/features/SPEC_14_FACULTY_PORTAL.md`
-- `context/features/SPEC_15_CASE_PUBLISHING_TARGETING.md`
+- `context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md`
 
 ## Answered Questions
 
-- A student belongs to exactly one section at a time; no secondary/elective sections in phase 1
-- Section naming is admin-defined at creation time and not editable after students are enrolled
-- Existing students with no section are migrated via a one-time admin bulk enrollment CSV (student email + section_name); no automated migration
-- Faculty assigning the same case to multiple sections creates a separate `case_section_assignments` record per section, with independent completion analytics per section
-- Active/pending case assignments show in the student's main case list; completed cases move to a separate Completed tab
+- Data is fully hardcoded per the spec's exact data object; no API endpoint is wired in this pass
+- Layout is a 2x2 grid plus one shared accordion panel (not 4 independent accordions)
+- Selecting a different category switches the panel's content in place; only re-clicking the already-active category closes it
 
 ## Implementation Order
 
 1. Read and follow `context/project-overview.md`
-2. Read `context/features/SPEC_12_COURSES_FACULTY_STUDENT_MANAGEMENT.md`
-3. Confirm current `users`, `students`, `case_studies`, `assigned_cases` schema and existing Admin, Faculty, and Student portal behavior
-4. Add Alembic migration for `courses`, `semesters`, `batches`, `class_sections`, `faculty_sections`, `student_sections`, and `case_section_assignments` tables
-5. Add Alembic migration for `students.course_id/batch_id/current_section_id/current_semester_number`, `case_studies.recommended_semester/recommended_courses`, and `assigned_cases.assignment_source/section_assignment_id`
-6. Implement Admin course and batch management APIs (creating a course seeds its semesters)
-7. Implement Admin section management APIs: create section, assign faculty, enroll students, bulk CSV enroll
-8. Implement Admin bulk semester-advancement API
-9. Update Admin Users UI and CSV import/template for course/batch/section fields
-10. Build Admin Course & Section management UI
-11. Implement Faculty sections-roster API and update Faculty Dashboard summary
-12. Implement Faculty students-by-section API and update the Faculty Students page
-13. Implement Faculty case-to-section assignment API ("Assign to Class"), assigned-cases completion view, and close-assignment action
-14. Update Faculty Case Builder with recommended course/semester tagging
-15. Update Faculty Analytics with a section dimension
-16. Update Student profile/dashboard API and UI for course/semester/batch/section identity
-17. Update Student case list API/UI to separate faculty-assigned (by section) vs mentor-assigned cases, plus a Completed tab
-18. Build the one-time admin bulk tool to migrate existing students into course/section data
-19. Run frontend build and relevant backend checks
+2. Read `context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md`
+3. Locate the existing blank Capability Matrix section in the student dashboard component
+4. Build the 2x2 category grid (label + aggregate score per box) using the hardcoded `capabilityData` object
+5. Build the shared accordion panel (sub-capability name, progress bar, score) driven by a single `activeCategory` state value
+6. Wire click/toggle interaction logic (same box closes, different box switches)
+7. Apply active/selected styling (gold border/highlight) and progress bar fill using only existing Tailwind/CSS tokens
+8. Confirm no other dashboard sections are modified or broken
+9. Run frontend build and visually verify in a browser
 
 ## Definition of Done
 
-- [x] `courses` table stores course name, code, total semesters, duration, and status
-- [x] Creating a course auto-seeds its `semesters` rows
-- [x] `batches` table stores batch name, start/end year, and status per course
-- [x] `class_sections` table links course + semester + batch with a section name and academic year
-- [x] `faculty_sections` table links faculty to sections with a subject
-- [x] `student_sections` table links each student to their one active section (enforced via partial unique index)
-- [x] `case_section_assignments` table records case-to-section assignments with due date, instructions, and status
-- [x] `assigned_cases` gains `assignment_source` and `section_assignment_id`
-- [x] Admin can create courses and batches; creating a course seeds semesters (course rename/status edit exists; batch edit does not)
-- [x] Admin can create class sections and assign faculty and students to them (individual and bulk-by-selection)
-- [x] Admin Users CSV import (file upload) supports course/batch/section columns — `POST /admin/users/import` parses a CSV (Name, Email, Role, Program, AdmissionYear, CourseCode, BatchName, SectionName, MentorID), creates each user with per-row error isolation (a savepoint per row), and enrolls students into the resolved section. Template download updated to match.
-- [x] Admin can run a bulk semester-advancement action per batch
-- [x] Faculty Dashboard shows section count and student count drawn from real sections (a dedicated "cases assigned" tile was not added)
-- [x] Faculty Students page lists the full class roster grouped by section, including students with zero attempts
-- [x] Faculty can assign a published case to one or more sections via "Assign to Class"
-- [x] Faculty can view per-section assigned-case completion rates and close an assignment — new "Class Assignments" section on the Case Library page consumes the existing `GET /faculty/cases/assigned` / `PATCH /faculty/case-assignments/{id}/close` endpoints with a completion-rate bar and Close button
-- [x] Faculty Case Builder supports recommended course/semester tagging — new "Recommended Course & Semester" panel (semester chips 1-12, course checkboxes from a new `GET /faculty/courses` endpoint), persisted via new `case_studies.recommended_semesters`/`recommended_course_ids` read/write path; soft tag only, does not restrict assignment
-- [x] Faculty Analytics includes a section dimension — new `GET /faculty/analytics/summary` endpoint (per-section student count, average capability score, cases assigned, completion rate) backing a real Analytics page with a bar chart and per-section table, replacing the placeholder
-- [x] Student Dashboard shows course/semester/batch/section identity
-- [x] Student case list separates faculty-assigned (by section) from mentor-assigned cases, with a Completed tab
-- [x] Frontend build and relevant backend checks pass
+- [x] 4 category boxes visible in a 2x2 grid on the student dashboard
+- [x] Each box shows category label + aggregate score
+- [x] Clicking a box opens the accordion panel below the grid
+- [x] Panel shows all 5 sub-capabilities with progress bars and scores
+- [x] Clicking the same active box closes the panel
+- [x] Clicking a different box switches the panel content without closing it
+- [x] Active box has a visible selected state (border or background highlight)
+- [x] Scores and names match the hardcoded data exactly
+- [x] No API calls made — purely hardcoded data for now
+- [x] No existing dashboard sections are affected or broken
+- [x] Frontend build and relevant checks pass
 
 ---
 
 ## History
+
+- 2026-07-03: Implemented SPEC_13 on `feature/capability-matrix-component`.
+  Added `frontend/src/components/student/CapabilityMatrix.tsx` (a
+  TypeScript component, matching the codebase's existing convention
+  rather than the spec's illustrative `.jsx` path): a 2x2 grid of the 4
+  category boxes plus a single shared accordion panel driven by one
+  `activeCategory` state value, using the exact hardcoded data object
+  from the spec (no API calls). Replaced the student dashboard's
+  Capability Matrix section — which rendered blank whenever
+  `summary.capability_scores` came back empty from the live API — with
+  this component, and removed the now-unused `CAPABILITY_ICONS` map and
+  three now-unused lucide icon imports (`BarChart3`, `CheckCircle2`,
+  `Target`) from `frontend/src/pages/student/Dashboard.tsx`. Styling
+  reuses only colors already present in the file (`#c9a227` gold,
+  `#081d3a` navy, `#e6e8eb`/`#6b7280`/`#111827`/`#fff7df`), introducing
+  no new tokens. Frontend build (`tsc -b && vite build`) passed; booted
+  both the backend and frontend dev servers to confirm no startup
+  errors, but could not visually drive the page in a browser since no
+  headless-browser tool (e.g. `chromium-cli`, Playwright) is installed
+  in this environment — correctness rests on the passing TypeScript
+  build and matching the spec's data/logic exactly. No API wiring was
+  done, per the spec.
+
+- 2026-07-03: SPEC_12 Courses, Faculty Management, Student Management &
+  Case Assignment marked Completed (all Definition of Done items
+  checked). SPEC_13 Student Dashboard Capability Matrix Component moved
+  to In Progress: fix the blank Capability Matrix section on the
+  student dashboard with a 2x2 category grid and a shared accordion
+  panel showing 5 sub-capabilities per category, using hardcoded data
+  only — no API wiring in this pass.
 
 - 2026-07-03: Finished the 4 remaining SPEC_12 items on `main`, closing
   out every unchecked box in the Definition of Done. Admin Users CSV
