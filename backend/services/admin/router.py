@@ -1340,6 +1340,100 @@ def create_admin_section(
     return section_response(section_row)
 
 
+def section_list_response(
+    row: Any, faculty_by_section: Dict[int, List[Dict[str, Any]]]
+) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "course_id": row.course_id,
+        "course_name": row.course_name,
+        "batch_id": row.batch_id,
+        "batch_name": row.batch_name,
+        "name": row.name,
+        "academic_year": row.academic_year,
+        "status": row.status,
+        "semester_number": row.semester_number,
+        "semester_name": row.semester_name,
+        "student_count": int(row.student_count),
+        "faculty_count": int(row.faculty_count),
+        "cases_assigned_count": int(row.cases_assigned_count),
+        "faculty": faculty_by_section.get(row.id, []),
+    }
+
+
+@admin_router.get("/sections")
+def list_admin_sections(
+    course_id: Optional[int] = None,
+    batch_id: Optional[int] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+
+    where_clauses: List[str] = []
+    params: Dict[str, Any] = {}
+    if course_id:
+        where_clauses.append("cs.course_id = :course_id")
+        params["course_id"] = course_id
+    if batch_id:
+        where_clauses.append("cs.batch_id = :batch_id")
+        params["batch_id"] = batch_id
+    if status:
+        where_clauses.append("cs.status = :status")
+        params["status"] = status
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    rows = db.execute(
+        text(f"""
+            SELECT cs.id, cs.course_id, c.name AS course_name, cs.batch_id, b.name AS batch_name,
+                   cs.name, cs.academic_year, cs.status,
+                   se.semester_number, se.name AS semester_name,
+                   COUNT(DISTINCT ss.student_id) FILTER (WHERE ss.status = 'active') AS student_count,
+                   COUNT(DISTINCT fs.faculty_id) AS faculty_count,
+                   COUNT(DISTINCT csa.id) FILTER (WHERE csa.status = 'active') AS cases_assigned_count
+            FROM class_sections cs
+            JOIN courses c ON c.id = cs.course_id
+            JOIN semesters se ON se.id = cs.semester_id
+            JOIN batches b ON b.id = cs.batch_id
+            LEFT JOIN student_sections ss ON ss.section_id = cs.id
+            LEFT JOIN faculty_sections fs ON fs.section_id = cs.id
+            LEFT JOIN case_section_assignments csa ON csa.section_id = cs.id
+            {where_sql}
+            GROUP BY cs.id, c.name, b.name, se.semester_number, se.name
+            ORDER BY c.name, se.semester_number, b.name, cs.name
+        """),
+        params,
+    ).fetchall()
+
+    section_ids = [row.id for row in rows]
+    faculty_by_section: Dict[int, List[Dict[str, Any]]] = {}
+    if section_ids:
+        faculty_rows = db.execute(
+            text("""
+                SELECT fs.section_id, fs.faculty_id, u.name AS faculty_name, fs.subject
+                FROM faculty_sections fs
+                JOIN users u ON u.id = fs.faculty_id
+                WHERE fs.section_id = ANY(:section_ids)
+                ORDER BY u.name
+            """),
+            {"section_ids": section_ids},
+        ).fetchall()
+        for faculty_row in faculty_rows:
+            faculty_by_section.setdefault(faculty_row.section_id, []).append(
+                {
+                    "faculty_id": faculty_row.faculty_id,
+                    "faculty_name": faculty_row.faculty_name,
+                    "subject": faculty_row.subject,
+                }
+            )
+
+    return {
+        "items": [section_list_response(row, faculty_by_section) for row in rows],
+        "total": len(rows),
+    }
+
+
 @admin_router.get("/sections/{section_id}")
 def get_admin_section(
     section_id: int,
@@ -1403,6 +1497,30 @@ def get_admin_section(
         for row in student_rows
     ]
     return result
+
+
+@admin_router.get("/sections/{section_id}/eligible-students")
+def list_admin_section_eligible_students(
+    section_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    section = ensure_section(db, section_id)
+    rows = db.execute(
+        text("""
+            SELECT u.id, u.name, u.email
+            FROM students s
+            JOIN users u ON u.id = s.user_id
+            WHERE u.role = 'student' AND u.status = 'active'
+              AND s.current_section_id IS NULL
+              AND (s.course_id IS NULL OR s.course_id = :course_id)
+              AND (s.batch_id IS NULL OR s.batch_id = :batch_id)
+            ORDER BY u.name
+        """),
+        {"course_id": section.course_id, "batch_id": section.batch_id},
+    ).fetchall()
+    return {"items": [{"id": row.id, "name": row.name, "email": row.email} for row in rows]}
 
 
 @admin_router.post("/sections/{section_id}/faculty", status_code=201)
@@ -1487,6 +1605,131 @@ def enroll_admin_section_students(
     )
     db.commit()
     return {"enrolled": results, "count": len(results)}
+
+
+@admin_router.delete("/sections/{section_id}/faculty/{faculty_id}")
+def remove_admin_section_faculty(
+    section_id: int,
+    faculty_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    ensure_section(db, section_id)
+    removed = db.execute(
+        text("""
+            DELETE FROM faculty_sections
+            WHERE section_id = :section_id AND faculty_id = :faculty_id
+            RETURNING id
+        """),
+        {"section_id": section_id, "faculty_id": faculty_id},
+    ).fetchall()
+    if not removed:
+        raise HTTPException(status_code=404, detail="Faculty is not assigned to this section")
+    record_system_event(
+        db,
+        current_user["id"],
+        "faculty_removed_section",
+        f"Removed faculty {faculty_id} from section {section_id}",
+    )
+    db.commit()
+    return {"removed_count": len(removed)}
+
+
+@admin_router.delete("/sections/{section_id}/students/{student_id}")
+def remove_admin_section_student(
+    section_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    ensure_section(db, section_id)
+    removed = db.execute(
+        text("""
+            UPDATE student_sections SET status = 'removed'
+            WHERE section_id = :section_id AND student_id = :student_id AND status = 'active'
+            RETURNING id
+        """),
+        {"section_id": section_id, "student_id": student_id},
+    ).fetchone()
+    if not removed:
+        raise HTTPException(status_code=404, detail="Student is not enrolled in this section")
+    db.execute(
+        text("""
+            UPDATE students
+            SET current_section_id = NULL, current_semester_number = NULL
+            WHERE id = :student_id AND current_section_id = :section_id
+        """),
+        {"student_id": student_id, "section_id": section_id},
+    )
+    record_system_event(
+        db,
+        current_user["id"],
+        "student_removed_section",
+        f"Removed student {student_id} from section {section_id}",
+    )
+    db.commit()
+    return {"removed": True}
+
+
+@admin_router.post("/sections/{section_id}/students/bulk")
+async def bulk_enroll_admin_section_students(
+    section_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    ensure_section(db, section_id)
+    raw = await file.read()
+    try:
+        decoded = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded CSV")
+
+    reader = csv.DictReader(io.StringIO(decoded))
+    fieldnames = {(name or "").strip() for name in (reader.fieldnames or [])}
+    if "Email" not in fieldnames:
+        raise HTTPException(status_code=400, detail="CSV must include an Email column")
+
+    enrolled: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+    for line_number, raw_row in enumerate(reader, start=2):
+        row = {(key or "").strip(): (value or "").strip() for key, value in raw_row.items()}
+        email = row.get("Email", "").lower()
+        try:
+            with db.begin_nested():
+                if not email:
+                    raise ValueError("Email is required")
+                user_row = db.execute(
+                    text("SELECT id FROM users WHERE email = :email AND role = 'student'"),
+                    {"email": email},
+                ).fetchone()
+                if not user_row:
+                    raise ValueError("No student account found for this email")
+                student = get_student_for_user(db, user_row.id)
+                enroll_student_in_section(db, student.id, section_id, current_user["id"])
+            enrolled.append({"row": line_number, "email": email})
+        except (ValueError, HTTPException) as exc:
+            detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            errors.append({"row": line_number, "email": email, "error": detail})
+
+    if enrolled:
+        record_system_event(
+            db,
+            current_user["id"],
+            "students_bulk_enrolled_section",
+            f"Bulk-enrolled {len(enrolled)} student(s) into section {section_id} via CSV "
+            f"({len(errors)} error(s))",
+        )
+    db.commit()
+    return {
+        "enrolled": enrolled,
+        "enrolled_count": len(enrolled),
+        "errors": errors,
+        "error_count": len(errors),
+    }
 
 
 @admin_router.post("/batches/{batch_id}/advance-semester")

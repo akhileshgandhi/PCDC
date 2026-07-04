@@ -6,49 +6,136 @@ In Progress
 
 ## Feature
 
-Bug Fixes — Red/Hardcoded Functionality Cleanup (Round 1: Student Dashboard)
+SPEC_16 Faculty → Course → Student Mapping
 
 ## Spec File
 
-No dedicated spec file — working directly off the 🔴 findings in `context/features/SPEC_14_PLATFORM_AUDIT.md` Section 2a (Student Dashboard), page by page, on the `Bugs-fixes` branch.
+`context/features/SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`
 
 ## Goals
 
-- Go through the platform one page at a time, per SPEC_14's audit, and fix the 🔴 (hardcoded/fake-data) items first before moving to lower-priority gaps
-- Round 1 = `/student/dashboard`. Explicitly in scope (confirmed fixable without unblocking bigger epics first): the hardcoded header identity, the generic dashboard error banner (plus its root cause), and the fully-mock "Continue Active Case" button / "Active Case Study" card
-- Explicitly deferred for this page (per user decision): the Capability Matrix (blocked on the whole Case Attempt Flow being wired up — SPEC_14 Group 2 — plus a taxonomy mismatch between SPEC_13's hardcoded 4-category/20-item UI and the real flat 8-capability backend) and the static "Your next challenge" copy / "Active" status badge (treated as intentional UX copy, not fake data)
-- Each round should get its own History entry; this file's Goals/DoD will be rewritten per round as we move to the next page
+- Build the admin-controlled structural layer (faculty-to-section, student-to-section) and the faculty-controlled academic layer (case-to-section assignment) on top of SPEC_12's `class_sections`/`faculty_sections`/`student_sections`/`case_section_assignments` tables
+- Admin Portal: new `/admin/sections` Section Management page (list/create sections, filter by course/batch/status, flag unassigned-faculty sections), "Manage Faculty" drawer, "Manage Students" drawer (with bulk CSV enroll), and a "Teaching Sections" block on the faculty user detail page
+- Faculty Portal: "My Sections" block on the dashboard, section-grouped Students page (replacing attempt-based grouping), "Assign to Section" flow from the Case Library (multi-section select, due date, note, notifies all enrolled students), and an "Assigned Cases" tracking tab with per-student progress
+- Student Portal: Case Studies page grouped by source ("Assigned by Your Faculty" vs "Assigned by Your Mentor"), plus in-app + email notification on faculty assignment
+- New endpoints under `/api/admin/sections/*`, `/api/faculty/sections/*`, `/api/faculty/cases/{id}/assign`, `/api/faculty/cases/assigned*`, `/api/student/cases`, and an internal case-assigned notification trigger
+- Confirm SPEC_12 tables (`class_sections`, `faculty_sections`, `student_sections`, `case_section_assignments`, and `assigned_cases.assignment_source`/`section_assignment_id`) already exist before starting; run the SPEC_12 migration first if any are missing
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_14_PLATFORM_AUDIT.md` (Section 2a specifically for this round)
+- `context/features/SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`
+- `context/features/SPEC_12` work (courses/sections schema and admin/faculty groundwork this spec builds on)
 
-## Answered Questions
+## Implementation Order (per spec's Build Order)
 
-- Capability Matrix: defer it rather than reshape it to partial real data now — pick it up once the Attempt Flow is wired and produces real scores
-- "Your next challenge" text and the "Active" status badge: leave both as-is, treated as intentional static UX copy rather than bugs
+1. Admin: Section Management page (`/admin/sections`) — list + create sections
+2. Admin: Manage Faculty drawer — assign/remove faculty per section
+3. Admin: Manage Students drawer — enroll/remove students per section
+4. Admin: Faculty detail page — add "Teaching Sections" block
+5. Faculty: My Sections on dashboard — reads from `faculty_sections`
+6. Faculty: Students page — section-grouped roster
+7. Faculty: Assign to Section flow — case library → assign modal → write records
+8. Faculty: Assigned Cases tracking tab — progress view
+9. Student: Case list — show faculty-assigned vs mentor-assigned, grouped
+10. Notification dispatch — email + in-app on case assignment
 
-## Implementation Order (Round 1: Student Dashboard)
+## Definition of Done
 
-1. Fix the hardcoded header identity in `DashboardLayout.tsx` ("Sanjay Mehta, MBA" / fake career track) — wire to real `GET /student/profile` data
-2. Fix the dashboard's generic "Unable to load your dashboard right now" error banner to surface the real error
-3. Close the root cause: the unguarded `POST /auth/register` path created `users` rows with no matching `students` row (404 on every dashboard load) — wire it to create a real student profile + seed capabilities, matching what Admin-driven creation already does
-4. Wire the "Continue Active Case" hero button and "Active Case Study" card to a real in-progress assignment (new `active_case` field on `GET /student/dashboard/summary`), with a real empty state when there isn't one
-5. Run frontend build and verify backend endpoints end-to-end against the live dev DB
-
-## Definition of Done (Round 1: Student Dashboard)
-
-- [x] Header shows the real logged-in user's name and career track/course (or nothing, not a fake identity) across all student pages
-- [x] Dashboard error banner surfaces the real failure reason instead of one generic string
-- [x] `/auth/register` no longer produces a profile-less student (creates `students` row + seeds capabilities, mirroring Admin's user-creation path)
-- [x] "Continue Active Case" / "Active Case Study" show a real in-progress case when one exists, and a real empty state when it doesn't
-- [x] Capability Matrix and the two static-copy items explicitly left untouched per the above decisions
-- [x] Frontend build passes; backend endpoints verified end-to-end against the live dev DB, including a live reproduction of the original bug and its fix
+- [x] Admin can create sections, assign/remove faculty (with required subject field), and enroll/remove students (single + bulk CSV) via `/admin/sections`
+- [ ] Faculty detail page shows a "Teaching Sections" block sourced from `faculty_sections`
+- [x] Faculty dashboard shows "My Sections" with per-section student/active-case counts and updated summary totals (My Students, Simulations Running, Pending Reviews) — already built under SPEC_12
+- [x] Faculty Students page groups rosters by section, each student showing capability score/attempts/status — already built under SPEC_12 (not collapsible yet, and links to no detail view yet)
+- [x] Faculty can assign a published case to one or more sections from the Case Library, seeing the notified-student count before confirming; writes `case_section_assignments` + one `assigned_cases` row per enrolled student — already built under SPEC_12 ("Assign to Class")
+- [ ] Faculty Case Library has an "Assigned" tab showing per-assignment progress (already built under SPEC_12), with a "View Detail" per-student breakdown (not yet built)
+- [ ] Student Case Studies page groups cases into "Assigned by Your Faculty" vs "Assigned by Your Mentor", each faculty-assigned case showing due date/note
+- [ ] Students receive in-app + email notification immediately when a faculty assigns a case to their section
+- [ ] Frontend build passes; backend endpoints verified end-to-end against the live dev DB
 
 ---
 
 ## History
+
+- 2026-07-04: Started implementation on branch `feature/faculty-course-student-mapping`
+  (branched from `main`). Audited the spec against the codebase first and found
+  most of the Faculty/Student sides were already built under SPEC_12: faculty
+  dashboard "My Sections", section-grouped Faculty Students page, the
+  "Assign to Class" case-to-section flow, and the Case Library "Class
+  Assignments" progress tab all already existed and matched the spec's intent
+  (see updated Definition of Done above for the exact per-item status). The
+  real gap was on the Admin side, which only supported managing sections by
+  drilling into a course on `/admin/courses` — no cross-course list, no way
+  to remove a faculty/student from a section, and no bulk enrollment.
+
+  Built the spec's dedicated Admin Section Management page: `GET
+  /admin/sections` (new flat endpoint in `backend/services/admin/router.py`,
+  filterable by `course_id`/`batch_id`/`status`, returning course/batch/
+  semester names and the assigned-faculty list per section so an unassigned
+  section can be flagged), `DELETE /admin/sections/{id}/faculty/{faculty_id}`,
+  `DELETE /admin/sections/{id}/students/{student_id}` (soft-removes via a new
+  `student_sections.status = 'removed'`, matching the existing `'dropped'`
+  convention, and clears the student's `current_section_id` if it pointed at
+  this section), and `POST /admin/sections/{id}/students/bulk` (CSV import by
+  email, per-row savepoint isolation mirroring the existing user-CSV-import
+  pattern). Added `frontend/src/pages/admin/AdminSections.tsx` at
+  `/admin/sections` (new sidebar nav item) with course/batch/status filters,
+  section cards showing the "Unassigned ⚠" flag and cases-assigned count,
+  a "New Section" modal (course → batch/semester → name), and "Manage
+  Faculty"/"Manage Students" drawers with add, remove, and bulk-CSV-upload
+  actions. Left the existing `/admin/courses` page and its inline section
+  management untouched — it still works for course/batch setup.
+
+  Verified end-to-end against the live dev DB: created an isolated throwaway
+  test course/batch/section, exercised assign-faculty → remove-faculty (plus
+  a repeat-remove 404 check), enroll-student → remove-student (plus a
+  repeat-remove 404 check), and a bulk CSV upload with one valid and one
+  invalid row (confirmed partial success with a per-row error message), then
+  deleted the test course (cascades through batch/section/enrollment rows)
+  and confirmed the original two sections were unaffected. Frontend
+  (`tsc -b && vite build`) and backend (`py_compile`) both passed; could not
+  visually drive the new page in a browser since no headless-browser tool is
+  available in this environment.
+
+  Follow-up same day: user reported "admin can not assign courses/sections to
+  a student" after trying the app directly. Turned out to be the new
+  `/admin/sections` page not yet being visible to them (confirmed once
+  pointed there — "I can see the option now"), not a functional bug; live DB
+  inspection during the conversation showed they'd already successfully
+  created a PGDM course/section and assigned a student to it via the new
+  Manage Students drawer while we were talking. While addressing this, tightened
+  the student picker in that drawer per the spec's exact requirement (only
+  show students matching the section's course/batch and not already enrolled
+  elsewhere): added `GET /admin/sections/{id}/eligible-students` (permissive
+  on `NULL` course/batch so newly-created, not-yet-assigned students remain
+  pickable everywhere, strict-match once a student has a course/batch, and
+  excluded entirely once `current_section_id` is set) and wired
+  `AdminSections.tsx`'s Manage Students dropdown to it instead of the
+  unfiltered all-students list, refreshing it after every enroll/remove/bulk
+  action. Verified against the live DB directly (queried real `students` rows
+  including the user's own just-created PGDM enrollment) that the endpoint
+  correctly excludes an already-enrolled student from their own section's
+  list while keeping unassigned students eligible everywhere. Frontend and
+  backend builds both re-verified clean after the change.
+
+  Remaining before this spec is fully done: the "Teaching Sections" block on
+  the faculty user detail page (`/admin/user/:id` is still a full
+  placeholder — building this also means giving that page real content for
+  the first time), a per-student "View Detail" breakdown on the faculty
+  Assigned Cases tab, the student Case Studies page grouping into "Assigned
+  by Your Faculty" vs "Assigned by Your Mentor" (currently a flat filterable
+  list), and a real in-app notification bell (currently icon-only — no
+  backend-fed dropdown/unread state anywhere in the app, though the
+  email-notification-log write on assignment already exists from SPEC_12).
+
+- 2026-07-04: SPEC_16 Faculty → Course → Student Mapping moved to In Progress.
+  Scope covers the admin structural layer (Section Management page, Manage
+  Faculty/Students drawers, faculty "Teaching Sections" block), the faculty
+  academic layer ("My Sections" dashboard block, section-grouped Students
+  page, "Assign to Section" case flow, "Assigned Cases" tracking tab), the
+  student-facing grouped case list (faculty- vs mentor-assigned), and the
+  case-assignment notification trigger — all building on SPEC_12's
+  `class_sections`/`faculty_sections`/`student_sections`/
+  `case_section_assignments` schema.
 
 - 2026-07-03: Started the "Bugs-fixes" initiative on branch `Bugs-fixes`
   (branched from `main`, separate from the not-yet-merged

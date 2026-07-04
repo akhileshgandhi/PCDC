@@ -97,6 +97,36 @@ export interface AdminSectionDetail extends AdminSection {
   students: Array<{ student_id: number; user_id: number; name: string; email: string }>
 }
 
+export interface AdminSectionListItem {
+  id: number
+  course_id: number
+  course_name: string
+  batch_id: number
+  batch_name: string
+  name: string
+  academic_year: string | null
+  status: "active" | "completed"
+  semester_number: number
+  semester_name: string
+  student_count: number
+  faculty_count: number
+  cases_assigned_count: number
+  faculty: Array<{ faculty_id: number; faculty_name: string; subject: string }>
+}
+
+export interface AdminSectionFilters {
+  course_id?: number
+  batch_id?: number
+  status?: string
+}
+
+export interface AdminSectionBulkEnrollResult {
+  enrolled: Array<{ row: number; email: string }>
+  enrolled_count: number
+  errors: Array<{ row: number; email: string; error: string }>
+  error_count: number
+}
+
 export interface AdvanceSemesterResult {
   advanced: Array<{
     student_id: number
@@ -238,8 +268,60 @@ export async function createAdminSection(
   return response.data
 }
 
+export async function getAdminSections(filters: AdminSectionFilters = {}) {
+  const response = await api.get<{ items: AdminSectionListItem[]; total: number }>(
+    "/admin/sections",
+    {
+      params: {
+        course_id: filters.course_id || undefined,
+        batch_id: filters.batch_id || undefined,
+        status: filters.status || undefined,
+      },
+    },
+  )
+  return response.data
+}
+
 export async function getAdminSection(sectionId: number) {
   const response = await api.get<AdminSectionDetail>(`/admin/sections/${sectionId}`)
+  return response.data
+}
+
+export interface AdminEligibleStudent {
+  id: number
+  name: string
+  email: string
+}
+
+export async function getAdminSectionEligibleStudents(sectionId: number) {
+  const response = await api.get<{ items: AdminEligibleStudent[] }>(
+    `/admin/sections/${sectionId}/eligible-students`,
+  )
+  return response.data
+}
+
+export async function removeAdminSectionFaculty(sectionId: number, facultyId: number) {
+  const response = await api.delete<{ removed_count: number }>(
+    `/admin/sections/${sectionId}/faculty/${facultyId}`,
+  )
+  return response.data
+}
+
+export async function removeAdminSectionStudent(sectionId: number, studentId: number) {
+  const response = await api.delete<{ removed: boolean }>(
+    `/admin/sections/${sectionId}/students/${studentId}`,
+  )
+  return response.data
+}
+
+export async function bulkEnrollAdminSectionStudents(sectionId: number, file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  const response = await api.post<AdminSectionBulkEnrollResult>(
+    `/admin/sections/${sectionId}/students/bulk`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  )
   return response.data
 }
 
