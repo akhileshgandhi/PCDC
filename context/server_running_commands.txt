@@ -1,2 +1,16 @@
 Frontend: npm run dev
 Backend: .\.venv\Scripts\python.exe -m uvicorn main:app --reload
+
+9926268079 - nikin Rajput
+
+183.182.87.172 - public IP 
+192.168.4.44 - local IP
+
+WHole case study Vs. breaking down the case study w.r.t different parameter
+
+Concept evaluation 
+Simulation
+development
+Faculty evaluation
+
+183.182.87.172:5173
