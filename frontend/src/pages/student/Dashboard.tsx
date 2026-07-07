@@ -20,12 +20,14 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 
 import {
+  getStudentActiveEngagements,
   getStudentDashboardSummary,
   getStudentProfile,
+  type StudentActiveEngagements,
   type StudentDashboardSummary,
   type StudentProfile,
 } from "../../api/student"
-import CapabilityMatrix from "../../components/student/CapabilityMatrix"
+import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
 import { getCurrentUser } from "../../utils/auth"
 
@@ -55,6 +57,12 @@ const defaultSummary: StudentDashboardSummary = {
   current_level: null,
   active_case: null,
   upcoming_session: null,
+}
+
+const defaultActiveEngagements: StudentActiveEngagements = {
+  active_case_study: null,
+  simulations: { groups: [] },
+  concept_study: { status: "coming_soon", groups: ["Think", "Lead", "Execute", "Grow"] },
 }
 
 function describeDashboardError(error: unknown): string {
@@ -122,6 +130,10 @@ const pathwayItems: PathwayItem[] = [
 export default function Dashboard() {
   const [summary, setSummary] = useState<StudentDashboardSummary>(defaultSummary)
   const [profile, setProfile] = useState<StudentProfile | null>(null)
+  const [activeEngagements, setActiveEngagements] = useState<StudentActiveEngagements>(
+    defaultActiveEngagements,
+  )
+  const [activeMatrixFilter, setActiveMatrixFilter] = useState<MatrixFilter>("case_study")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const currentUser = getCurrentUser()
@@ -132,13 +144,15 @@ export default function Dashboard() {
 
     async function loadDashboard() {
       try {
-        const [summaryData, profileData] = await Promise.all([
+        const [summaryData, profileData, activeEngagementsData] = await Promise.all([
           getStudentDashboardSummary(),
           getStudentProfile(),
+          getStudentActiveEngagements(),
         ])
         if (isMounted) {
           setSummary(summaryData)
           setProfile(profileData)
+          setActiveEngagements(activeEngagementsData)
           setError("")
         }
       } catch (err) {
@@ -231,6 +245,70 @@ export default function Dashboard() {
           </div>
         </section>
 
+        <section>
+          <h2 className="mb-4 text-2xl font-semibold">Active Engagements</h2>
+          <div className="grid gap-5 xl:grid-cols-3">
+            <Card title="Active Case Study">
+              {summary.active_case ? (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">{summary.active_case.title}</h3>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge>{titleCase(summary.active_case.domain)}</Badge>
+                      <Badge>
+                        {summary.active_case.difficulty_label ||
+                          `Level ${summary.active_case.difficulty}`}
+                      </Badge>
+                    </div>
+                  </div>
+                  {summary.active_case.due_date ? (
+                    <p className="text-xs font-semibold text-[#6b7280]">
+                      Due {formatDueDate(summary.active_case.due_date)}
+                    </p>
+                  ) : null}
+                  <Link
+                    to={`/student/case-studies/${summary.active_case.case_id}/attempt`}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
+                  >
+                    Continue Attempt
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </Link>
+                </div>
+              ) : (
+                <div className="py-2 text-center">
+                  <p className="text-sm font-medium text-[#6b7280]">
+                    {isLoading ? "Loading..." : "No case study in progress right now."}
+                  </p>
+                </div>
+              )}
+              <MatrixFilterButton
+                label="Browse Case Studies"
+                filterValue="case_study"
+                activeFilter={activeMatrixFilter}
+                onSelect={setActiveMatrixFilter}
+              />
+            </Card>
+
+            <Card title="Simulations">
+              <MatrixFilterButton
+                label="Browse Simulations"
+                filterValue="simulation"
+                activeFilter={activeMatrixFilter}
+                onSelect={setActiveMatrixFilter}
+              />
+            </Card>
+
+            <Card title="Concept Study">
+              <MatrixFilterButton
+                label="Browse Concepts"
+                filterValue="concept_study"
+                activeFilter={activeMatrixFilter}
+                onSelect={setActiveMatrixFilter}
+              />
+            </Card>
+          </div>
+        </section>
+
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
@@ -238,6 +316,19 @@ export default function Dashboard() {
               <p className="mt-1 text-sm text-[#6b7280]">
                 Real-time performance across core executive competencies.
               </p>
+              {activeMatrixFilter !== "case_study" ? (
+                <p className="mt-1 text-xs font-semibold text-[#92702a]">
+                  Showing: {activeMatrixFilter === "simulation" ? "Simulations" : "Concept Study"}{" "}
+                  only —{" "}
+                  <button
+                    type="button"
+                    onClick={() => setActiveMatrixFilter("case_study")}
+                    className="underline"
+                  >
+                    Clear filter
+                  </button>
+                </p>
+              ) : null}
             </div>
             <button
               type="button"
@@ -248,51 +339,14 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <CapabilityMatrix />
+          <CapabilityMatrix
+            filter={activeMatrixFilter}
+            simulationGroups={activeEngagements.simulations.groups}
+            conceptGroups={activeEngagements.concept_study.groups}
+          />
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-3">
-          <Card title="Active Case Study">
-            {summary.active_case ? (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-semibold">{summary.active_case.title}</h3>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge>{titleCase(summary.active_case.domain)}</Badge>
-                    <Badge>
-                      {summary.active_case.difficulty_label ||
-                        `Level ${summary.active_case.difficulty}`}
-                    </Badge>
-                  </div>
-                </div>
-                {summary.active_case.due_date ? (
-                  <p className="text-xs font-semibold text-[#6b7280]">
-                    Due {formatDueDate(summary.active_case.due_date)}
-                  </p>
-                ) : null}
-                <Link
-                  to={`/student/case-studies/${summary.active_case.case_id}/attempt`}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
-                >
-                  Continue Attempt
-                  <ArrowRight size={17} aria-hidden="true" />
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3 py-2 text-center">
-                <p className="text-sm font-medium text-[#6b7280]">
-                  {isLoading ? "Loading..." : "No case study in progress right now."}
-                </p>
-                <Link
-                  to="/student/case-studies"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
-                >
-                  Browse Case Studies
-                </Link>
-              </div>
-            )}
-          </Card>
-
+        <section className="grid gap-5 xl:grid-cols-2">
           <Card title="AI Coaches">
             <div className="divide-y divide-[#e6e8eb]">
               {coaches.map((coach) => {
@@ -446,6 +500,36 @@ function Card({ title, children }: CardProps) {
       <h2 className="mb-4 text-lg font-semibold">{title}</h2>
       {children}
     </article>
+  )
+}
+
+interface MatrixFilterButtonProps {
+  label: string
+  filterValue: MatrixFilter
+  activeFilter: MatrixFilter
+  onSelect: (filter: MatrixFilter) => void
+}
+
+function MatrixFilterButton({
+  label,
+  filterValue,
+  activeFilter,
+  onSelect,
+}: MatrixFilterButtonProps) {
+  const isActive = filterValue === activeFilter
+  return (
+    <button
+      type="button"
+      aria-pressed={isActive}
+      onClick={() => onSelect(isActive ? "case_study" : filterValue)}
+      className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition ${
+        isActive
+          ? "bg-[#081d3a] text-white"
+          : "border border-[#081d3a] text-[#081d3a] hover:bg-[#081d3a] hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
   )
 }
 

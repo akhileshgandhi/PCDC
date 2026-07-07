@@ -167,3 +167,81 @@ def student_dashboard_summary(
         } if upcoming_session_row else None,
     }
     return cache_set(cache_key, result)
+
+
+SIMULATION_GROUPS = [
+    ("think", "Think"),
+    ("lead", "Lead"),
+    ("execute", "Execute"),
+    ("grow", "Grow"),
+]
+
+
+@student_router.get("/active-engagements")
+def student_active_engagements(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_student(current_user)
+    student_row = db.execute(
+        text("SELECT id FROM students WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]},
+    ).fetchone()
+    if not student_row:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    student_id = student_row.id
+
+    active_case_row = db.execute(
+        text("""
+            SELECT cs.id AS case_id, cs.title, cs.domain, cs.difficulty,
+                   cs.case_code, cs.subject, cs.difficulty_label, ac.due_date
+            FROM assigned_cases ac
+            JOIN case_studies cs ON cs.id = ac.case_study_id
+            WHERE ac.student_id = :student_id AND ac.status = 'active'
+            ORDER BY ac.assigned_at DESC
+            LIMIT 1
+        """),
+        {"student_id": student_id},
+    ).fetchone()
+
+    simulation_rows = db.execute(
+        text("""
+            SELECT c.capability_group, c.name, COALESCE(sc.current_score, 0) AS score
+            FROM capabilities c
+            LEFT JOIN student_capabilities sc
+                ON sc.capability_id = c.id AND sc.student_id = :student_id
+            WHERE c.engagement_type = 'simulation'
+            ORDER BY c.capability_group, c.name
+        """),
+        {"student_id": student_id},
+    ).fetchall()
+
+    capabilities_by_group: Dict[str, Any] = {key: [] for key, _ in SIMULATION_GROUPS}
+    for row in simulation_rows:
+        if row.capability_group in capabilities_by_group:
+            capabilities_by_group[row.capability_group].append(
+                {"name": row.name, "score": int(row.score)}
+            )
+
+    return {
+        "active_case_study": {
+            "case_id": active_case_row.case_id,
+            "title": active_case_row.title,
+            "domain": active_case_row.domain,
+            "difficulty": active_case_row.difficulty,
+            "case_code": active_case_row.case_code,
+            "subject": active_case_row.subject,
+            "difficulty_label": active_case_row.difficulty_label,
+            "due_date": str(active_case_row.due_date) if active_case_row.due_date else None,
+        } if active_case_row else None,
+        "simulations": {
+            "groups": [
+                {"name": label, "capabilities": capabilities_by_group[key]}
+                for key, label in SIMULATION_GROUPS
+            ]
+        },
+        "concept_study": {
+            "status": "coming_soon",
+            "groups": [label for _, label in SIMULATION_GROUPS],
+        },
+    }
