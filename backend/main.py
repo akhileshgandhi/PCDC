@@ -13,9 +13,15 @@ from services.student.router import student_router
 app = FastAPI()
 
 # CORS middleware
+# allow_origin_regex matches localhost or any IPv4-addressed origin on the
+# Vite dev server port, so access from any machine on the network keeps
+# working regardless of which IP it has, without opening the API up to
+# arbitrary hostnames/websites. A regex match still gets the requesting
+# Origin reflected back correctly with credentials (unlike a literal "*",
+# which is invalid combined with allow_credentials).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*","http://183.182.87.172:5173"],  # Allow all origins for development
+    allow_origin_regex=r"https?://(localhost|(\d{1,3}\.){3}\d{1,3}):5173",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
