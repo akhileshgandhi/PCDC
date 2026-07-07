@@ -54,3 +54,29 @@ export async function getStudentProfile() {
   const response = await api.get<StudentProfile>("/student/profile")
   return response.data
 }
+
+export interface SimulationCapability {
+  name: string
+  score: number
+}
+
+export interface SimulationGroup {
+  name: string
+  capabilities: SimulationCapability[]
+}
+
+export interface ConceptStudyPlaceholder {
+  status: "coming_soon"
+  groups: string[]
+}
+
+export interface StudentActiveEngagements {
+  active_case_study: StudentActiveCase | null
+  simulations: { groups: SimulationGroup[] }
+  concept_study: ConceptStudyPlaceholder
+}
+
+export async function getStudentActiveEngagements() {
+  const response = await api.get<StudentActiveEngagements>("/student/active-engagements")
+  return response.data
+}

@@ -1,4 +1,8 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+
+import type { SimulationGroup } from "../../api/student"
+
+export type MatrixFilter = "case_study" | "simulation" | "concept_study"
 
 interface CapabilityMatrixItem {
   name: string
@@ -8,11 +12,11 @@ interface CapabilityMatrixItem {
 interface CapabilityMatrixCategory {
   id: string
   label: string
-  score: number
-  items: CapabilityMatrixItem[]
+  score: number | null
+  items: CapabilityMatrixItem[] | null
 }
 
-const capabilityData: CapabilityMatrixCategory[] = [
+const caseStudyCategories: CapabilityMatrixCategory[] = [
   {
     id: "cognitive",
     label: "Cognitive Capabilities",
@@ -63,19 +67,63 @@ const capabilityData: CapabilityMatrixCategory[] = [
   },
 ]
 
-export default function CapabilityMatrix() {
+function averageScore(items: CapabilityMatrixItem[]): number {
+  if (items.length === 0) return 0
+  return Math.round(items.reduce((sum, item) => sum + item.score, 0) / items.length)
+}
+
+function buildCategories(
+  filter: MatrixFilter,
+  simulationGroups: SimulationGroup[],
+  conceptGroups: string[],
+): CapabilityMatrixCategory[] {
+  if (filter === "simulation") {
+    return simulationGroups.map((group) => ({
+      id: group.name.toLowerCase(),
+      label: group.name,
+      score: averageScore(group.capabilities),
+      items: group.capabilities,
+    }))
+  }
+  if (filter === "concept_study") {
+    return conceptGroups.map((name) => ({
+      id: name.toLowerCase(),
+      label: name,
+      score: null,
+      items: null,
+    }))
+  }
+  return caseStudyCategories
+}
+
+interface CapabilityMatrixProps {
+  filter: MatrixFilter
+  simulationGroups: SimulationGroup[]
+  conceptGroups: string[]
+}
+
+export default function CapabilityMatrix({
+  filter,
+  simulationGroups,
+  conceptGroups,
+}: CapabilityMatrixProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const categories = buildCategories(filter, simulationGroups, conceptGroups)
+
+  useEffect(() => {
+    setActiveCategory(null)
+  }, [filter])
 
   function handleBoxClick(categoryId: string) {
     setActiveCategory((prev) => (prev === categoryId ? null : categoryId))
   }
 
-  const activeData = capabilityData.find((category) => category.id === activeCategory) ?? null
+  const activeData = categories.find((category) => category.id === activeCategory) ?? null
 
   return (
     <div>
       <div className="grid gap-4 sm:grid-cols-2">
-        {capabilityData.map((category) => {
+        {categories.map((category) => {
           const isActive = category.id === activeCategory
           return (
             <button
@@ -90,8 +138,14 @@ export default function CapabilityMatrix() {
               }`}
             >
               <h3 className="text-sm font-medium text-[#111827]">{category.label}</h3>
-              <p className="mt-3 text-3xl font-bold text-[#081d3a]">{category.score}</p>
-              <p className="mt-1 text-xs text-[#6b7280]">avg score</p>
+              {category.score !== null ? (
+                <>
+                  <p className="mt-3 text-3xl font-bold text-[#081d3a]">{category.score}</p>
+                  <p className="mt-1 text-xs text-[#6b7280]">avg score</p>
+                </>
+              ) : (
+                <p className="mt-3 text-xs font-semibold uppercase text-[#6b7280]">TBD</p>
+              )}
             </button>
           )
         })}
@@ -101,26 +155,32 @@ export default function CapabilityMatrix() {
         <div className="mt-4 rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-md">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-[#111827]">{activeData.label}</h3>
-            <span className="text-lg font-bold text-[#081d3a]">{activeData.score}</span>
+            {activeData.score !== null ? (
+              <span className="text-lg font-bold text-[#081d3a]">{activeData.score}</span>
+            ) : null}
           </div>
-          <div className="mt-4 space-y-3">
-            {activeData.items.map((item) => (
-              <div key={item.name} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 text-sm font-medium text-[#111827] sm:w-48">
-                  {item.name}
-                </span>
-                <div className="h-2 flex-1 rounded-full bg-[#e6e8eb]">
-                  <div
-                    className="h-2 rounded-full bg-[#c9a227]"
-                    style={{ width: `${Math.min(100, Math.max(0, item.score))}%` }}
-                  />
+          {activeData.items ? (
+            <div className="mt-4 space-y-3">
+              {activeData.items.map((item) => (
+                <div key={item.name} className="flex items-center gap-3">
+                  <span className="w-40 shrink-0 text-sm font-medium text-[#111827] sm:w-48">
+                    {item.name}
+                  </span>
+                  <div className="h-2 flex-1 rounded-full bg-[#e6e8eb]">
+                    <div
+                      className="h-2 rounded-full bg-[#c9a227]"
+                      style={{ width: `${Math.min(100, Math.max(0, item.score))}%` }}
+                    />
+                  </div>
+                  <span className="w-8 shrink-0 text-right text-sm font-semibold text-[#111827]">
+                    {item.score}
+                  </span>
                 </div>
-                <span className="w-8 shrink-0 text-right text-sm font-semibold text-[#111827]">
-                  {item.score}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm font-medium text-[#6b7280]">Coming Soon</p>
+          )}
         </div>
       ) : null}
     </div>

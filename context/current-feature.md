@@ -6,55 +6,187 @@ In Progress
 
 ## Feature
 
-SPEC_16 Faculty → Course → Student Mapping
+SPEC_16 Active Engagements Section (Student Dashboard)
 
 ## Spec File
 
-`context/features/SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`
+`context/features/SPEC_16_Active_Engagements_Section.md`
+
+Note: this is a separate spec from `context/features/SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`, which reused the same spec number. That spec's remaining items (see History below) are paused, not abandoned.
 
 ## Goals
 
-- Build the admin-controlled structural layer (faculty-to-section, student-to-section) and the faculty-controlled academic layer (case-to-section assignment) on top of SPEC_12's `class_sections`/`faculty_sections`/`student_sections`/`case_section_assignments` tables
-- Admin Portal: new `/admin/sections` Section Management page (list/create sections, filter by course/batch/status, flag unassigned-faculty sections), "Manage Faculty" drawer, "Manage Students" drawer (with bulk CSV enroll), and a "Teaching Sections" block on the faculty user detail page
-- Faculty Portal: "My Sections" block on the dashboard, section-grouped Students page (replacing attempt-based grouping), "Assign to Section" flow from the Case Library (multi-section select, due date, note, notifies all enrolled students), and an "Assigned Cases" tracking tab with per-student progress
-- Student Portal: Case Studies page grouped by source ("Assigned by Your Faculty" vs "Assigned by Your Mentor"), plus in-app + email notification on faculty assignment
-- New endpoints under `/api/admin/sections/*`, `/api/faculty/sections/*`, `/api/faculty/cases/{id}/assign`, `/api/faculty/cases/assigned*`, `/api/student/cases`, and an internal case-assigned notification trigger
-- Confirm SPEC_12 tables (`class_sections`, `faculty_sections`, `student_sections`, `case_section_assignments`, and `assigned_cases.assignment_source`/`section_assignment_id`) already exist before starting; run the SPEC_12 migration first if any are missing
+- Add a new "Active Engagements" section to the Student Dashboard, positioned directly above the existing Capability Matrix (SPEC_13), without modifying SPEC_13's existing combined/overall behavior
+- Three side-by-side boxes: **Active Case Study** (existing component, re-parented under the new heading, no logic changes), **Simulations** (fully defined 4-group × 5-capability structure: Think/Lead/Execute/Grow), and **Concept Study** (placeholder-only "Coming Soon" box, group headers with no backing data)
+- All three boxes share the SPEC_13 accordion primitive (click-to-expand headers, one group expanded at a time, consistent visual language)
+- **NEW (spec updated 2026-07-07, then simplified by the user the same day):** each box gets a full-width "Browse ..." button (Browse Case Studies / Browse Simulations / Browse Concepts). Clicking one sets the dashboard's `activeMatrixFilter` state (no navigation) and swaps which 4 groups the Capability Matrix displays below — **there is no taxonomy mapping and no combined/all state**. Exactly 3 states, `case_study` is the default on page load:
+  - `case_study` (default): unchanged — the existing hardcoded Cognitive/Leadership/Entrepreneurial/Professional cards + sub-capability accordion (SPEC_13 behavior, untouched)
+  - `simulation`: the matrix's 4 cards become Think/Lead/Execute/Grow, populated from the real per-capability scores already returned by `/student/active-engagements` (same data the Simulations box uses — no new endpoint needed)
+  - `concept_study`: the matrix's 4 cards become Think/Lead/Execute/Grow headers, each expanding to a static "Coming Soon" message (mirrors the Concept Study box itself)
+  - Clicking the already-active button clears back to `case_study` (the default), matching the original re-click-to-clear behavior
+- Backend: extend `capabilities` with `engagement_type`/`capability_group` columns, add `simulation_capability_scores` table, seed the 20 Simulations capabilities, expose `GET /api/student/{student_id}/active-engagements` aggregating all three boxes — **no additional backend endpoint required**, since the simplified filter reuses this same payload
+- **Section 5.1's mapping question is superseded/moot:** the spec originally proposed mapping Think/Lead/Execute/Grow onto Cognitive/Leadership/Entrepreneurial/Professional to compute filtered averages under the existing 4-card taxonomy. The user resolved this by deciding the matrix should instead directly swap to each engagement type's *own* groups (Think/Lead/Execute/Grow for Simulations) rather than force-fitting them into the Case Study taxonomy — so no mapping is needed at all
+- Concept Study still has no real data model in this phase — static TBD/"Coming Soon" template only
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`
-- `context/features/SPEC_12` work (courses/sections schema and admin/faculty groundwork this spec builds on)
+- `context/features/SPEC_16_Active_Engagements_Section.md`
+- `context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md` (accordion pattern this spec reuses, and the component the new filter behavior extends)
 
-## Implementation Order (per spec's Build Order)
+## Implementation Order (simplified 2026-07-07 — no mapping, no new endpoint)
 
-1. Admin: Section Management page (`/admin/sections`) — list + create sections
-2. Admin: Manage Faculty drawer — assign/remove faculty per section
-3. Admin: Manage Students drawer — enroll/remove students per section
-4. Admin: Faculty detail page — add "Teaching Sections" block
-5. Faculty: My Sections on dashboard — reads from `faculty_sections`
-6. Faculty: Students page — section-grouped roster
-7. Faculty: Assign to Section flow — case library → assign modal → write records
-8. Faculty: Assigned Cases tracking tab — progress view
-9. Student: Case list — show faculty-assigned vs mentor-assigned, grouped
-10. Notification dispatch — email + in-app on case assignment
+1. DB migration: extend `capabilities` with `engagement_type` and `capability_group` columns — done
+2. DB migration: create `simulation_capability_scores` table — done
+3. Seed the 20 Simulations capabilities (Think/Lead/Execute/Grow × 5) — done
+4. Backend: `GET /api/student/{student_id}/active-engagements` endpoint (Case Study + Simulations scores + static Concept Study placeholder) — done (as `/student/active-engagements`)
+5. Frontend: `<ActiveEngagements />` wrapper + heading — done
+6. Frontend: re-parent existing Active Case Study box under the new wrapper — done
+7. Frontend: `<SimulationsBox />` using the SPEC_13 accordion pattern, wired to the new endpoint — done
+8. Frontend: `<ConceptStudyBox />` with static TBD group headers + "Coming Soon" expand state — done
+9. Frontend: add "Browse Case Studies" / "Browse Simulations" / "Browse Concepts" buttons to the three boxes, wired to a dashboard-level `activeMatrixFilter` state (`'case_study' | 'simulation' | 'concept_study'`, default `'case_study'`); re-clicking the active button resets to `'case_study'`
+10. Frontend: extend `<CapabilityMatrix />` to accept the active filter plus the already-fetched Simulations/Concept Study group data, and swap its 4 displayed cards accordingly (no re-fetch needed — reuses the `/student/active-engagements` payload the Dashboard already has)
+11. Manual verification: all three boxes render side by side, accordion works independently per box, each button toggles the correct matrix view (including re-click to clear back to Case Study), and existing SPEC_13 default view is unaffected
 
 ## Definition of Done
 
-- [x] Admin can create sections, assign/remove faculty (with required subject field), and enroll/remove students (single + bulk CSV) via `/admin/sections`
-- [ ] Faculty detail page shows a "Teaching Sections" block sourced from `faculty_sections`
-- [x] Faculty dashboard shows "My Sections" with per-section student/active-case counts and updated summary totals (My Students, Simulations Running, Pending Reviews) — already built under SPEC_12
-- [x] Faculty Students page groups rosters by section, each student showing capability score/attempts/status — already built under SPEC_12 (not collapsible yet, and links to no detail view yet)
-- [x] Faculty can assign a published case to one or more sections from the Case Library, seeing the notified-student count before confirming; writes `case_section_assignments` + one `assigned_cases` row per enrolled student — already built under SPEC_12 ("Assign to Class")
-- [ ] Faculty Case Library has an "Assigned" tab showing per-assignment progress (already built under SPEC_12), with a "View Detail" per-student breakdown (not yet built)
-- [ ] Student Case Studies page groups cases into "Assigned by Your Faculty" vs "Assigned by Your Mentor", each faculty-assigned case showing due date/note
-- [ ] Students receive in-app + email notification immediately when a faculty assigns a case to their section
-- [ ] Frontend build passes; backend endpoints verified end-to-end against the live dev DB
+- [x] `capabilities` table extended with `engagement_type`/`capability_group`; `simulation_capability_scores` table created
+- [x] 20 Simulations capabilities seeded (5 per group × 4 groups)
+- [x] `GET /student/active-engagements` returns active_case_study/simulations/concept_study payload per spec shape (path adapted to the codebase's JWT-derived-student convention, no `{student_id}` in the URL, matching every other `/student/*` endpoint)
+- [x] "Active Engagements" heading renders above the Capability Matrix with three responsive columns (stacks to 1 column on mobile)
+- [x] Active Case Study box re-parented with no behavioral changes (still sourced from the existing `dashboard/summary.active_case`, unchanged)
+- [x] Simulations and Concept Study boxes are title + "Browse ..." button only — the 4-group accordion detail lives in the Capability Matrix below, shown when that box's filter is active (simplified 2026-07-07, see History; supersedes the original per-box accordion design)
+- [x] Existing SPEC_13 Capability Matrix below this section is unaffected in its default (`case_study`) state
+- [x] Frontend build passes; backend endpoint verified end-to-end against the live dev DB
+- [x] Each box has a full-width "Browse ..." button (Browse Case Studies / Browse Simulations / Browse Concepts), matching the existing button style; the active button is visually distinct (filled navy) from the other two (outlined)
+- [x] Clicking a button sets `activeMatrixFilter`; clicking the already-active one resets to `case_study` (no navigation either way)
+- [x] `<CapabilityMatrix />` swaps its 4 cards based on the active filter: unchanged hardcoded cards for `case_study`, real Think/Lead/Execute/Grow scores (group average) for `simulation`, Think/Lead/Execute/Grow headers with a "Coming Soon" expand for `concept_study`
+- [x] Frontend build passes after the filter wiring
 
 ---
 
 ## History
+
+- 2026-07-07: Simplified the Active Engagements boxes per user feedback on
+  a screenshot: the "Active Case Study" box was rendering two
+  visually-identical "Browse Case Studies" buttons — the pre-existing
+  empty-state `Link` that navigated to `/student/case-studies`, plus the
+  new non-navigating `MatrixFilterButton` added earlier this session.
+  Removed the navigating Link entirely (case_study is the default filter
+  view anyway, and the page-level "Browse Case Studies" action still exists
+  in the hero section above), leaving one button. Also removed the
+  Think/Lead/Execute/Grow accordion detail from the Simulations and Concept
+  Study boxes per direction ("we just need the buttons there, remove rest
+  of the content because that will come in the capability box") — those
+  two boxes now render as just a `<Card>` title + their single "Browse ..."
+  button, with the full group/capability breakdown appearing only in the
+  Capability Matrix section below once that box's filter is selected.
+  Deleted `SimulationsBox.tsx` and `ConceptStudyBox.tsx` as dead code since
+  nothing renders their accordion content anymore. Frontend build
+  (`tsc -b && vite build`) passed.
+
+- 2026-07-07: Implemented the Capability Matrix filter buttons on
+  `feature/active-engagements-section`, resolving the open question from
+  the previous entry. User simplified the design themselves: instead of
+  mapping Think/Lead/Execute/Grow onto the existing Cognitive/Leadership/
+  Entrepreneurial/Professional taxonomy to compute filtered averages, the
+  Capability Matrix now directly swaps to each engagement type's *own*
+  groups. Confirmed with the user (via question) that there is no 4th
+  combined/all state (`case_study` is simply the default of 3 states) and
+  that the Concept Study filter shows the same Think/Lead/Execute/Grow
+  headers as Simulations but with a "Coming Soon" expand, mirroring the
+  Concept Study box itself. No new backend endpoint was needed — the
+  existing `/student/active-engagements` payload already carries everything
+  (`simulations.groups` and `concept_study.groups`), so the whole feature
+  is frontend-only. Rewrote `CapabilityMatrix.tsx` to accept `filter` +
+  `simulationGroups` + `conceptGroups` props and compute its 4 displayed
+  cards per filter (`case_study`: unchanged hardcoded cards; `simulation`:
+  real per-group average of the 5 capability scores; `concept_study`: null
+  score + null items, rendered as "TBD"/"Coming Soon"), resetting the
+  expanded accordion category whenever the filter changes. Added a
+  `MatrixFilterButton` component in `Dashboard.tsx` (filled navy when
+  active, outlined otherwise; clicking the active one resets to
+  `case_study`) placed at the bottom of all three Active Engagements boxes,
+  plus a "Showing: X only — Clear filter" indicator under the Capability
+  Matrix heading when a non-default filter is active. Frontend build
+  (`tsc -b && vite build`) passed; not yet driven in an actual browser since
+  no headless-browser tool is available in this environment — correctness
+  rests on the passing build plus the already-verified `/student/
+  active-engagements` payload shape.
+
+- 2026-07-07: Spec updated by the user — `SPEC_16_Active_Engagements_Section.md`
+  grew significant new scope beyond what was already implemented (see entry
+  below). Added: a full-width "Browse Case Studies / Browse Simulations /
+  Browse Concepts" button on each of the three Active Engagements boxes
+  (Section 3.4); clicking one sets a dashboard-level `activeMatrixFilter`
+  state (no navigation) that filters the existing SPEC_13 Capability Matrix
+  below to show averages computed only from that engagement type, with a
+  "Showing: X only — Clear filter" indicator (Section 3.5), and re-clicking
+  the active button clears back to the combined view; a new
+  `GET /api/student/{student_id}/capability-matrix?engagement_type=...`
+  endpoint to serve the filtered card averages (Section 7.1); and an
+  explicit open question in Section 5.1 (marked "ASSUMPTION — CONFIRM")
+  about how the box groups (Think/Lead/Execute/Grow) map onto the existing
+  Capability Matrix cards (Cognitive/Leadership/Entrepreneurial/
+  Professional) — the spec's proposed mapping sends Grow → Entrepreneurial,
+  but flags that split as debatable (Innovation reads as Entrepreneurial;
+  Learning Agility/Professional Ethics read as Professional) and says it
+  needs confirmation before the filtered-average logic is built. Status
+  kept at In Progress; updated Goals/Implementation Order/Definition of
+  Done above to reflect the already-completed pieces (migration, seed,
+  `/student/active-engagements` endpoint, the three boxes, accordions) versus
+  the new unstarted scope (buttons, filter state, filtered endpoint,
+  `<CapabilityMatrix />` extension), and flagged the Section 5.1 mapping
+  as the blocking next step before that new scope can be implemented.
+
+- 2026-07-07: Implemented SPEC_16 Active Engagements Section on branch
+  `feature/active-engagements-section` (branched from `main`). Added Alembic
+  migration 0010: extended `capabilities` with `engagement_type` (default
+  `'case_study'`) and `capability_group` columns, created
+  `simulation_capability_scores` (referencing `simulation_attempts.id`, the
+  real PK name — the spec's illustrative SQL used `attempt_id`), and seeded
+  the 20 Simulations capabilities (5 each under Think/Lead/Execute/Grow),
+  idempotently via a `WHERE NOT EXISTS` guard. Added `GET
+  /student/active-engagements` to `backend/services/student/router.py`,
+  returning `active_case_study` (same shape as the existing dashboard
+  summary's `active_case`), `simulations.groups[].capabilities[].score`
+  (aggregated from `student_capabilities` LEFT JOINed against the new
+  simulation capabilities so students with no rows yet still see all 20 at a
+  0 score instead of being dropped), and a static `concept_study` placeholder
+  — deviated from the spec's illustrative `/api/student/{student_id}/...`
+  path to `/student/active-engagements` with the student derived from the
+  JWT, matching every other endpoint in this router. Frontend: added
+  `SimulationsBox.tsx` and `ConceptStudyBox.tsx` (both a vertical
+  one-group-expanded-at-a-time accordion, per the spec's box mockup, distinct
+  from SPEC_13's 2x2-grid-plus-panel accordion shape but the same visual
+  language/primitive), wrapped the dashboard in a new "Active Engagements"
+  heading + 3-column grid, and moved the existing "Active Case Study" card
+  into it unchanged (still sourced from `dashboard/summary.active_case`,
+  not the new endpoint's duplicate field, to avoid changing its behavior).
+  Restructured the section below it (AI Coaches / Mentor Support) from a
+  3-column to a 2-column grid now that Active Case Study no longer lives
+  there. Verified end-to-end against the live dev DB: called the new
+  endpoint as the seed student (`student@pcdc.com`), confirmed all 20
+  simulation capabilities render at score 0 by default, inserted a temporary
+  `student_capabilities` row (Strategic Thinking = 77) and confirmed it
+  appeared correctly in the Think group's response, then deleted the test
+  row. Frontend build (`tsc -b && vite build`) passed.
+
+- 2026-07-07: SPEC_16 Active Engagements Section (Student Dashboard) moved to
+  In Progress. Note this spec number collides with the already-in-progress
+  "SPEC_16 Faculty → Course → Student Mapping" (`SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`)
+  — two different spec files were independently numbered SPEC_16. That spec's
+  remaining items (faculty "Teaching Sections" block, Assigned Cases
+  per-student detail view, student faculty-vs-mentor case grouping, real
+  in-app notification bell — see the 2026-07-04 entry below for full detail)
+  are paused, not completed, while work shifts to this new spec per direction.
+  This new spec adds an "Active Engagements" section above the existing
+  Capability Matrix (SPEC_13) on the Student Dashboard: the existing Active
+  Case Study box re-parented as-is, a new Simulations box (4 groups × 5
+  capabilities, backed by new `capabilities.engagement_type`/
+  `capability_group` columns and a new `simulation_capability_scores` table),
+  and a placeholder-only Concept Study box (static "Coming Soon", no data
+  model yet).
 
 - 2026-07-04: Started implementation on branch `feature/faculty-course-student-mapping`
   (branched from `main`). Audited the spec against the codebase first and found
