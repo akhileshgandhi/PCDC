@@ -1,3 +1,4 @@
+
 # Current Feature
 
 ## Status
@@ -6,66 +7,120 @@ In Progress
 
 ## Feature
 
-SPEC_16 Active Engagements Section (Student Dashboard)
+SPEC_17 Fix Internal Network Access (Login Fails via LAN IP)
 
 ## Spec File
 
-`context/features/SPEC_16_Active_Engagements_Section.md`
+`context/features/SPEC_17_Network_Access_Fix.md`
 
-Note: this is a separate spec from `context/features/SPEC_16_FACULTY_STUDENT_COURSE_MAPPING.md`, which reused the same spec number. That spec's remaining items (see History below) are paused, not abandoned.
+Note: this reuses the number of the already-completed `SPEC_17_CASE_STUDIES.md` (Case Studies backend, done 2026-06-25). Two different spec files now share the number 17 — same collision pattern as the two SPEC_16 files earlier in this project.
 
 ## Goals
 
-- Add a new "Active Engagements" section to the Student Dashboard, positioned directly above the existing Capability Matrix (SPEC_13), without modifying SPEC_13's existing combined/overall behavior
-- Three side-by-side boxes: **Active Case Study** (existing component, re-parented under the new heading, no logic changes), **Simulations** (fully defined 4-group × 5-capability structure: Think/Lead/Execute/Grow), and **Concept Study** (placeholder-only "Coming Soon" box, group headers with no backing data)
-- All three boxes share the SPEC_13 accordion primitive (click-to-expand headers, one group expanded at a time, consistent visual language)
-- **NEW (spec updated 2026-07-07, then simplified by the user the same day):** each box gets a full-width "Browse ..." button (Browse Case Studies / Browse Simulations / Browse Concepts). Clicking one sets the dashboard's `activeMatrixFilter` state (no navigation) and swaps which 4 groups the Capability Matrix displays below — **there is no taxonomy mapping and no combined/all state**. Exactly 3 states, `case_study` is the default on page load:
-  - `case_study` (default): unchanged — the existing hardcoded Cognitive/Leadership/Entrepreneurial/Professional cards + sub-capability accordion (SPEC_13 behavior, untouched)
-  - `simulation`: the matrix's 4 cards become Think/Lead/Execute/Grow, populated from the real per-capability scores already returned by `/student/active-engagements` (same data the Simulations box uses — no new endpoint needed)
-  - `concept_study`: the matrix's 4 cards become Think/Lead/Execute/Grow headers, each expanding to a static "Coming Soon" message (mirrors the Concept Study box itself)
-  - Clicking the already-active button clears back to `case_study` (the default), matching the original re-click-to-clear behavior
-- Backend: extend `capabilities` with `engagement_type`/`capability_group` columns, add `simulation_capability_scores` table, seed the 20 Simulations capabilities, expose `GET /api/student/{student_id}/active-engagements` aggregating all three boxes — **no additional backend endpoint required**, since the simplified filter reuses this same payload
-- **Section 5.1's mapping question is superseded/moot:** the spec originally proposed mapping Think/Lead/Execute/Grow onto Cognitive/Leadership/Entrepreneurial/Professional to compute filtered averages under the existing 4-card taxonomy. The user resolved this by deciding the matrix should instead directly swap to each engagement type's *own* groups (Think/Lead/Execute/Grow for Simulations) rather than force-fitting them into the Case Study taxonomy — so no mapping is needed at all
-- Concept Study still has no real data model in this phase — static TBD/"Coming Soon" template only
+- Fix login failing when the app is accessed from another machine on the internal network via the server's LAN IP (`http://183.182.87.172:5173`) — the browser blocks the request with a CORS/Private-Network-Access error
+- Root cause is not really CORS: the frontend's API base URL is hardcoded/pointed at `127.0.0.1:8000`, which resolves to the *requesting* machine's own loopback, not the server — so a different machine on the network is calling itself and finding nothing listening
+- Frontend: find every `127.0.0.1`/`localhost:8000` reference pointing at the backend (confirmed present in `AuthContext.tsx` around line 31, plus possibly `.env`/an axios config file), and centralize into a single `VITE_API_BASE_URL` env var set to `http://183.182.87.172:8000`; restart Vite after changing env vars since they're baked in at server start
+- Backend: confirm uvicorn is bound to `--host 0.0.0.0` (not the `127.0.0.1` default) so it accepts connections from other LAN machines, and check firewall allows inbound on 8000/5173
+- CORS: `main.py`'s `allow_origins` currently mixes explicit origins with a wildcard `"*"` alongside `allow_credentials=True`, which is redundant and invalid per spec in strict browsers — clean up to explicit origins only (localhost for local dev + the LAN IP)
+- Out of scope: exposing the app to the public internet, HTTPS/reverse-proxy setup, or production deployment config — internal LAN dev/testing access only
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_16_Active_Engagements_Section.md`
-- `context/features/SPEC_13_CAPABILITY_MATRIX_COMPONENT.md` (accordion pattern this spec reuses, and the component the new filter behavior extends)
+- `context/features/SPEC_17_Network_Access_Fix.md`
+- `backend/main.py` (uvicorn host binding + CORS `allow_origins`)
+- Frontend `AuthContext.tsx` (confirmed hardcoded `127.0.0.1` around line 31, per the console trace in the spec) and any `.env`/API-config file
 
-## Implementation Order (simplified 2026-07-07 — no mapping, no new endpoint)
+## Implementation Order (per spec's Build Order, Section 5)
 
-1. DB migration: extend `capabilities` with `engagement_type` and `capability_group` columns — done
-2. DB migration: create `simulation_capability_scores` table — done
-3. Seed the 20 Simulations capabilities (Think/Lead/Execute/Grow × 5) — done
-4. Backend: `GET /api/student/{student_id}/active-engagements` endpoint (Case Study + Simulations scores + static Concept Study placeholder) — done (as `/student/active-engagements`)
-5. Frontend: `<ActiveEngagements />` wrapper + heading — done
-6. Frontend: re-parent existing Active Case Study box under the new wrapper — done
-7. Frontend: `<SimulationsBox />` using the SPEC_13 accordion pattern, wired to the new endpoint — done
-8. Frontend: `<ConceptStudyBox />` with static TBD group headers + "Coming Soon" expand state — done
-9. Frontend: add "Browse Case Studies" / "Browse Simulations" / "Browse Concepts" buttons to the three boxes, wired to a dashboard-level `activeMatrixFilter` state (`'case_study' | 'simulation' | 'concept_study'`, default `'case_study'`); re-clicking the active button resets to `'case_study'`
-10. Frontend: extend `<CapabilityMatrix />` to accept the active filter plus the already-fetched Simulations/Concept Study group data, and swap its 4 displayed cards accordingly (no re-fetch needed — reuses the `/student/active-engagements` payload the Dashboard already has)
-11. Manual verification: all three boxes render side by side, accordion works independently per box, each button toggles the correct matrix view (including re-click to clear back to Case Study), and existing SPEC_13 default view is unaffected
+1. Search the frontend codebase for all `127.0.0.1` / `localhost:8000` references
+2. Centralize into a single `VITE_API_BASE_URL` env var if not already; set it to `http://183.182.87.172:8000`
+3. Restart the Vite dev server (env vars are baked in at server start, not picked up by a browser refresh)
+4. Update the uvicorn startup command to `--host 0.0.0.0`
+5. Restart the backend server
+6. Clean up `allow_origins` in the CORS middleware (remove the redundant `"*"` mixed with explicit origins, per Section 3.3)
+7. Run verification (Section 4) from a second machine on the network: confirm backend listens on `0.0.0.0:8000`, login request from another device goes to the LAN IP (not `127.0.0.1`), no CORS error, successful response — repeat from at least one more device
 
 ## Definition of Done
 
-- [x] `capabilities` table extended with `engagement_type`/`capability_group`; `simulation_capability_scores` table created
-- [x] 20 Simulations capabilities seeded (5 per group × 4 groups)
-- [x] `GET /student/active-engagements` returns active_case_study/simulations/concept_study payload per spec shape (path adapted to the codebase's JWT-derived-student convention, no `{student_id}` in the URL, matching every other `/student/*` endpoint)
-- [x] "Active Engagements" heading renders above the Capability Matrix with three responsive columns (stacks to 1 column on mobile)
-- [x] Active Case Study box re-parented with no behavioral changes (still sourced from the existing `dashboard/summary.active_case`, unchanged)
-- [x] Simulations and Concept Study boxes are title + "Browse ..." button only — the 4-group accordion detail lives in the Capability Matrix below, shown when that box's filter is active (simplified 2026-07-07, see History; supersedes the original per-box accordion design)
-- [x] Existing SPEC_13 Capability Matrix below this section is unaffected in its default (`case_study`) state
-- [x] Frontend build passes; backend endpoint verified end-to-end against the live dev DB
-- [x] Each box has a full-width "Browse ..." button (Browse Case Studies / Browse Simulations / Browse Concepts), matching the existing button style; the active button is visually distinct (filled navy) from the other two (outlined)
-- [x] Clicking a button sets `activeMatrixFilter`; clicking the already-active one resets to `case_study` (no navigation either way)
-- [x] `<CapabilityMatrix />` swaps its 4 cards based on the active filter: unchanged hardcoded cards for `case_study`, real Think/Lead/Execute/Grow scores (group average) for `simulation`, Think/Lead/Execute/Grow headers with a "Coming Soon" expand for `concept_study`
-- [x] Frontend build passes after the filter wiring
+- [x] Frontend API base URL is no longer hardcoded to `127.0.0.1` — deviated from the spec's literal ask (a fixed `VITE_API_BASE_URL` pointed at one LAN IP) in favor of a dynamic fallback (see History): `axios.ts` now defaults to `${window.location.protocol}//${window.location.hostname}:8000/api/v1` when `VITE_API_URL` isn't set, so it works from any machine/IP without maintaining a hardcoded address; `VITE_API_URL` still works as an explicit override
+- [x] uvicorn bound to `--host 0.0.0.0` — confirmed via `netstat` showing `0.0.0.0:8000` LISTENING (documented in `context/server_running_commands.txt`)
+- [x] CORS cleaned up — replaced the wildcard-`"*"`-mixed-with-explicit-origins list (invalid alongside `allow_credentials=True`) with `allow_origin_regex` matching `localhost`/any IPv4 address on port 5173, so any device on the network works without hardcoding one IP, while rejecting arbitrary hostnames (verified `evil.com:5173` gets a 400, real IPs get their Origin correctly reflected)
+- [x] `vite.config.ts` explicitly sets `server: { host: true }` so `npm run dev` reliably binds to all interfaces (previously relied on an unrecorded manual `--host` flag or a Vite default)
+- [x] Verified end-to-end in this environment: started uvicorn with `--host 0.0.0.0`, confirmed `0.0.0.0:8000` listening; sent CORS preflight + real login requests with `Origin` headers for `192.168.4.16:5173`, `183.182.87.172:5173` (the spec's own "public IP" per `server_running_commands.txt`), `localhost:5173`, and `127.0.0.1:5173` — all got 200s with the correct `Access-Control-Allow-Origin` reflected; `evil.com:5173` correctly got 400
+- [x] Frontend build (`tsc -b && vite build`) and backend syntax check (`py_compile`) both passed
+- [ ] Firewall inbound rules for ports 8000/5173 — not verifiable from this environment; confirm on the actual server machine if a second LAN device still can't reach it
+- [ ] Final confirmation from a real second/third physical device on the network (this session could only simulate LAN origins via `Origin` headers against localhost, not a true separate-machine test)
 
 ---
 
 ## History
+
+- 2026-07-07: Implemented SPEC_17 Fix Internal Network Access on branch
+  `feature/network-access-fix` (branched from `main`). Investigated before
+  implementing: this machine's actual LAN IP (`192.168.4.16`, via
+  `Get-NetIPAddress`) didn't match the spec's example
+  (`183.182.87.172`) — turned out `context/server_running_commands.txt`
+  already documented `183.182.87.172` as the "public IP" (not a private
+  LAN address) used for external access, alongside a `192.168.4.44` local
+  IP. Asked the user whether to hardcode a `VITE_API_URL` per the spec's
+  literal wording or derive the API host dynamically; they chose dynamic.
+  Changed `frontend/src/api/axios.ts`'s baseURL fallback from the hardcoded
+  `http://127.0.0.1:8000/api/v1` to
+  `` `${window.location.protocol}//${window.location.hostname}:8000/api/v1` ``,
+  so the frontend always calls back to whatever host served the page —
+  works for `127.0.0.1`, `localhost`, any LAN IP, or the public IP, with no
+  address to maintain (`VITE_API_URL` still overrides it if ever needed).
+  Note: searched the whole frontend for hardcoded `127.0.0.1`/`localhost`
+  references and found only this one line — `AuthContext.tsx`, which the
+  spec named specifically, already routes through this same shared `api`
+  instance and had no hardcoded URL of its own.
+
+  For `backend/main.py`'s CORS config (found already showing signs of a
+  prior manual edit toward the spec's quoted "before" state — a redundant
+  `"*"` mixed with explicit origins under `allow_credentials=True`), first
+  tried an `allow_origin_regex` restricted to private RFC1918 ranges, then
+  caught during testing that this would incorrectly exclude the
+  spec's own public-IP access pattern; broadened it, but a second test
+  round caught that an overly-permissive version (`[\w.\-]+`) let
+  `evil.com:5173` through — a real CORS security regression, since matched
+  origins get their exact Origin reflected and accepted with credentials.
+  Settled on `allow_origin_regex=r"https?://(localhost|(\d{1,3}\.){3}\d{1,3}):5173"`
+  — matches `localhost` or any bare IPv4 address on the Vite port (covers
+  every device on the network regardless of IP, public or private) while
+  rejecting arbitrary hostnames. Verified with curl: preflight + real
+  `/auth/login` requests using `Origin` headers for `192.168.4.16:5173`,
+  `183.182.87.172:5173`, `localhost:5173`, and `127.0.0.1:5173` all
+  succeeded with the correct origin reflected back and a valid token
+  returned; `evil.com:5173` got 400. Also updated
+  `context/server_running_commands.txt`'s documented uvicorn command to
+  include `--host 0.0.0.0 --port 8000` (previously undocumented and
+  defaulting to loopback-only), confirmed via `netstat` that the server
+  actually listens on `0.0.0.0:8000` once started that way, and added
+  `server: { host: true }` to `frontend/vite.config.ts` so `npm run dev`
+  reliably binds to all interfaces without relying on an unrecorded manual
+  flag. Frontend build (`tsc -b && vite build`) and backend syntax check
+  (`py_compile`) both passed. Could not test from an actual second
+  physical device in this environment — verification here is a curl-based
+  simulation of LAN origins against localhost, not a true cross-machine
+  test; recommend a final real-device check per the spec's Section 4.
+
+- 2026-07-07: SPEC_16 Active Engagements Section (Student Dashboard) marked
+  Completed — all Definition of Done items checked (see the prior entries
+  below for the full implementation history). Committed and merged into
+  `main` via `feature/active-engagements-section` (`--no-ff`), local branch
+  deleted, and pushed to `origin/main`. SPEC_17 Fix Internal Network Access
+  moved to In Progress: login fails when the app is accessed from another
+  machine on the internal network via the server's LAN IP, because the
+  frontend's API base URL is hardcoded to `127.0.0.1:8000` (resolves to the
+  *requesting* machine's own loopback, not the server) and/or uvicorn isn't
+  bound to `0.0.0.0`. Scope: centralize the frontend API base URL into a
+  `VITE_API_BASE_URL` env var pointed at the LAN IP, confirm/fix the uvicorn
+  host binding, clean up the CORS `allow_origins` wildcard-plus-credentials
+  redundancy in `main.py`, and verify login end-to-end from at least two
+  other LAN devices. Note this spec number collides with the
+  already-completed `SPEC_17_CASE_STUDIES.md` (Case Studies backend) —
+  same collision pattern as the two SPEC_16 files earlier in this project.
 
 - 2026-07-07: Simplified the Active Engagements boxes per user feedback on
   a screenshot: the "Active Case Study" box was rendering two
