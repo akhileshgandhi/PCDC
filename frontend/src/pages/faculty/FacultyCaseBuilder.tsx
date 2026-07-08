@@ -5,10 +5,13 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  Pencil,
   PenLine,
+  RefreshCw,
   Save,
   Send,
   Sparkles,
+  X,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
@@ -16,26 +19,25 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   createFacultyCase,
   generateFacultyCase,
+  generateFacultyCaseQuestions,
+  generateFacultyRapidFireQuestions,
   getFacultyCaseGenerationJob,
-  getFacultyCapabilities,
   getFacultyCase,
   getFacultyCourses,
   publishFacultyCase,
   updateFacultyCase,
   type CaseSectionKey,
   type CaseSectionMeta,
-  type FacultyCapability,
   type FacultyCaseGenerationJob,
   type FacultyCaseEditor,
   type FacultyCaseInstructions,
-  type FacultyCaseMarks,
-  type FacultyCaseMetadata,
   type FacultyCaseQuestion,
   type FacultyCaseRecommendation,
   type FacultyCaseTiming,
   type FacultyCourseOption,
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
+import CapabilitySelector from "../../components/faculty/CapabilitySelector"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 type BuilderMode = "scratch" | "ai"
@@ -46,7 +48,6 @@ interface CoreFormState {
   difficulty: string
   duration_minutes: string
   capabilities: string[]
-  expected_outcomes: string
 }
 
 const industries = [
@@ -75,7 +76,6 @@ const sectionDefinitions: Array<{ key: CaseSectionKey; label: string; required?:
 const arraySections = new Set<CaseSectionKey>(["reflection_questions", "learning_outcomes"])
 
 const bloomsLevels = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
-const difficultyLabels = ["Foundation", "Regular", "Pro", "Expert", "Champion"]
 const WRITTEN_QUESTION_COUNT = 3
 const RAPID_FIRE_QUESTION_COUNT = 6
 
@@ -131,24 +131,12 @@ function normalizeCaseData(data: FacultyCaseEditor): FacultyCaseEditor {
   }
 }
 
-const fallbackCapabilities: FacultyCapability[] = [
-  "Communication",
-  "Leadership",
-  "Problem Solving",
-  "Decision Making",
-  "Innovation",
-  "Strategic Thinking",
-  "Entrepreneurship",
-  "Professionalism",
-].map((name, index) => ({ id: -(index + 1), name }))
-
 const emptyCoreForm: CoreFormState = {
   title: "",
   industry: "business",
   difficulty: "3",
   duration_minutes: "45",
   capabilities: [],
-  expected_outcomes: "",
 }
 
 export default function FacultyCaseBuilder() {
@@ -157,12 +145,10 @@ export default function FacultyCaseBuilder() {
   const caseId = id ? Number(id) : null
   const [mode, setMode] = useState<BuilderMode | null>(caseId ? "scratch" : null)
   const [coreForm, setCoreForm] = useState<CoreFormState>(emptyCoreForm)
-  const [capabilities, setCapabilities] = useState<FacultyCapability[]>([])
   const [courses, setCourses] = useState<FacultyCourseOption[]>([])
   const [caseData, setCaseData] = useState<FacultyCaseEditor | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [notice, setNotice] = useState("")
-  const [isLoadingCapabilities, setIsLoadingCapabilities] = useState(true)
   const [isLoading, setIsLoading] = useState(Boolean(caseId))
   const [isSaving, setIsSaving] = useState(false)
   const [generatingSection, setGeneratingSection] = useState<CaseSectionKey | "full" | null>(
@@ -170,35 +156,12 @@ export default function FacultyCaseBuilder() {
   )
   const [generationJob, setGenerationJob] = useState<FacultyCaseGenerationJob | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [caseSummary, setCaseSummary] = useState("")
+  const [showQuestionsModal, setShowQuestionsModal] = useState(false)
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false)
+  const [isGeneratingRapidFire, setIsGeneratingRapidFire] = useState(false)
+  const [editableRapidFireIndices, setEditableRapidFireIndices] = useState<Set<number>>(new Set())
   const shouldOfferFullDraft = mode === "ai" && caseData && allSectionsEmpty(caseData)
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadCapabilities() {
-      try {
-        const data = await getFacultyCapabilities()
-        if (isMounted) {
-          setCapabilities(data.length > 0 ? data : fallbackCapabilities)
-        }
-      } catch {
-        if (isMounted) {
-          setCapabilities(fallbackCapabilities)
-          setErrors(["Unable to load capabilities from the server. Showing default capabilities."])
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingCapabilities(false)
-        }
-      }
-    }
-
-    loadCapabilities()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -328,9 +291,6 @@ export default function FacultyCaseBuilder() {
     if (coreForm.capabilities.length === 0) {
       nextErrors.push("Select at least one targeted capability.")
     }
-    if (!coreForm.expected_outcomes.trim()) {
-      nextErrors.push("Expected outcomes are required.")
-    }
     setErrors(nextErrors)
     return nextErrors.length === 0
   }
@@ -348,7 +308,6 @@ export default function FacultyCaseBuilder() {
         difficulty: Number(coreForm.difficulty),
         duration_minutes: Number(coreForm.duration_minutes),
         capabilities: coreForm.capabilities,
-        expected_outcomes: coreForm.expected_outcomes,
       })
       setCaseData(normalizeCaseData(data))
       setErrors([])
@@ -374,7 +333,6 @@ export default function FacultyCaseBuilder() {
         difficulty: Number(coreForm.difficulty),
         duration_minutes: Number(coreForm.duration_minutes),
         capabilities: coreForm.capabilities,
-        expected_outcomes: coreForm.expected_outcomes,
         sections: caseData.sections,
         section_meta: caseData.section_meta,
         metadata: caseData.metadata,
@@ -410,16 +368,6 @@ export default function FacultyCaseBuilder() {
     })
   }
 
-  function updateMetadata<K extends keyof FacultyCaseMetadata>(
-    field: K,
-    value: FacultyCaseMetadata[K],
-  ) {
-    setCaseData((current) => {
-      if (!current) return current
-      return { ...current, metadata: { ...current.metadata, [field]: value } }
-    })
-  }
-
   function updateRecommendation<K extends keyof FacultyCaseRecommendation>(
     field: K,
     value: FacultyCaseRecommendation[K],
@@ -434,13 +382,6 @@ export default function FacultyCaseBuilder() {
     setCaseData((current) => {
       if (!current) return current
       return { ...current, timing: { ...current.timing, [field]: value } }
-    })
-  }
-
-  function updateMarks<K extends keyof FacultyCaseMarks>(field: K, value: number | null) {
-    setCaseData((current) => {
-      if (!current) return current
-      return { ...current, marks: { ...current.marks, [field]: value } }
     })
   }
 
@@ -508,6 +449,69 @@ export default function FacultyCaseBuilder() {
       setErrors(["AI generation failed. Existing content was preserved."])
       setGeneratingSection(null)
     }
+  }
+
+  async function handleGenerateQuestions() {
+    if (!caseData || !caseSummary.trim()) {
+      return
+    }
+    const hasManualContent = caseData.questions.some((question) => question.question_text.trim())
+    if (
+      hasManualContent &&
+      !window.confirm("This will overwrite your existing questions. Continue?")
+    ) {
+      return
+    }
+    setIsGeneratingQuestions(true)
+    setNotice("")
+    try {
+      const questions = await generateFacultyCaseQuestions(caseData.id, caseSummary.trim())
+      setCaseData((current) =>
+        current ? { ...current, questions: padQuestions(questions) } : current,
+      )
+      setShowQuestionsModal(false)
+      setErrors([])
+      setNotice("Questions generated. Review and edit as needed.")
+    } catch {
+      setErrors(["AI question generation failed. Existing content was preserved."])
+    } finally {
+      setIsGeneratingQuestions(false)
+    }
+  }
+
+  async function handleGenerateRapidFire() {
+    if (!caseData || !caseSummary.trim()) {
+      return
+    }
+    setIsGeneratingRapidFire(true)
+    setNotice("")
+    try {
+      const questions = await generateFacultyRapidFireQuestions(caseData.id, caseSummary.trim())
+      setCaseData((current) =>
+        current
+          ? { ...current, rapid_fire_questions: padRapidFireQuestions(questions) }
+          : current,
+      )
+      setEditableRapidFireIndices(new Set())
+      setErrors([])
+      setNotice("Rapid fire questions generated.")
+    } catch {
+      setErrors(["AI rapid fire generation failed. Existing content was preserved."])
+    } finally {
+      setIsGeneratingRapidFire(false)
+    }
+  }
+
+  function toggleRapidFireEditable(index: number) {
+    setEditableRapidFireIndices((current) => {
+      const next = new Set(current)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
   }
 
   async function handlePublish() {
@@ -589,8 +593,6 @@ export default function FacultyCaseBuilder() {
           <CoreFieldsStep
             mode={mode}
             form={coreForm}
-            capabilities={capabilities}
-            isLoadingCapabilities={isLoadingCapabilities}
             isSaving={isSaving}
             onBack={() => setMode(null)}
             onFieldChange={updateCoreField}
@@ -601,8 +603,6 @@ export default function FacultyCaseBuilder() {
           <EditorStep
             caseData={caseData}
             coreForm={coreForm}
-            capabilities={capabilities}
-            isLoadingCapabilities={isLoadingCapabilities}
             publishBlockers={publishBlockers}
             shouldOfferFullDraft={Boolean(shouldOfferFullDraft)}
             generatingSection={generatingSection}
@@ -611,14 +611,23 @@ export default function FacultyCaseBuilder() {
             onCapabilityToggle={toggleCapability}
             onSectionChange={updateSection}
             onGenerate={handleGenerate}
-            onMetadataChange={updateMetadata}
             onTimingChange={updateTiming}
-            onMarksChange={updateMarks}
             onInstructionsChange={updateInstructions}
             onQuestionChange={updateQuestion}
             onRapidFireChange={updateRapidFireQuestion}
             courses={courses}
             onRecommendationChange={updateRecommendation}
+            caseSummary={caseSummary}
+            onCaseSummaryChange={setCaseSummary}
+            showQuestionsModal={showQuestionsModal}
+            onOpenQuestionsModal={() => setShowQuestionsModal(true)}
+            onCloseQuestionsModal={() => setShowQuestionsModal(false)}
+            isGeneratingQuestions={isGeneratingQuestions}
+            onGenerateQuestions={handleGenerateQuestions}
+            isGeneratingRapidFire={isGeneratingRapidFire}
+            onGenerateRapidFire={handleGenerateRapidFire}
+            editableRapidFireIndices={editableRapidFireIndices}
+            onToggleRapidFireEditable={toggleRapidFireEditable}
           />
         )}
       </div>
@@ -675,8 +684,6 @@ function EntryCard({ title, description, icon: Icon, onClick }: EntryCardProps) 
 interface CoreFieldsStepProps {
   mode: BuilderMode
   form: CoreFormState
-  capabilities: FacultyCapability[]
-  isLoadingCapabilities: boolean
   isSaving: boolean
   onBack: () => void
   onFieldChange: (field: keyof CoreFormState, value: string) => void
@@ -687,8 +694,6 @@ interface CoreFieldsStepProps {
 function CoreFieldsStep({
   mode,
   form,
-  capabilities,
-  isLoadingCapabilities,
   isSaving,
   onBack,
   onFieldChange,
@@ -710,13 +715,7 @@ function CoreFieldsStep({
           Change mode
         </button>
       </div>
-      <CoreFieldsForm
-        form={form}
-        capabilities={capabilities}
-        isLoadingCapabilities={isLoadingCapabilities}
-        onFieldChange={onFieldChange}
-        onCapabilityToggle={onCapabilityToggle}
-      />
+      <CoreFieldsForm form={form} onFieldChange={onFieldChange} onCapabilityToggle={onCapabilityToggle} />
       <button
         type="button"
         onClick={onContinue}
@@ -733,8 +732,6 @@ function CoreFieldsStep({
 interface EditorStepProps {
   caseData: FacultyCaseEditor
   coreForm: CoreFormState
-  capabilities: FacultyCapability[]
-  isLoadingCapabilities: boolean
   publishBlockers: string[]
   shouldOfferFullDraft: boolean
   generatingSection: CaseSectionKey | "full" | null
@@ -743,12 +740,7 @@ interface EditorStepProps {
   onCapabilityToggle: (capabilityName: string) => void
   onSectionChange: (section: CaseSectionKey, value: string) => void
   onGenerate: (section?: CaseSectionKey) => void
-  onMetadataChange: <K extends keyof FacultyCaseMetadata>(
-    field: K,
-    value: FacultyCaseMetadata[K],
-  ) => void
   onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
-  onMarksChange: <K extends keyof FacultyCaseMarks>(field: K, value: number | null) => void
   onInstructionsChange: <K extends keyof FacultyCaseInstructions>(
     field: K,
     value: string,
@@ -768,13 +760,22 @@ interface EditorStepProps {
     field: K,
     value: FacultyCaseRecommendation[K],
   ) => void
+  caseSummary: string
+  onCaseSummaryChange: (value: string) => void
+  showQuestionsModal: boolean
+  onOpenQuestionsModal: () => void
+  onCloseQuestionsModal: () => void
+  isGeneratingQuestions: boolean
+  onGenerateQuestions: () => void
+  isGeneratingRapidFire: boolean
+  onGenerateRapidFire: () => void
+  editableRapidFireIndices: Set<number>
+  onToggleRapidFireEditable: (index: number) => void
 }
 
 function EditorStep({
   caseData,
   coreForm,
-  capabilities,
-  isLoadingCapabilities,
   publishBlockers,
   shouldOfferFullDraft,
   generatingSection,
@@ -783,14 +784,23 @@ function EditorStep({
   onCapabilityToggle,
   onSectionChange,
   onGenerate,
-  onMetadataChange,
   onTimingChange,
-  onMarksChange,
   onInstructionsChange,
   onQuestionChange,
   onRapidFireChange,
   courses,
   onRecommendationChange,
+  caseSummary,
+  onCaseSummaryChange,
+  showQuestionsModal,
+  onOpenQuestionsModal,
+  onCloseQuestionsModal,
+  isGeneratingQuestions,
+  onGenerateQuestions,
+  isGeneratingRapidFire,
+  onGenerateRapidFire,
+  editableRapidFireIndices,
+  onToggleRapidFireEditable,
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
@@ -830,16 +840,8 @@ function EditorStep({
             The editor will refresh when it is ready.
           </div>
         ) : null}
-        <CoreFieldsForm
-          form={coreForm}
-          capabilities={capabilities}
-          isLoadingCapabilities={isLoadingCapabilities}
-          onFieldChange={onFieldChange}
-          onCapabilityToggle={onCapabilityToggle}
-        />
+        <CoreFieldsForm form={coreForm} onFieldChange={onFieldChange} onCapabilityToggle={onCapabilityToggle} />
       </section>
-
-      <MetadataPanel metadata={caseData.metadata} onChange={onMetadataChange} />
 
       <RecommendationPanel
         recommendation={caseData.recommendation}
@@ -847,19 +849,35 @@ function EditorStep({
         onChange={onRecommendationChange}
       />
 
-      <TimingMarksPanel
-        timing={caseData.timing}
-        marks={caseData.marks}
-        onTimingChange={onTimingChange}
-        onMarksChange={onMarksChange}
-      />
+      <TimingPanel timing={caseData.timing} onTimingChange={onTimingChange} />
 
       <InstructionsPanel instructions={caseData.instructions} onChange={onInstructionsChange} />
 
-      <QuestionsPanel questions={caseData.questions} onChange={onQuestionChange} />
+      <QuestionsPanel
+        questions={caseData.questions}
+        onChange={onQuestionChange}
+        onOpenGenerateModal={onOpenQuestionsModal}
+      />
+
+      <GenerateQuestionsModal
+        isOpen={showQuestionsModal}
+        summary={caseSummary}
+        onSummaryChange={onCaseSummaryChange}
+        difficultyLevel={Number(coreForm.difficulty)}
+        capabilities={coreForm.capabilities}
+        isGenerating={isGeneratingQuestions}
+        onCancel={onCloseQuestionsModal}
+        onGenerate={onGenerateQuestions}
+      />
 
       <RapidFirePanel
         questions={caseData.rapid_fire_questions}
+        summary={caseSummary}
+        onSummaryChange={onCaseSummaryChange}
+        isGenerating={isGeneratingRapidFire}
+        onGenerate={onGenerateRapidFire}
+        editableIndices={editableRapidFireIndices}
+        onToggleEditable={onToggleRapidFireEditable}
         onChange={onRapidFireChange}
       />
 
@@ -905,19 +923,11 @@ function EditorStep({
 
 interface CoreFieldsFormProps {
   form: CoreFormState
-  capabilities: FacultyCapability[]
-  isLoadingCapabilities: boolean
   onFieldChange: (field: keyof CoreFormState, value: string) => void
   onCapabilityToggle: (capabilityName: string) => void
 }
 
-function CoreFieldsForm({
-  form,
-  capabilities,
-  isLoadingCapabilities,
-  onFieldChange,
-  onCapabilityToggle,
-}: CoreFieldsFormProps) {
+function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsFormProps) {
   return (
     <div className="grid gap-4">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -963,48 +973,7 @@ function CoreFieldsForm({
           onChange={(value) => onFieldChange("duration_minutes", value)}
         />
       </div>
-      <div>
-        <p className="text-sm font-semibold text-[#111827]">Capabilities Targeted</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {isLoadingCapabilities ? (
-            <span className="inline-flex items-center gap-2 text-sm font-medium text-[#6b7280]">
-              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
-              Loading capabilities...
-            </span>
-          ) : null}
-          {!isLoadingCapabilities && capabilities.length === 0 ? (
-            <span className="text-sm font-medium text-[#b42318]">
-              No capabilities are available.
-            </span>
-          ) : null}
-          {!isLoadingCapabilities && capabilities.map((capability) => {
-            const isSelected = form.capabilities.includes(capability.name)
-            return (
-              <button
-                key={capability.id}
-                type="button"
-                onClick={() => onCapabilityToggle(capability.name)}
-                className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${
-                  isSelected
-                    ? "border-[#0b1d3a] bg-[#0b1d3a] text-white"
-                    : "border-[#e6e8eb] bg-white text-[#111827] hover:border-[#c9a227]"
-                }`}
-              >
-                {capability.name}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-      <label className="grid gap-2 text-sm font-semibold text-[#111827]">
-        Expected Outcomes
-        <textarea
-          value={form.expected_outcomes}
-          onChange={(event) => onFieldChange("expected_outcomes", event.target.value)}
-          rows={4}
-          className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-        />
-      </label>
+      <CapabilitySelector selected={form.capabilities} onToggle={onCapabilityToggle} />
     </div>
   )
 }
@@ -1100,67 +1069,7 @@ function SelectField({ label, value, options, onChange }: SelectFieldProps) {
   )
 }
 
-interface MetadataPanelProps {
-  metadata: FacultyCaseMetadata
-  onChange: <K extends keyof FacultyCaseMetadata>(field: K, value: FacultyCaseMetadata[K]) => void
-}
-
-function MetadataPanel({ metadata, onChange }: MetadataPanelProps) {
-  return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold">Case Metadata</h2>
-      <p className="mt-1 text-sm text-[#6b7280]">
-        Identity and classification fields used for case codes, filtering, and search.
-      </p>
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <TextField
-          label="Case Code"
-          value={metadata.case_code ?? ""}
-          onChange={(value) => onChange("case_code", value)}
-        />
-        <TextField
-          label="Volume"
-          value={metadata.volume ?? ""}
-          onChange={(value) => onChange("volume", value)}
-        />
-        <TextField
-          label="Subject"
-          value={metadata.subject ?? ""}
-          onChange={(value) => onChange("subject", value)}
-        />
-        <TextField
-          label="Functional Area"
-          value={metadata.functional_area ?? ""}
-          onChange={(value) => onChange("functional_area", value)}
-        />
-        <TextField
-          label="Capability Category"
-          value={metadata.capability_category ?? ""}
-          onChange={(value) => onChange("capability_category", value)}
-        />
-        <SelectField
-          label="Difficulty Label"
-          value={metadata.difficulty_label ?? ""}
-          options={difficultyLabels}
-          onChange={(value) => onChange("difficulty_label", value)}
-        />
-        <TextField
-          label="Target Learners"
-          value={metadata.target_learners ?? ""}
-          onChange={(value) => onChange("target_learners", value)}
-        />
-        <TextAreaField
-          label="Bloom's Levels (one per line)"
-          value={(metadata.blooms_levels ?? []).join("\n")}
-          rows={3}
-          onChange={(value) => onChange("blooms_levels", linesToList(value))}
-        />
-      </div>
-    </section>
-  )
-}
-
-const recommendableSemesters = Array.from({ length: 12 }, (_, index) => index + 1)
+const recommendableSemesters = [1, 2, 3, 4]
 
 interface RecommendationPanelProps {
   recommendation: FacultyCaseRecommendation
@@ -1246,26 +1155,20 @@ function RecommendationPanel({ recommendation, courses, onChange }: Recommendati
   )
 }
 
-interface TimingMarksPanelProps {
+interface TimingPanelProps {
   timing: FacultyCaseTiming
-  marks: FacultyCaseMarks
   onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
-  onMarksChange: <K extends keyof FacultyCaseMarks>(field: K, value: number | null) => void
 }
 
-function TimingMarksPanel({
-  timing,
-  marks,
-  onTimingChange,
-  onMarksChange,
-}: TimingMarksPanelProps) {
+function TimingPanel({ timing, onTimingChange }: TimingPanelProps) {
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold">Time &amp; Marks Breakdown</h2>
+      <h2 className="text-2xl font-semibold">Time Breakdown</h2>
       <p className="mt-1 text-sm text-[#6b7280]">
-        Reading, writing, and rapid fire time in minutes; marks out of 10 (7 written + 3 rapid fire).
+        Reading and answer writing time in minutes. Rapid fire time (8 min) and marks (7 written +
+        3 rapid fire = 10 total) are fixed platform constants applied automatically.
       </p>
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <NumberField
           label="Reading Time (min)"
           value={timing.reading_time_minutes}
@@ -1275,26 +1178,6 @@ function TimingMarksPanel({
           label="Answer Writing Time (min)"
           value={timing.answer_writing_time_minutes}
           onChange={(value) => onTimingChange("answer_writing_time_minutes", value)}
-        />
-        <NumberField
-          label="Rapid Fire Time (min)"
-          value={timing.rapid_fire_time_minutes}
-          onChange={(value) => onTimingChange("rapid_fire_time_minutes", value)}
-        />
-        <NumberField
-          label="Total Marks"
-          value={marks.total_marks}
-          onChange={(value) => onMarksChange("total_marks", value)}
-        />
-        <NumberField
-          label="Written Marks"
-          value={marks.written_marks}
-          onChange={(value) => onMarksChange("written_marks", value)}
-        />
-        <NumberField
-          label="Rapid Fire Marks"
-          value={marks.rapid_fire_marks}
-          onChange={(value) => onMarksChange("rapid_fire_marks", value)}
         />
       </div>
     </section>
@@ -1366,15 +1249,28 @@ interface QuestionsPanelProps {
     field: K,
     value: FacultyCaseQuestion[K],
   ) => void
+  onOpenGenerateModal: () => void
 }
 
-function QuestionsPanel({ questions, onChange }: QuestionsPanelProps) {
+function QuestionsPanel({ questions, onChange, onOpenGenerateModal }: QuestionsPanelProps) {
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold">Structured Written Questions</h2>
-      <p className="mt-1 text-sm text-[#6b7280]">
-        Three questions with marks, word limits, model answers, and a marking scheme.
-      </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold">Structured Written Questions</h2>
+          <p className="mt-1 text-sm text-[#6b7280]">
+            Three questions with marks, word limits, model answers, and a marking scheme.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenGenerateModal}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+        >
+          <Sparkles size={16} aria-hidden="true" />
+          Generate Questions with AI
+        </button>
+      </div>
       <div className="mt-5 grid gap-5">
         {questions.map((question, index) => (
           <article
@@ -1441,8 +1337,100 @@ function QuestionsPanel({ questions, onChange }: QuestionsPanelProps) {
   )
 }
 
+interface GenerateQuestionsModalProps {
+  isOpen: boolean
+  summary: string
+  onSummaryChange: (value: string) => void
+  difficultyLevel: number
+  capabilities: string[]
+  isGenerating: boolean
+  onCancel: () => void
+  onGenerate: () => void
+}
+
+function GenerateQuestionsModal({
+  isOpen,
+  summary,
+  onSummaryChange,
+  difficultyLevel,
+  capabilities,
+  isGenerating,
+  onCancel,
+  onGenerate,
+}: GenerateQuestionsModalProps) {
+  if (!isOpen) {
+    return null
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-xl font-semibold text-[#111827]">Generate Questions</h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-[#6b7280] transition hover:text-[#111827]"
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+        </div>
+        <label className="mt-4 grid gap-2 text-sm font-semibold text-[#111827]">
+          Briefly describe what this case is about
+          <textarea
+            value={summary}
+            onChange={(event) => onSummaryChange(event.target.value)}
+            rows={4}
+            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+          />
+        </label>
+        <div className="mt-4 rounded-md bg-[#f9fafb] p-3 text-sm text-[#6b7280]">
+          <p className="font-semibold text-[#111827]">
+            The AI will generate 3 questions calibrated to:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>Difficulty: Level {difficultyLevel}</li>
+            <li>
+              Capabilities: {capabilities.length > 0 ? capabilities.join(", ") : "None selected yet"}
+            </li>
+            <li>Marks: Q1=2, Q2=2, Q3=3</li>
+          </ul>
+        </div>
+        <div className="mt-5 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isGenerating}
+            className="rounded-md border border-[#e6e8eb] px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#c9a227] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={isGenerating || !summary.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isGenerating ? (
+              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+            ) : (
+              <Sparkles size={16} aria-hidden="true" />
+            )}
+            Generate Questions
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface RapidFirePanelProps {
   questions: FacultyRapidFireQuestion[]
+  summary: string
+  onSummaryChange: (value: string) => void
+  isGenerating: boolean
+  onGenerate: () => void
+  editableIndices: Set<number>
+  onToggleEditable: (index: number) => void
   onChange: <K extends keyof FacultyRapidFireQuestion>(
     index: number,
     field: K,
@@ -1450,37 +1438,103 @@ interface RapidFirePanelProps {
   ) => void
 }
 
-function RapidFirePanel({ questions, onChange }: RapidFirePanelProps) {
+function RapidFirePanel({
+  questions,
+  summary,
+  onSummaryChange,
+  isGenerating,
+  onGenerate,
+  editableIndices,
+  onToggleEditable,
+  onChange,
+}: RapidFirePanelProps) {
+  const hasGenerated = questions.some((question) => question.question_text.trim())
+
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
       <h2 className="text-2xl font-semibold">Rapid Fire Questions</h2>
       <p className="mt-1 text-sm text-[#6b7280]">
-        Six quick question/answer pairs shown after the written submission.
+        Six quick question/answer pairs shown after the written submission, generated by AI from a
+        case summary.
       </p>
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        {questions.map((question, index) => (
-          <article
-            key={question.sequence}
-            className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
-          >
-            <h3 className="text-sm font-semibold text-[#111827]">Q{question.sequence}</h3>
-            <div className="mt-3 grid gap-3">
-              <TextAreaField
-                label="Question"
-                value={question.question_text}
-                rows={2}
-                onChange={(value) => onChange(index, "question_text", value)}
-              />
-              <TextAreaField
-                label="Answer"
-                value={question.answer_text ?? ""}
-                rows={2}
-                onChange={(value) => onChange(index, "answer_text", value)}
-              />
-            </div>
-          </article>
-        ))}
+
+      <div className="mt-5 rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4">
+        <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+          Case Summary for Rapid Fire Generation
+          <textarea
+            value={summary}
+            onChange={(event) => onSummaryChange(event.target.value)}
+            rows={3}
+            placeholder="Briefly describe the core business situation and key facts from this case..."
+            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={isGenerating || !summary.trim()}
+          className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isGenerating ? (
+            <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+          ) : hasGenerated ? (
+            <RefreshCw size={16} aria-hidden="true" />
+          ) : (
+            <Sparkles size={16} aria-hidden="true" />
+          )}
+          {hasGenerated ? "Regenerate" : "Generate Rapid Fire Questions"}
+        </button>
       </div>
+
+      {hasGenerated ? (
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          {questions.map((question, index) => {
+            const isEditable = editableIndices.has(index)
+            return (
+              <article
+                key={question.sequence}
+                className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-[#111827]">Q{question.sequence}</h3>
+                  <button
+                    type="button"
+                    onClick={() => onToggleEditable(index)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#6b7280] transition hover:text-[#111827]"
+                  >
+                    <Pencil size={13} aria-hidden="true" />
+                    {isEditable ? "Done" : "Edit"}
+                  </button>
+                </div>
+                {isEditable ? (
+                  <div className="mt-3 grid gap-3">
+                    <TextAreaField
+                      label="Question"
+                      value={question.question_text}
+                      rows={2}
+                      onChange={(value) => onChange(index, "question_text", value)}
+                    />
+                    <TextAreaField
+                      label="Answer"
+                      value={question.answer_text ?? ""}
+                      rows={2}
+                      onChange={(value) => onChange(index, "answer_text", value)}
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-2 text-sm leading-6 text-[#111827]">
+                    <p>{question.question_text}</p>
+                    <p className="mt-1 text-[#6b7280]">
+                      <span className="font-semibold text-[#111827]">Answer: </span>
+                      {question.answer_text}
+                    </p>
+                  </div>
+                )}
+              </article>
+            )
+          })}
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -1591,7 +1645,6 @@ function caseToCoreForm(caseData: FacultyCaseEditor): CoreFormState {
     difficulty: String(caseData.difficulty),
     duration_minutes: String(caseData.duration_minutes),
     capabilities: caseData.capabilities,
-    expected_outcomes: caseData.expected_outcomes,
   }
 }
 

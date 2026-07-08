@@ -86,6 +86,35 @@ Output must match the provided JSON schema exactly.
 CASE_GENERATION_JOBS: Dict[str, Dict[str, Any]] = {}
 CASE_GENERATION_JOBS_LOCK = threading.Lock()
 
+DIFFICULTY_LABELS = ["Foundation", "Regular", "Pro", "Expert", "Champion"]
+FIXED_QUESTION_MARKS = [2, 2, 3]
+RAPID_FIRE_GENERATION_COUNT = 6
+
+GENERATE_QUESTIONS_PROMPT = """
+You are generating Structured Written Questions for an MBA/PGDM business
+case study simulation. Given the case's core fields and a short case summary,
+produce exactly 3 written questions with model answers and a marking scheme,
+calibrated to the stated difficulty and targeted capabilities. Follow a
+Bloom's taxonomy progression across the 3 questions: question 1 should test
+lower-order thinking (Remember/Understand), question 2 middle-order
+(Apply/Analyze), and question 3 higher-order thinking (Evaluate/Create).
+Output must match the provided JSON schema exactly.
+"""
+
+GENERATE_RAPID_FIRE_PROMPT = """
+You are generating Rapid Fire round questions for an MBA/PGDM business case
+study simulation. Given the case's core fields and a short case summary,
+produce exactly 6 short-answer factual questions that test recall and
+understanding of the case facts, appropriate for a timed 8-minute round, each
+with a concise 1-2 sentence answer. Output must match the provided JSON
+schema exactly.
+"""
+
+
+def difficulty_label_for(difficulty: int) -> str:
+    index = max(0, min(difficulty - 1, len(DIFFICULTY_LABELS) - 1))
+    return DIFFICULTY_LABELS[index]
+
 
 class CaseCoreFields(BaseModel):
     title: str
@@ -93,7 +122,7 @@ class CaseCoreFields(BaseModel):
     difficulty: int
     duration_minutes: int
     capabilities: List[str] = Field(default_factory=list)
-    expected_outcomes: str
+    expected_outcomes: Optional[str] = ""
     metadata: Optional[Dict[str, Any]] = None
     timing: Optional[Dict[str, Any]] = None
     marks: Optional[Dict[str, Any]] = None
@@ -139,6 +168,14 @@ class RubricRequest(BaseModel):
     case_specific_criteria: List[str] = Field(default_factory=list)
 
 
+class GenerateQuestionsRequest(BaseModel):
+    summary: str
+
+
+class GenerateRapidFireRequest(BaseModel):
+    summary: str
+
+
 class AssignCaseToSectionsRequest(BaseModel):
     section_ids: List[int]
     due_date: Optional[str] = None
@@ -167,8 +204,6 @@ def validate_core_fields(data: CaseCoreFields) -> None:
         raise HTTPException(status_code=400, detail="Duration must be at least 1 minute")
     if not data.capabilities:
         raise HTTPException(status_code=400, detail="At least one capability is required")
-    if not data.expected_outcomes.strip():
-        raise HTTPException(status_code=400, detail="Expected outcomes are required")
 
 
 def empty_sections() -> Dict[str, Any]:
@@ -272,21 +307,29 @@ def normalize_case_metadata(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+# Rapid Fire time/marks and the written/total marks split are fixed platform
+# constants, not faculty-configurable — applied silently on every case save
+# regardless of what (if anything) the client sends for them.
+RAPID_FIRE_TIME_MINUTES = 8
+RAPID_FIRE_MARKS = 3
+WRITTEN_MARKS = 7
+TOTAL_MARKS = 10
+
+
 def normalize_case_timing(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     data = data or {}
     return {
         "reading_time_minutes": int_value(data.get("reading_time_minutes")),
         "answer_writing_time_minutes": int_value(data.get("answer_writing_time_minutes")),
-        "rapid_fire_time_minutes": int_value(data.get("rapid_fire_time_minutes")),
+        "rapid_fire_time_minutes": RAPID_FIRE_TIME_MINUTES,
     }
 
 
 def normalize_case_marks(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    data = data or {}
     return {
-        "total_marks": float_value(data.get("total_marks")),
-        "written_marks": float_value(data.get("written_marks")),
-        "rapid_fire_marks": float_value(data.get("rapid_fire_marks")),
+        "total_marks": TOTAL_MARKS,
+        "written_marks": WRITTEN_MARKS,
+        "rapid_fire_marks": RAPID_FIRE_MARKS,
     }
 
 
@@ -847,6 +890,211 @@ def call_openai_case_generation(
     return validate_generated_sections(json.loads(content), requested_sections)
 
 
+def build_generate_questions_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "questions": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "question_text": {"type": "string"},
+                        "blooms_level": {"type": "string"},
+                        "word_limit_min": {"type": "integer"},
+                        "word_limit_max": {"type": "integer"},
+                        "instructions": {"type": "string"},
+                        "model_answer": {"type": "string"},
+                        "alternative_answers": {"type": "array", "items": {"type": "string"}},
+                        "marking_scheme": {"type": "string"},
+                    },
+                    "required": [
+                        "question_text",
+                        "blooms_level",
+                        "word_limit_min",
+                        "word_limit_max",
+                        "instructions",
+                        "model_answer",
+                        "alternative_answers",
+                        "marking_scheme",
+                    ],
+                },
+            },
+        },
+        "required": ["questions"],
+    }
+
+
+def build_generate_questions_prompt(
+    row: Any,
+    capabilities: List[str],
+    difficulty_label: str,
+    summary: str,
+) -> str:
+    prompt = {
+        "case_title": row.title,
+        "difficulty_level": row.difficulty,
+        "difficulty_label": difficulty_label,
+        "capabilities_targeted": capabilities,
+        "case_summary": summary,
+        "fixed_marks_per_question": FIXED_QUESTION_MARKS,
+    }
+    return json.dumps(prompt)
+
+
+def call_openai_generate_questions(
+    row: Any,
+    capabilities: List[str],
+    difficulty_label: str,
+    summary: str,
+) -> List[Dict[str, Any]]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OpenAI API key is not configured")
+
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=CASE_GENERATION_MODEL,
+        messages=[
+            {"role": "system", "content": GENERATE_QUESTIONS_PROMPT},
+            {
+                "role": "user",
+                "content": build_generate_questions_prompt(
+                    row, capabilities, difficulty_label, summary
+                ),
+            },
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "faculty_generate_questions",
+                "strict": True,
+                "schema": build_generate_questions_schema(),
+            },
+        },
+        timeout=60,
+    )
+    content = response.choices[0].message.content
+    if not content:
+        raise RuntimeError("OpenAI returned an empty response")
+    questions = json.loads(content).get("questions")
+    if not isinstance(questions, list) or len(questions) != 3:
+        raise ValueError("AI did not return exactly 3 questions")
+
+    return [
+        {
+            "question_number": index + 1,
+            "question_text": str(question.get("question_text", "")).strip(),
+            "marks": FIXED_QUESTION_MARKS[index],
+            "blooms_level": text_value(question.get("blooms_level")),
+            "word_limit_min": int_value(question.get("word_limit_min")),
+            "word_limit_max": int_value(question.get("word_limit_max")),
+            "instructions": text_value(question.get("instructions")),
+            "model_answer": text_value(question.get("model_answer")),
+            "alternative_answers": [
+                str(answer).strip()
+                for answer in question.get("alternative_answers", [])
+                if str(answer).strip()
+            ],
+            "marking_scheme": text_value(question.get("marking_scheme")),
+        }
+        for index, question in enumerate(questions)
+    ]
+
+
+def build_generate_rapid_fire_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "questions": {
+                "type": "array",
+                "minItems": RAPID_FIRE_GENERATION_COUNT,
+                "maxItems": RAPID_FIRE_GENERATION_COUNT,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "question_text": {"type": "string"},
+                        "answer_text": {"type": "string"},
+                    },
+                    "required": ["question_text", "answer_text"],
+                },
+            },
+        },
+        "required": ["questions"],
+    }
+
+
+def build_generate_rapid_fire_prompt(
+    row: Any,
+    capabilities: List[str],
+    difficulty_label: str,
+    summary: str,
+) -> str:
+    prompt = {
+        "case_title": row.title,
+        "difficulty_level": row.difficulty,
+        "difficulty_label": difficulty_label,
+        "capabilities_targeted": capabilities,
+        "case_summary": summary,
+    }
+    return json.dumps(prompt)
+
+
+def call_openai_generate_rapid_fire(
+    row: Any,
+    capabilities: List[str],
+    difficulty_label: str,
+    summary: str,
+) -> List[Dict[str, Any]]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OpenAI API key is not configured")
+
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=CASE_GENERATION_MODEL,
+        messages=[
+            {"role": "system", "content": GENERATE_RAPID_FIRE_PROMPT},
+            {
+                "role": "user",
+                "content": build_generate_rapid_fire_prompt(
+                    row, capabilities, difficulty_label, summary
+                ),
+            },
+        ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "faculty_generate_rapid_fire",
+                "strict": True,
+                "schema": build_generate_rapid_fire_schema(),
+            },
+        },
+        timeout=60,
+    )
+    content = response.choices[0].message.content
+    if not content:
+        raise RuntimeError("OpenAI returned an empty response")
+    questions = json.loads(content).get("questions")
+    if not isinstance(questions, list) or len(questions) != RAPID_FIRE_GENERATION_COUNT:
+        raise ValueError("AI did not return exactly 6 rapid fire questions")
+
+    return [
+        {
+            "sequence": index + 1,
+            "question_text": str(question.get("question_text", "")).strip(),
+            "answer_text": text_value(question.get("answer_text")),
+        }
+        for index, question in enumerate(questions)
+    ]
+
+
 def set_generation_job(job_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     with CASE_GENERATION_JOBS_LOCK:
         job = CASE_GENERATION_JOBS.get(job_id)
@@ -1211,13 +1459,15 @@ def faculty_capabilities(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     require_faculty(current_user)
-    count = db.execute(text("SELECT COUNT(*) FROM capabilities")).scalar() or 0
+    count = db.execute(
+        text("SELECT COUNT(*) FROM capabilities WHERE engagement_type = 'case_study'")
+    ).scalar() or 0
     if count == 0:
         for capability in DEFAULT_CAPABILITIES:
             db.execute(
                 text("""
-                    INSERT INTO capabilities (name, weightage)
-                    VALUES (:name, 1)
+                    INSERT INTO capabilities (name, weightage, engagement_type)
+                    VALUES (:name, 1, 'case_study')
                 """),
                 {"name": capability},
             )
@@ -1227,6 +1477,7 @@ def faculty_capabilities(
         text("""
             SELECT id, name
             FROM capabilities
+            WHERE engagement_type = 'case_study'
             ORDER BY name
         """)
     ).fetchall()
@@ -1244,7 +1495,8 @@ def create_faculty_case(
     domain = normalize_domain(data.industry)
     sections = empty_sections()
     section_meta = empty_section_meta()
-    content = serialize_case_content(data.expected_outcomes, sections, section_meta)
+    expected_outcomes = data.expected_outcomes or ""
+    content = serialize_case_content(expected_outcomes, sections, section_meta)
     metadata = normalize_case_metadata(data.metadata)
     timing = normalize_case_timing(data.timing)
     marks = normalize_case_marks(data.marks)
@@ -1285,7 +1537,7 @@ def create_faculty_case(
         """),
         {
             "title": data.title.strip(),
-            "description": data.expected_outcomes.strip(),
+            "description": expected_outcomes.strip(),
             "content": content,
             "domain": domain,
             "difficulty": data.difficulty,
@@ -1293,11 +1545,7 @@ def create_faculty_case(
             "created_by": current_user["id"],
             **metadata,
             **timing,
-            "total_marks": marks["total_marks"] if marks["total_marks"] is not None else 10,
-            "written_marks": marks["written_marks"] if marks["written_marks"] is not None else 7,
-            "rapid_fire_marks": (
-                marks["rapid_fire_marks"] if marks["rapid_fire_marks"] is not None else 3
-            ),
+            **marks,
             **instructions,
             **recommendation,
         },
@@ -1474,23 +1722,12 @@ def update_faculty_case(
         normalize_case_timing(data.timing)
         if data.timing is not None
         else {
-            key: existing_values.get(key)
-            for key in [
-                "reading_time_minutes",
-                "answer_writing_time_minutes",
-                "rapid_fire_time_minutes",
-            ]
+            "reading_time_minutes": existing_values.get("reading_time_minutes"),
+            "answer_writing_time_minutes": existing_values.get("answer_writing_time_minutes"),
+            "rapid_fire_time_minutes": RAPID_FIRE_TIME_MINUTES,
         }
     )
-    marks = (
-        normalize_case_marks(data.marks)
-        if data.marks is not None
-        else {
-            "total_marks": existing_values.get("total_marks"),
-            "written_marks": existing_values.get("written_marks"),
-            "rapid_fire_marks": existing_values.get("rapid_fire_marks"),
-        }
-    )
+    marks = normalize_case_marks(data.marks)
     instructions = (
         normalize_case_instructions(data.instructions)
         if data.instructions is not None
@@ -1569,11 +1806,7 @@ def update_faculty_case(
             "learning_outcomes": section_to_text(sections.get("learning_outcomes")),
             **metadata,
             **timing,
-            "total_marks": marks["total_marks"] if marks["total_marks"] is not None else 10,
-            "written_marks": marks["written_marks"] if marks["written_marks"] is not None else 7,
-            "rapid_fire_marks": (
-                marks["rapid_fire_marks"] if marks["rapid_fire_marks"] is not None else 3
-            ),
+            **marks,
             **instructions,
             **recommendation,
         },
@@ -1662,6 +1895,48 @@ def get_faculty_case_generation_job(
         return generation_job_response(dict(job))
 
 
+@faculty_router.post("/cases/{case_id}/generate-questions")
+def generate_faculty_case_questions(
+    case_id: int,
+    data: GenerateQuestionsRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    row = get_owned_case_row(db, case_id, current_user)
+    if not data.summary.strip():
+        raise HTTPException(status_code=400, detail="A case summary is required")
+    capabilities = get_capability_tags(db, case_id)
+    try:
+        questions = call_openai_generate_questions(
+            row, capabilities, difficulty_label_for(row.difficulty), data.summary.strip()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI question generation failed: {exc}")
+    return {"questions": questions}
+
+
+@faculty_router.post("/cases/{case_id}/generate-rapid-fire")
+def generate_faculty_case_rapid_fire(
+    case_id: int,
+    data: GenerateRapidFireRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    row = get_owned_case_row(db, case_id, current_user)
+    if not data.summary.strip():
+        raise HTTPException(status_code=400, detail="A case summary is required")
+    capabilities = get_capability_tags(db, case_id)
+    try:
+        questions = call_openai_generate_rapid_fire(
+            row, capabilities, difficulty_label_for(row.difficulty), data.summary.strip()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI rapid fire generation failed: {exc}")
+    return {"questions": questions}
+
+
 @faculty_router.post("/cases/{case_id}/publish")
 def publish_faculty_case(
     case_id: int,
@@ -1684,8 +1959,6 @@ def publish_faculty_case(
         missing_fields.append("duration")
     if not get_capability_tags(db, case_id):
         missing_fields.append("capabilities")
-    if not parsed_content["expected_outcomes"]:
-        missing_fields.append("expected_outcomes")
     for section in ["situation", "objectives", "timeline", "reflection_questions"]:
         if not section_has_content(sections.get(section)):
             missing_fields.append(section)

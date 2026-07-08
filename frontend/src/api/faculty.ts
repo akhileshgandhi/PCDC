@@ -82,11 +82,6 @@ export type CaseSectionKey =
 export type CaseSectionMeta = "ai_generated" | "edited" | "manual"
 export type CaseSectionValue = string | string[]
 
-export interface FacultyCapability {
-  id: number
-  name: string
-}
-
 export interface FacultyCaseMetadata {
   case_code?: string | null
   volume?: string | null
@@ -184,7 +179,7 @@ export interface CreateFacultyCasePayload {
   difficulty: number
   duration_minutes: number
   capabilities: string[]
-  expected_outcomes: string
+  expected_outcomes?: string
   metadata?: FacultyCaseMetadata
   timing?: FacultyCaseTiming
   marks?: FacultyCaseMarks
@@ -276,11 +271,6 @@ export async function getFacultyCases(filters: FacultyCaseFilters = {}) {
   return response.data
 }
 
-export async function getFacultyCapabilities() {
-  const response = await api.get<FacultyCapability[]>("/faculty/capabilities")
-  return response.data
-}
-
 export async function getFacultyCourses() {
   const response = await api.get<{ items: FacultyCourseOption[] }>("/faculty/courses")
   return response.data
@@ -335,6 +325,22 @@ export async function saveFacultyCaseRubric(caseId: number, payload: FacultyRubr
 export async function publishFacultyCase(caseId: number) {
   const response = await api.post<FacultyCaseEditor>(`/faculty/cases/${caseId}/publish`)
   return response.data
+}
+
+export async function generateFacultyCaseQuestions(caseId: number, summary: string) {
+  const response = await api.post<{ questions: FacultyCaseQuestion[] }>(
+    `/faculty/cases/${caseId}/generate-questions`,
+    { summary },
+  )
+  return response.data.questions
+}
+
+export async function generateFacultyRapidFireQuestions(caseId: number, summary: string) {
+  const response = await api.post<{ questions: FacultyRapidFireQuestion[] }>(
+    `/faculty/cases/${caseId}/generate-rapid-fire`,
+    { summary },
+  )
+  return response.data.questions
 }
 
 export async function getFacultySections() {
