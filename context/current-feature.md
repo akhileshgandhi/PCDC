@@ -7,54 +7,80 @@ In Progress
 
 ## Feature
 
-SPEC_17 Fix Internal Network Access (Login Fails via LAN IP)
+SPEC_18 Case Builder Form — Revision
 
 ## Spec File
 
-`context/features/SPEC_17_Network_Access_Fix.md`
+`context/features/SPEC_18_CASE_BUILDER_FORM_REVISION.md`
 
-Note: this reuses the number of the already-completed `SPEC_17_CASE_STUDIES.md` (Case Studies backend, done 2026-06-25). Two different spec files now share the number 17 — same collision pattern as the two SPEC_16 files earlier in this project.
+Note: the spec file's own internal heading reads "SPEC_16: Case Builder Form — Revision" even though the filename is `SPEC_18_...` — a mismatch between filename and in-document title, on top of the project's existing pattern of duplicate spec numbers (two SPEC_16 files, two SPEC_17 files). Treating the filename (`SPEC_18`) as authoritative here since it's what's referenced going forward.
 
 ## Goals
 
-- Fix login failing when the app is accessed from another machine on the internal network via the server's LAN IP (`http://183.182.87.172:5173`) — the browser blocks the request with a CORS/Private-Network-Access error
-- Root cause is not really CORS: the frontend's API base URL is hardcoded/pointed at `127.0.0.1:8000`, which resolves to the *requesting* machine's own loopback, not the server — so a different machine on the network is calling itself and finding nothing listening
-- Frontend: find every `127.0.0.1`/`localhost:8000` reference pointing at the backend (confirmed present in `AuthContext.tsx` around line 31, plus possibly `.env`/an axios config file), and centralize into a single `VITE_API_BASE_URL` env var set to `http://183.182.87.172:8000`; restart Vite after changing env vars since they're baked in at server start
-- Backend: confirm uvicorn is bound to `--host 0.0.0.0` (not the `127.0.0.1` default) so it accepts connections from other LAN machines, and check firewall allows inbound on 8000/5173
-- CORS: `main.py`'s `allow_origins` currently mixes explicit origins with a wildcard `"*"` alongside `allow_credentials=True`, which is redundant and invalid per spec in strict browsers — clean up to explicit origins only (localhost for local dev + the LAN IP)
-- Out of scope: exposing the app to the public internet, HTTPS/reverse-proxy setup, or production deployment config — internal LAN dev/testing access only
+- Capabilities Targeted: replace the flat capability chip row with a hierarchical 4-category expandable selector (Cognitive / Leadership / Entrepreneurial / Professional, 5 sub-capabilities each); at least 1 sub-capability required to save; selected values still save as the same flat array of names as before (no DB change)
+- Remove the Expected Outcomes textarea from Core Fields entirely (UI-only removal; leave the DB column alone)
+- Remove the entire Case Metadata section (Case Code, Volume, Subject, Functional Area, Capability Category, Difficulty Label, Target Learners, Bloom's Levels) — UI-only, DB columns stay for Admin Case Import
+- Recommended Semesters: cut from Sem 1–12 down to Sem 1–4 only
+- Time & Marks Breakdown: remove Rapid Fire Time, Total Marks, Written Marks, Rapid Fire Marks fields from the form; backend must silently default these on every save (`rapid_fire_time_minutes=8`, `rapid_fire_marks=3`, `written_marks=7`, `total_marks=10`) since they're fixed platform constants, not faculty-configurable
+- Structured Written Questions: add a "Generate Questions with AI" button + summary-input modal; new `POST /faculty/cases/{id}/generate-questions` endpoint calling OpenAI with title/difficulty/capabilities/summary context, returning 3 questions (fixed marks Q1=2/Q2=2/Q3=3, Bloom's progression low→high); overwrite-confirm dialog if manual content already exists
+- Rapid Fire Questions: replace the 6 manual Q&A cards entirely with AI generation from a case-summary textarea; new `POST /faculty/cases/{id}/generate-rapid-fire` endpoint returning 6 `{question, answer}` pairs; results shown as read-only cards with per-card "Edit" toggle and a "Regenerate" button
+- Out of scope per spec: no other Case Builder sections affected (Recommended Course & Semester's course list, Student Instructions & Faculty Notes panel stay unchanged)
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_17_Network_Access_Fix.md`
-- `backend/main.py` (uvicorn host binding + CORS `allow_origins`)
-- Frontend `AuthContext.tsx` (confirmed hardcoded `127.0.0.1` around line 31, per the console trace in the spec) and any `.env`/API-config file
+- `context/features/SPEC_18_CASE_BUILDER_FORM_REVISION.md`
+- `frontend/src/pages/faculty/FacultyCaseBuilder.tsx` — the actual current file (spec's illustrative path is `CaseBuilder.jsx`); this is where all 7 UI changes land, including the Capabilities Targeted section fixed in the prior conversation turn (bug: duplicate capability names from mixing `case_study`/`simulation` engagement types — see `backend/services/faculty/router.py`'s `faculty_capabilities` endpoint)
+- New component per spec: `frontend/src/components/faculty/CapabilitySelector.tsx` (spec names it `.jsx`; match this project's TS convention instead)
+- `backend/services/faculty/router.py` — add `generate-questions` and `generate-rapid-fire` endpoints; also home of the existing `replace_capability_tags`/case save logic that needs the new hardcoded rapid-fire/marks defaults
+- `backend/services/faculty/service.py` — spec's suggested home for the two new OpenAI calls (module may not exist yet under this exact name; check `router.py`'s existing `call_openai_case_generation` pattern first)
 
-## Implementation Order (per spec's Build Order, Section 5)
+## Implementation Order
 
-1. Search the frontend codebase for all `127.0.0.1` / `localhost:8000` references
-2. Centralize into a single `VITE_API_BASE_URL` env var if not already; set it to `http://183.182.87.172:8000`
-3. Restart the Vite dev server (env vars are baked in at server start, not picked up by a browser refresh)
-4. Update the uvicorn startup command to `--host 0.0.0.0`
-5. Restart the backend server
-6. Clean up `allow_origins` in the CORS middleware (remove the redundant `"*"` mixed with explicit origins, per Section 3.3)
-7. Run verification (Section 4) from a second machine on the network: confirm backend listens on `0.0.0.0:8000`, login request from another device goes to the LAN IP (not `127.0.0.1`), no CORS error, successful response — repeat from at least one more device
+1. Capabilities Targeted hierarchical selector (Change 1) — new `CapabilitySelector` component, 4 fixed categories × 5 fixed sub-capabilities per the spec's mockup (this introduces a *second*, separate taxonomy from the `capabilities` DB table's flat list — needs a decision on how the two reconcile, since the spec's category/sub-capability names don't exactly match the existing `capabilities` table rows)
+2. Remove Expected Outcomes field (Change 2) and Case Metadata section (Change 3) — pure UI deletions
+3. Recommended Semesters trim to Sem 1–4 (Change 4)
+4. Time & Marks Breakdown field removal (Change 5) + backend silent-default logic on save
+5. Structured Written Questions AI generation (Change 6) — modal, new endpoint, service-layer OpenAI call
+6. Rapid Fire Questions AI generation (Change 7) — replaces manual cards, new endpoint, service-layer OpenAI call
+7. Verify against Acceptance Criteria checklist in the spec; confirm no regressions to Recommended Course & Semester or Student Instructions & Faculty Notes panels
 
 ## Definition of Done
 
-- [x] Frontend API base URL is no longer hardcoded to `127.0.0.1` — deviated from the spec's literal ask (a fixed `VITE_API_BASE_URL` pointed at one LAN IP) in favor of a dynamic fallback (see History): `axios.ts` now defaults to `${window.location.protocol}//${window.location.hostname}:8000/api/v1` when `VITE_API_URL` isn't set, so it works from any machine/IP without maintaining a hardcoded address; `VITE_API_URL` still works as an explicit override
-- [x] uvicorn bound to `--host 0.0.0.0` — confirmed via `netstat` showing `0.0.0.0:8000` LISTENING (documented in `context/server_running_commands.txt`)
-- [x] CORS cleaned up — replaced the wildcard-`"*"`-mixed-with-explicit-origins list (invalid alongside `allow_credentials=True`) with `allow_origin_regex` matching `localhost`/any IPv4 address on port 5173, so any device on the network works without hardcoding one IP, while rejecting arbitrary hostnames (verified `evil.com:5173` gets a 400, real IPs get their Origin correctly reflected)
-- [x] `vite.config.ts` explicitly sets `server: { host: true }` so `npm run dev` reliably binds to all interfaces (previously relied on an unrecorded manual `--host` flag or a Vite default)
-- [x] Verified end-to-end in this environment: started uvicorn with `--host 0.0.0.0`, confirmed `0.0.0.0:8000` listening; sent CORS preflight + real login requests with `Origin` headers for `192.168.4.16:5173`, `183.182.87.172:5173` (the spec's own "public IP" per `server_running_commands.txt`), `localhost:5173`, and `127.0.0.1:5173` — all got 200s with the correct `Access-Control-Allow-Origin` reflected; `evil.com:5173` correctly got 400
-- [x] Frontend build (`tsc -b && vite build`) and backend syntax check (`py_compile`) both passed
-- [ ] Firewall inbound rules for ports 8000/5173 — not verifiable from this environment; confirm on the actual server machine if a second LAN device still can't reach it
-- [ ] Final confirmation from a real second/third physical device on the network (this session could only simulate LAN origins via `Origin` headers against localhost, not a true separate-machine test)
+- [ ] Capabilities Targeted shows 4 collapsible categories, each with 5 sub-capability checkboxes; at least 1 required to save; summary line shows count + names
+- [ ] Expected Outcomes field removed from the form
+- [ ] Case Metadata section removed from the form
+- [ ] Recommended Semesters shows only Sem 1–4
+- [ ] Time Breakdown shows only Reading Time and Answer Writing Time; Rapid Fire Time/Total Marks/Written Marks/Rapid Fire Marks fields removed
+- [ ] Backend auto-sets rapid_fire_time=8, rapid_fire_marks=3, written_marks=7, total_marks=10 on every case save
+- [ ] "Generate Questions with AI" button + summary modal implemented; generation populates all 3 question cards; overwrite-confirm shown when manual content exists
+- [ ] Rapid Fire section replaced with summary textarea + "Generate" button; no manual Q&A cards remain
+- [ ] Rapid Fire generation produces 6 Q&A cards; "Regenerate" and per-card "Edit" toggle both work
+- [ ] No other Case Builder sections affected
 
 ---
 
 ## History
+
+- 2026-07-08: SPEC_17 Fix Internal Network Access merged into `main` (see
+  `677b946`, merge of `feature/network-access-fix`) — moving on per direction
+  even though its own Definition of Done still had two unchecked items
+  (firewall inbound rules and a true second-physical-device confirmation,
+  both unverifiable from this environment). SPEC_18 Case Builder Form —
+  Revision moved to In Progress: a 7-part revision of the faculty Case
+  Builder form (`FacultyCaseBuilder.tsx`) — hierarchical 4-category
+  capability selector replacing the flat chip row, removal of Expected
+  Outcomes and the entire Case Metadata section, trimming Recommended
+  Semesters to Sem 1–4, removing the Rapid Fire time/marks fields from the
+  Time & Marks Breakdown (backend to silently default them instead), and AI
+  generation replacing manual entry for both Structured Written Questions and
+  Rapid Fire Questions (two new endpoints). Flagged an open question before
+  implementation starts: the spec's new 4-category/20-sub-capability
+  taxonomy for the capability selector (Cognitive/Leadership/Entrepreneurial/
+  Professional) doesn't match the existing flat `capabilities` DB table's
+  names 1:1 (that table was just fixed this session — see prior turn — to
+  filter by `engagement_type = 'case_study'` after a duplicate-display bug),
+  so how the two reconcile needs a decision first.
 
 - 2026-07-07: Implemented SPEC_17 Fix Internal Network Access on branch
   `feature/network-access-fix` (branched from `main`). Investigated before
