@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Bell,
   BookOpen,
@@ -20,8 +20,29 @@ import {
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
 
-import { getStudentProfile, type StudentProfile } from "../api/student"
 import { clearToken, getCurrentUser } from "../utils/auth"
+
+const ROLE_LABELS: Record<string, string> = {
+  student: "Student",
+  faculty: "Faculty",
+  mentor: "Mentor",
+  admin: "Admin",
+  director: "Director",
+  program_head: "Program Head",
+}
+
+function roleLabel(role: string | undefined): string {
+  if (!role) return "Student"
+  return ROLE_LABELS[role] ?? role
+}
+
+function userInitials(name: string | undefined): string {
+  if (!name) return "PC"
+  const parts = name.split(" ").filter(Boolean)
+  if (parts.length === 0) return "PC"
+  if (parts.length === 1) return parts[0][0].toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -41,25 +62,19 @@ const navigationItems = [
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate()
   const currentUser = getCurrentUser()
-  const [profile, setProfile] = useState<StudentProfile | null>(null)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    let isMounted = true
-    getStudentProfile()
-      .then((data) => {
-        if (isMounted) setProfile(data)
-      })
-      .catch(() => {
-        if (isMounted) setProfile(null)
-      })
-    return () => {
-      isMounted = false
+    if (!isMenuOpen) return
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
     }
-  }, [])
-
-  const identitySubtitle = profile?.career_track_name
-    ? `Career Track: ${profile.career_track_name}`
-    : profile?.course_name || null
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isMenuOpen])
 
   function handleLogout() {
     clearToken()
@@ -168,19 +183,66 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </button>
             </div>
 
-            <div className="flex items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-2 py-2">
-              <div className="grid size-10 place-items-center rounded-md bg-[#081d3a] text-white">
-                <UserCircle size={24} aria-hidden="true" />
-              </div>
-              <div className="hidden min-w-36 sm:block">
-                <p className="truncate text-sm font-semibold text-[#111827]">
-                  {currentUser?.name ?? "PCDC User"}
-                  {profile?.course_name ? `, ${profile.course_name}` : ""}
-                </p>
-                {identitySubtitle ? (
-                  <p className="truncate text-xs text-[#6b7280]">{identitySubtitle}</p>
-                ) : null}
-              </div>
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen((open) => !open)}
+                aria-expanded={isMenuOpen}
+                aria-haspopup="true"
+                className="flex items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-2 py-2 transition hover:border-[#c9a227]"
+              >
+                <div className="grid size-10 place-items-center rounded-md bg-[#081d3a] text-sm font-semibold text-white">
+                  {userInitials(currentUser?.name)}
+                </div>
+                <div className="hidden min-w-36 text-left sm:block">
+                  <p className="truncate text-sm font-semibold text-[#111827]">
+                    {currentUser?.name ?? "PCDC User"}
+                  </p>
+                  <p className="truncate text-xs text-[#6b7280]">{roleLabel(currentUser?.role)}</p>
+                </div>
+              </button>
+
+              {isMenuOpen ? (
+                <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-md border border-[#e6e8eb] bg-white py-2 shadow-lg">
+                  <div className="flex items-center gap-3 px-4 pb-2">
+                    <div className="grid size-9 place-items-center rounded-md bg-[#081d3a] text-xs font-semibold text-white">
+                      {userInitials(currentUser?.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#111827]">
+                        {currentUser?.name ?? "PCDC User"}
+                      </p>
+                      <p className="truncate text-xs text-[#6b7280]">{roleLabel(currentUser?.role)}</p>
+                    </div>
+                  </div>
+                  <div className="my-2 border-t border-[#e6e8eb]" />
+                  <NavLink
+                    to="/student/profile"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2 text-sm font-medium text-[#111827] hover:bg-[#f6f7fb]"
+                  >
+                    <UserCircle size={17} aria-hidden="true" />
+                    My Profile
+                  </NavLink>
+                  <NavLink
+                    to="/student/career-pathway"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2 text-sm font-medium text-[#111827] hover:bg-[#f6f7fb]"
+                  >
+                    <Compass size={17} aria-hidden="true" />
+                    Career Pathway
+                  </NavLink>
+                  <div className="my-2 border-t border-[#e6e8eb]" />
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm font-medium text-[#111827] hover:bg-[#f6f7fb]"
+                  >
+                    <LogOut size={17} aria-hidden="true" />
+                    Logout
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </header>

@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react"
 
-import type { SimulationGroup } from "../../api/student"
+import {
+  getStudentDashboardCapabilities,
+  type SimulationGroup,
+  type StudentCapabilityMatrix,
+} from "../../api/student"
 
 export type MatrixFilter = "case_study" | "simulation" | "concept_study"
 
 interface CapabilityMatrixItem {
   name: string
   score: number
+  attempts?: number
 }
 
 interface CapabilityMatrixCategory {
@@ -15,57 +20,6 @@ interface CapabilityMatrixCategory {
   score: number | null
   items: CapabilityMatrixItem[] | null
 }
-
-const caseStudyCategories: CapabilityMatrixCategory[] = [
-  {
-    id: "cognitive",
-    label: "Cognitive Capabilities",
-    score: 68,
-    items: [
-      { name: "Analytical Thinking", score: 74 },
-      { name: "Critical Thinking", score: 65 },
-      { name: "Strategic Thinking", score: 71 },
-      { name: "Systems Thinking", score: 60 },
-      { name: "Decision Making", score: 70 },
-    ],
-  },
-  {
-    id: "leadership",
-    label: "Leadership Capabilities",
-    score: 61,
-    items: [
-      { name: "Communication", score: 68 },
-      { name: "Influence", score: 58 },
-      { name: "Negotiation", score: 63 },
-      { name: "Conflict Resolution", score: 55 },
-      { name: "Team Management", score: 61 },
-    ],
-  },
-  {
-    id: "entrepreneurial",
-    label: "Entrepreneurial Capabilities",
-    score: 57,
-    items: [
-      { name: "Opportunity Recognition", score: 62 },
-      { name: "Innovation", score: 55 },
-      { name: "Business Model Thinking", score: 58 },
-      { name: "Risk Assessment", score: 51 },
-      { name: "Resourcefulness", score: 59 },
-    ],
-  },
-  {
-    id: "professional",
-    label: "Professional Capabilities",
-    score: 72,
-    items: [
-      { name: "Professional Judgment", score: 75 },
-      { name: "Business Acumen", score: 70 },
-      { name: "Execution Orientation", score: 73 },
-      { name: "Learning Agility", score: 68 },
-      { name: "Adaptability", score: 74 },
-    ],
-  },
-]
 
 function averageScore(items: CapabilityMatrixItem[]): number {
   if (items.length === 0) return 0
@@ -76,6 +30,7 @@ function buildCategories(
   filter: MatrixFilter,
   simulationGroups: SimulationGroup[],
   conceptGroups: string[],
+  caseStudyMatrix: StudentCapabilityMatrix | null,
 ): CapabilityMatrixCategory[] {
   if (filter === "simulation") {
     return simulationGroups.map((group) => ({
@@ -93,7 +48,12 @@ function buildCategories(
       items: null,
     }))
   }
-  return caseStudyCategories
+  return (caseStudyMatrix?.categories ?? []).map((category) => ({
+    id: category.id,
+    label: category.label,
+    score: category.score,
+    items: category.items,
+  }))
 }
 
 interface CapabilityMatrixProps {
@@ -108,7 +68,28 @@ export default function CapabilityMatrix({
   conceptGroups,
 }: CapabilityMatrixProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const categories = buildCategories(filter, simulationGroups, conceptGroups)
+  const [caseStudyMatrix, setCaseStudyMatrix] = useState<StudentCapabilityMatrix | null>(null)
+  const [isLoadingCaseStudy, setIsLoadingCaseStudy] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+    getStudentDashboardCapabilities()
+      .then((data) => {
+        if (isMounted) setCaseStudyMatrix(data)
+      })
+      .catch(() => {
+        if (isMounted) setCaseStudyMatrix(null)
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingCaseStudy(false)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const categories = buildCategories(filter, simulationGroups, conceptGroups, caseStudyMatrix)
+  const showCaseStudySkeleton = filter === "case_study" && isLoadingCaseStudy
 
   useEffect(() => {
     setActiveCategory(null)
@@ -119,6 +100,22 @@ export default function CapabilityMatrix({
   }
 
   const activeData = categories.find((category) => category.id === activeCategory) ?? null
+
+  if (showCaseStudySkeleton) {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        {[0, 1, 2, 3].map((index) => (
+          <div
+            key={index}
+            className="animate-pulse rounded-lg border border-[#e6e8eb] bg-white p-5 text-center shadow-sm"
+          >
+            <div className="mx-auto h-4 w-32 rounded bg-[#e6e8eb]" />
+            <div className="mx-auto mt-4 h-8 w-12 rounded bg-[#e6e8eb]" />
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -162,7 +159,15 @@ export default function CapabilityMatrix({
           {activeData.items ? (
             <div className="mt-4 space-y-3">
               {activeData.items.map((item) => (
-                <div key={item.name} className="flex items-center gap-3">
+                <div
+                  key={item.name}
+                  className="flex items-center gap-3"
+                  title={
+                    item.attempts !== undefined
+                      ? `Based on ${item.attempts} case attempt${item.attempts === 1 ? "" : "s"}`
+                      : undefined
+                  }
+                >
                   <span className="w-40 shrink-0 text-sm font-medium text-[#111827] sm:w-48">
                     {item.name}
                   </span>

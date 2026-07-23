@@ -55,6 +55,9 @@ const defaultSummary: StudentDashboardSummary = {
   pending_simulations: 0,
   completed_simulations: 0,
   current_level: null,
+  level_label: null,
+  hero_message:
+    "Your next challenge is designed to strengthen strategic judgment and risk awareness. Keep sharpening.",
   active_case: null,
   upcoming_session: null,
 }
@@ -202,8 +205,7 @@ export default function Dashboard() {
               </p>
             ) : null}
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/82 sm:text-base">
-              Your next challenge is designed to strengthen strategic judgment
-              and risk awareness. Keep sharpening.
+              {summary.hero_message}
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -241,14 +243,22 @@ export default function Dashboard() {
                   ? "Level --"
                   : `Level ${summary.current_level}`}
               </h3>
+              {summary.level_label ? (
+                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#92702a]">
+                  {summary.level_label}
+                </p>
+              ) : null}
             </div>
           </div>
         </section>
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Active Engagements</h2>
-          <div className="grid gap-5 xl:grid-cols-3">
-            <Card title="Active Case Study">
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <Card title="Active Case Study" className="border-sky-100 bg-sky-50">
+              <p className="mb-4 text-sm font-medium text-[#6b7280]">
+                Apply strategic thinking to real business challenges.
+              </p>
               {summary.active_case ? (
                 <div className="space-y-4">
                   <div>
@@ -289,7 +299,10 @@ export default function Dashboard() {
               />
             </Card>
 
-            <Card title="Simulations">
+            <Card title="Simulations" className="border-teal-100 bg-teal-50">
+              <p className="mb-4 text-sm font-medium text-[#6b7280]">
+                Practice high-stakes decisions in realistic simulated scenarios.
+              </p>
               <MatrixFilterButton
                 label="Browse Simulations"
                 filterValue="simulation"
@@ -298,13 +311,31 @@ export default function Dashboard() {
               />
             </Card>
 
-            <Card title="Concept Study">
+            <Card title="Academic Fundamentals" className="border-rose-100 bg-rose-50">
+              <p className="mb-4 text-sm font-medium text-[#6b7280]">
+                Strengthen your grasp of core business concepts.
+              </p>
               <MatrixFilterButton
                 label="Browse Concepts"
                 filterValue="concept_study"
                 activeFilter={activeMatrixFilter}
                 onSelect={setActiveMatrixFilter}
               />
+            </Card>
+
+            <Card title="Career Compass" className="border-orange-100 bg-orange-50">
+              <div className="py-2 text-center">
+                <Compass size={28} aria-hidden="true" className="mx-auto text-[#92702a]" />
+                <p className="mt-3 text-sm font-medium text-[#6b7280]">
+                  Explore roles and pathways aligned to your strengths.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+              >
+                Explore Career Compass
+              </button>
             </Card>
           </div>
         </section>
@@ -318,7 +349,8 @@ export default function Dashboard() {
               </p>
               {activeMatrixFilter !== "case_study" ? (
                 <p className="mt-1 text-xs font-semibold text-[#92702a]">
-                  Showing: {activeMatrixFilter === "simulation" ? "Simulations" : "Concept Study"}{" "}
+                  Showing:{" "}
+                  {activeMatrixFilter === "simulation" ? "Simulations" : "Academic Fundamentals"}{" "}
                   only —{" "}
                   <button
                     type="button"
@@ -492,11 +524,12 @@ export default function Dashboard() {
 interface CardProps {
   title: string
   children: ReactNode
+  className?: string
 }
 
-function Card({ title, children }: CardProps) {
+function Card({ title, children, className }: CardProps) {
   return (
-    <article className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+    <article className={`rounded-lg border p-5 shadow-sm ${className ?? "border-[#e6e8eb] bg-white"}`}>
       <h2 className="mb-4 text-lg font-semibold">{title}</h2>
       {children}
     </article>

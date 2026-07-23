@@ -3,64 +3,194 @@
 
 ## Status
 
-In Progress
+Complete
 
 ## Feature
 
-SPEC_18 Case Builder Form — Revision
+SPEC_17 Student Portal — Dynamic Dashboard + Profile
 
 ## Spec File
 
-`context/features/SPEC_18_CASE_BUILDER_FORM_REVISION.md`
+`context/features/SPEC_17_STUDENT_DASHBOARD_PROFILE.md`
 
-Note: the spec file's own internal heading reads "SPEC_16: Case Builder Form — Revision" even though the filename is `SPEC_18_...` — a mismatch between filename and in-document title, on top of the project's existing pattern of duplicate spec numbers (two SPEC_16 files, two SPEC_17 files). Treating the filename (`SPEC_18`) as authoritative here since it's what's referenced going forward.
+Note: this spec number collides with two already-completed spec files —
+`SPEC_17_CASE_STUDIES.md` (Case Studies backend) and
+`SPEC_17_FIX_INTERNAL_NETWORK_ACCESS.md`/network-access fix — same
+duplicate-numbering pattern noted elsewhere in this project's history.
+Treating this file (`SPEC_17_STUDENT_DASHBOARD_PROFILE.md`) as authoritative
+for "SPEC_17" going forward since it's the one now referenced as current.
 
 ## Goals
 
-- Capabilities Targeted: replace the flat capability chip row with a hierarchical 4-category expandable selector (Cognitive / Leadership / Entrepreneurial / Professional, 5 sub-capabilities each); at least 1 sub-capability required to save; selected values still save as the same flat array of names as before (no DB change)
-- Remove the Expected Outcomes textarea from Core Fields entirely (UI-only removal; leave the DB column alone)
-- Remove the entire Case Metadata section (Case Code, Volume, Subject, Functional Area, Capability Category, Difficulty Label, Target Learners, Bloom's Levels) — UI-only, DB columns stay for Admin Case Import
-- Recommended Semesters: cut from Sem 1–12 down to Sem 1–4 only
-- Time & Marks Breakdown: remove Rapid Fire Time, Total Marks, Written Marks, Rapid Fire Marks fields from the form; backend must silently default these on every save (`rapid_fire_time_minutes=8`, `rapid_fire_marks=3`, `written_marks=7`, `total_marks=10`) since they're fixed platform constants, not faculty-configurable
-- Structured Written Questions: add a "Generate Questions with AI" button + summary-input modal; new `POST /faculty/cases/{id}/generate-questions` endpoint calling OpenAI with title/difficulty/capabilities/summary context, returning 3 questions (fixed marks Q1=2/Q2=2/Q3=3, Bloom's progression low→high); overwrite-confirm dialog if manual content already exists
-- Rapid Fire Questions: replace the 6 manual Q&A cards entirely with AI generation from a case-summary textarea; new `POST /faculty/cases/{id}/generate-rapid-fire` endpoint returning 6 `{question, answer}` pairs; results shown as read-only cards with per-card "Edit" toggle and a "Regenerate" button
-- Out of scope per spec: no other Case Builder sections affected (Recommended Course & Semester's course list, Student Instructions & Faculty Notes panel stay unchanged)
+- Hero panel (welcome text, course/semester/batch/section, Overall Score, Level) made dynamic — currently hardcoded; new `GET /api/student/dashboard/hero` endpoint
+- Hero motivational message picks the student's lowest-scoring capability category via a fixed `HERO_MESSAGES` map (with a `no_attempts` default before any attempts exist)
+- Hero CTA button: "Continue Active Case →" if an active in-progress attempt exists, else "Browse Case Studies →"
+- Top-right header made dynamic (name, role) and fixes an existing bug where role is shown twice (should show "Student", not the program repeated) — sourced from JWT, no separate API call
+- Header gains a dropdown menu (My Profile / Career Pathway / Logout) on avatar/name click
+- Capability Matrix (SPEC_13's hardcoded 4-category/20-sub-capability grid) replaced with a real API call — new `GET /api/student/dashboard/capabilities` endpoint; loading skeleton while fetching
+- New Capability Score Algorithm (backend engine): per-attempt score attribution to targeted capabilities, rolling weighted average (`RECENCY_WEIGHT = 0.3`, first attempt sets score directly), category score = average of its 5 sub-capabilities, overall score = average of all 20, level derived from a 5-tier threshold table (Foundation/Regular/Pro/Expert/Champion)
+- Engine runs on attempt completion (same DB transaction as `simulation_attempts.status = 'completed'`); dashboard load only reads the stored `student_capability` table, no recompute
+- New Student Profile page at `/student/profile` — fully read-only (name, email, course, batch, semester, section, mentor, career track), with an info banner explaining why academic fields aren't editable and a link to change Career Pathway
+- New `GET /api/student/profile` endpoint
+- Out of scope / stays static per spec: Active Engagements, AI Coaches, Mentor Support, Recent Evaluations, Achievements, Career Pathway page itself
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_18_CASE_BUILDER_FORM_REVISION.md`
-- `frontend/src/pages/faculty/FacultyCaseBuilder.tsx` — the actual current file (spec's illustrative path is `CaseBuilder.jsx`); this is where all 7 UI changes land, including the Capabilities Targeted section fixed in the prior conversation turn (bug: duplicate capability names from mixing `case_study`/`simulation` engagement types — see `backend/services/faculty/router.py`'s `faculty_capabilities` endpoint)
-- New component per spec: `frontend/src/components/faculty/CapabilitySelector.tsx` (spec names it `.jsx`; match this project's TS convention instead)
-- `backend/services/faculty/router.py` — add `generate-questions` and `generate-rapid-fire` endpoints; also home of the existing `replace_capability_tags`/case save logic that needs the new hardcoded rapid-fire/marks defaults
-- `backend/services/faculty/service.py` — spec's suggested home for the two new OpenAI calls (module may not exist yet under this exact name; check `router.py`'s existing `call_openai_case_generation` pattern first)
+- `context/features/SPEC_17_STUDENT_DASHBOARD_PROFILE.md`
+- `backend/services/student/router.py` — add 3 new endpoints (`dashboard/hero`, `dashboard/capabilities`, `profile`)
+- `backend/services/student/service.py` — hero data query, capability score read, profile query
+- `backend/services/student/capability_engine.py` — **new file**, isolated scoring algorithm (Steps 1–4 of spec Section 4) so it can be called from attempt completion and tested independently
+- `backend/services/attempts/service.py` (or equivalent) — call `capability_engine.update_scores()` on attempt completion
+- `frontend/src/pages/student/Dashboard.tsx` — replace hardcoded hero + capability data with API calls (spec's illustrative path is `Dashboard.jsx`; this project uses `.tsx`)
+- `frontend/src/components/student/CapabilityMatrix.tsx` (from SPEC_13) — add fetch + loading skeleton, drop hardcoded data prop
+- Student header/layout component (dropdown menu, duplicate-role fix) — likely `frontend/src/layouts/DashboardLayout.tsx` per prior SPEC_14 bugfix history; confirm exact file before editing
+- `frontend/src/pages/student/Profile.tsx` — **new page**, read-only profile (spec's illustrative path is `Profile.jsx`)
+- Router file (`App.tsx` or equivalent) — add `/student/profile` route
+- `student_capability` table — confirm existing schema matches spec's `student_id/capability_name/current_score/attempt_count/last_updated` shape before building the engine against it
 
 ## Implementation Order
 
-1. Capabilities Targeted hierarchical selector (Change 1) — new `CapabilitySelector` component, 4 fixed categories × 5 fixed sub-capabilities per the spec's mockup (this introduces a *second*, separate taxonomy from the `capabilities` DB table's flat list — needs a decision on how the two reconcile, since the spec's category/sub-capability names don't exactly match the existing `capabilities` table rows)
-2. Remove Expected Outcomes field (Change 2) and Case Metadata section (Change 3) — pure UI deletions
-3. Recommended Semesters trim to Sem 1–4 (Change 4)
-4. Time & Marks Breakdown field removal (Change 5) + backend silent-default logic on save
-5. Structured Written Questions AI generation (Change 6) — modal, new endpoint, service-layer OpenAI call
-6. Rapid Fire Questions AI generation (Change 7) — replaces manual cards, new endpoint, service-layer OpenAI call
-7. Verify against Acceptance Criteria checklist in the spec; confirm no regressions to Recommended Course & Semester or Student Instructions & Faculty Notes panels
+1. Confirm `student_capability` table shape and existing capability data flow (this dashboard already has partial live wiring from SPEC_10/SPEC_13/prior Bugs-fixes work — audit what's real vs hardcoded before changing anything)
+2. Build `capability_engine.py` (Section 4 algorithm) as an isolated, independently callable/testable module
+3. Wire engine into attempt-completion flow (Trigger 1)
+4. `GET /api/student/dashboard/capabilities` + frontend `CapabilityMatrix` fetch/skeleton wiring
+5. `GET /api/student/dashboard/hero` + frontend hero panel wiring, including CTA and hero-message logic
+6. Header dynamic name/role fix + duplicate-role bug fix + dropdown menu
+7. `GET /api/student/profile` + new `/student/profile` page + route
+8. Verify against Acceptance Criteria checklist in the spec end-to-end against the live dev DB
 
 ## Definition of Done
 
-- [ ] Capabilities Targeted shows 4 collapsible categories, each with 5 sub-capability checkboxes; at least 1 required to save; summary line shows count + names
-- [ ] Expected Outcomes field removed from the form
-- [ ] Case Metadata section removed from the form
-- [ ] Recommended Semesters shows only Sem 1–4
-- [ ] Time Breakdown shows only Reading Time and Answer Writing Time; Rapid Fire Time/Total Marks/Written Marks/Rapid Fire Marks fields removed
-- [ ] Backend auto-sets rapid_fire_time=8, rapid_fire_marks=3, written_marks=7, total_marks=10 on every case save
-- [ ] "Generate Questions with AI" button + summary modal implemented; generation populates all 3 question cards; overwrite-confirm shown when manual content exists
-- [ ] Rapid Fire section replaced with summary textarea + "Generate" button; no manual Q&A cards remain
-- [ ] Rapid Fire generation produces 6 Q&A cards; "Regenerate" and per-card "Edit" toggle both work
-- [ ] No other Case Builder sections affected
+- [x] Hero panel: name, course/semester/batch/section, Overall Score, Level (numeric + label) all sourced from the database
+- [x] Hero message reflects weakest capability category, or the `no_attempts` default
+- [x] Hero CTA correctly toggles between "Continue Active Case" and "Browse Case Studies"
+- [x] Header name/role sourced from JWT; duplicate-role bug fixed ("Student" shown, not program twice)
+- [x] Header dropdown opens with Profile / Career Pathway / Logout
+- [x] Capability Matrix shows real sub-capability scores (0 before any attempts) with correct category averages — 2 real sub-capabilities per category (8 total), not 20, per the reconciliation decision recorded in History below
+- [x] Capability Matrix shows a loading skeleton while fetching; accordion interaction still works
+- [x] Capability engine: immediate update on attempt completion (pre-existing trigger, confirmed wired), rolling weighted average with RECENCY_WEIGHT=0.3 (pre-existing, admin-configurable), first attempt sets score directly (was broken — fixed this session), all targeted capabilities updated equally, overall score = average of the matrix's real capabilities
+- [x] `/student/profile` page: all fields read-only, course/semester/section/batch/mentor display correctly, info banner present, Career Pathway link present, reachable from header dropdown
 
 ---
 
 ## History
+
+- 2026-07-23: Implemented SPEC_17 on branch `feature/student-dashboard-profile`
+  (branched from `main`; the `frontend/src/pages/student/Dashboard.tsx`
+  changes already sitting uncommitted before this branch was cut — a 4-card
+  Active Engagements redesign with a new "Career Compass" card, unrelated to
+  SPEC_17 — carried forward onto the branch untouched, since `checkout -b`
+  doesn't discard working-tree changes).
+
+  Investigated first and found the codebase already had a live capability
+  engine (`services/simulation/service.py`: `update_capability_scores` →
+  `update_single_capability_score`, wired into case-study attempt completion)
+  more mature than the spec assumed, which created two real conflicts asked
+  to the user before writing code: (1) the spec's 20-name/4-category
+  taxonomy vs. the real `capabilities` table's 8 flat case_study names with
+  no category column — user chose to map the existing 8 onto the 4
+  categories for display (2 real sub-capabilities per category) rather than
+  migrate to a new 20-row taxonomy; (2) the spec's proposed 5-level
+  Foundation–Champion scale vs. the already-live 7-level scale
+  (`students.current_level`, thresholds 60/70/80/85/90/95) already consumed
+  by the Mentor portal (`MentorStudents.tsx` shows "L{current_level}") — user
+  deferred to "best decision", kept the existing 7-level scale as
+  authoritative (no data migration, no Mentor portal risk) and added a
+  7-entry label map instead of adopting the spec's 5-entry one.
+
+  Built `backend/services/student/capability_engine.py` as a **read-only
+  aggregation module** — deliberately not a second score-writing engine,
+  since one already exists and two competing writers to the same
+  `student_capabilities` table would be a real bug source. It holds
+  `CATEGORY_MAP` (the 8→4 mapping), `HERO_MESSAGES`, `LEVEL_LABELS` (7
+  entries), `get_capability_matrix()`, `get_hero_message()`,
+  `get_level_label()`. Added migration `0011_student_capability_attempt_count`
+  (additive `attempt_count` column on `student_capabilities`, needed for the
+  spec's "Based on N case attempts" tooltip, which didn't exist before) and
+  applied it to the dev DB. While verifying the engine end-to-end, found and
+  fixed a real bug against the spec's own explicit acceptance criterion:
+  `update_single_capability_score` treated *any* existing row as "not first
+  attempt" and always blended via the rolling weighted average — since seed
+  scripts pre-create a zero-score row for every capability, this meant a
+  student's true first real attempt was never set directly, contrary to
+  "first attempt sets score directly (no weighted average on first entry)".
+  Fixed by keying the branch on `attempt_count == 0` instead of row
+  existence, and incrementing `attempt_count` on every update path.
+
+  Backend: added `GET /student/dashboard/capabilities` (new endpoint, wraps
+  `capability_engine.get_capability_matrix`); extended the *existing*
+  `GET /student/dashboard/summary` with `hero_message` and `level_label`
+  fields rather than adding a separate `GET /student/dashboard/hero` endpoint
+  as the spec's illustrative path suggested — the frontend already fetches
+  `dashboard/summary` on every load and most of the hero fields (course/
+  semester/batch/section, `active_case`-driven CTA) were already wired from
+  prior work, so a second parallel endpoint would have meant a duplicate
+  network call recomputing overlapping data; extended the existing
+  `GET /student/profile` additively with `full_name`, `email`, and a nested
+  `mentor: {name, initials}` object (kept all pre-existing field names since
+  `DashboardLayout.tsx` already depended on them).
+
+  Frontend: `CapabilityMatrix.tsx`'s hardcoded 20-name `caseStudyCategories`
+  stopgap array (from SPEC_13) replaced with a live fetch to the new
+  capabilities endpoint plus a 4-box loading skeleton; sub-capability rows
+  now show an attempts-count tooltip. `Dashboard.tsx` hero section now
+  renders `summary.hero_message` and a `level_label` line instead of the
+  hardcoded motivational copy. `DashboardLayout.tsx`: fixed the duplicate-role
+  header bug (name line no longer appends course; subtitle now shows the
+  role label "Student" via a small `ROLE_LABELS` map, not the program again)
+  and added the header avatar dropdown (My Profile / Career Pathway /
+  Logout) with click-outside-to-close; removed its now-unused
+  `getStudentProfile` fetch since the header only needs JWT-sourced name/role
+  per the spec. New read-only `frontend/src/pages/student/Profile.tsx` at
+  `/student/profile` (route added in `App.tsx`): identity card, Personal
+  Information, Academic Information (including a Program row mirroring
+  Course, matching the spec's mockup), Mentor card with a "Schedule Session"
+  link, Career section with a "Change Pathway →" link, and the read-only
+  info banner.
+
+  Verified end-to-end against the live dev DB using the seed
+  `student@pcdc.com` account: confirmed `/profile`, `/dashboard/summary`,
+  and `/dashboard/capabilities` all return correctly at the zero-attempt
+  state (`level_label: "Foundation"`, `hero_message` is the `no_attempts`
+  default, all 8 real capabilities correctly grouped into the 4 categories);
+  directly exercised `update_single_capability_score` twice for a test
+  capability to confirm both the first-attempt-sets-directly fix (80 → score
+  80, attempt_count 1) and the second-attempt weighted average
+  (80×0.7 + 20×0.3 = 62, attempt_count 2) before reverting the test data.
+  `tsc -b` and `vite build` both passed. Could not visually drive the header
+  dropdown or Profile page in a browser since no headless-browser tool is
+  available in this environment.
+
+  Known pre-existing issue noticed but left alone (out of scope, predates
+  this session): `GET /student/dashboard/summary`'s `overall_capability_score`
+  and `capability_scores` list are computed from *all* of a student's
+  `student_capabilities` rows regardless of `engagement_type`, not filtered
+  to `case_study` — so once a student has any Simulations-box scores, the
+  hero panel's "Overall Score" would blend case-study and simulation scores
+  together. The new `capability_engine.get_capability_matrix` used for the
+  dashboard Capability Matrix and hero message correctly filters to
+  `engagement_type = 'case_study'`; only the older summary field is affected.
+
+- 2026-07-23: Switched current feature to SPEC_17 Student Portal — Dynamic
+  Dashboard + Profile (`context/features/SPEC_17_STUDENT_DASHBOARD_PROFILE.md`),
+  status In Progress. This spec number collides with two already-completed
+  specs (SPEC_17 Case Studies backend, SPEC_17 Fix Internal Network Access) —
+  treating this file as authoritative for "SPEC_17" going forward per
+  direction. Scope: make the student dashboard's hero panel, top-right
+  header, and Capability Matrix dynamic (replacing hardcoded/stopgap data
+  from SPEC_10/SPEC_13/earlier Bugs-fixes work) via three new endpoints
+  (`dashboard/hero`, `dashboard/capabilities`, `profile`), a new isolated
+  `capability_engine.py` implementing the rolling-weighted-average scoring
+  algorithm (RECENCY_WEIGHT=0.3) triggered on attempt completion, and a new
+  read-only `/student/profile` page reachable from a new header dropdown
+  menu. SPEC_18 Case Builder Form — Revision (previously In Progress, still
+  incomplete per its own Definition of Done — see 2026-07-08 entry below) is
+  paused, not completed, while work shifts to this spec per direction.
+  `frontend/src/pages/student/Dashboard.tsx` shows as modified in git status
+  at the time of this switch — not yet investigated whether that's
+  in-progress SPEC_18 work or leftover from something else; check before
+  building SPEC_17's changes on top of it.
 
 - 2026-07-08: SPEC_17 Fix Internal Network Access merged into `main` (see
   `677b946`, merge of `feature/network-access-fix`) — moving on per direction
