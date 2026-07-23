@@ -29,6 +29,8 @@ export interface StudentDashboardSummary {
   pending_simulations: number
   completed_simulations: number
   current_level: number | null
+  level_label: string | null
+  hero_message: string
   active_case: StudentActiveCase | null
   upcoming_session: StudentUpcomingSession | null
 }
@@ -38,9 +40,16 @@ export async function getStudentDashboardSummary() {
   return response.data
 }
 
+export interface StudentMentor {
+  name: string
+  initials: string
+}
+
 export interface StudentProfile {
   student_id: number
   current_level: number | null
+  full_name: string | null
+  email: string | null
   course_name: string | null
   batch_name: string | null
   section_name: string | null
@@ -48,10 +57,35 @@ export interface StudentProfile {
   semester_name: string | null
   mentor_name: string | null
   career_track_name: string | null
+  mentor: StudentMentor | null
 }
 
 export async function getStudentProfile() {
   const response = await api.get<StudentProfile>("/student/profile")
+  return response.data
+}
+
+export interface CapabilityMatrixItem {
+  name: string
+  score: number
+  attempts: number
+}
+
+export interface CapabilityMatrixCategory {
+  id: string
+  label: string
+  score: number
+  items: CapabilityMatrixItem[]
+}
+
+export interface StudentCapabilityMatrix {
+  categories: CapabilityMatrixCategory[]
+  overall_score: number
+  total_attempts: number
+}
+
+export async function getStudentDashboardCapabilities() {
+  const response = await api.get<StudentCapabilityMatrix>("/student/dashboard/capabilities")
   return response.data
 }
 

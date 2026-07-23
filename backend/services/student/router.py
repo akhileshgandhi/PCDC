@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
+from services.student import capability_engine
 from shared.cache import cache_get, cache_set
 from shared.database import get_db
 
@@ -16,6 +17,15 @@ def require_student(current_user: Dict[str, Any]) -> None:
         raise HTTPException(status_code=403, detail="Student access required")
 
 
+def mentor_initials(mentor_name: str) -> str:
+    parts = [part for part in mentor_name.split() if part]
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0][0].upper()
+    return (parts[0][0] + parts[-1][0]).upper()
+
+
 @student_router.get("/profile")
 def student_profile(
     db: Session = Depends(get_db),
@@ -25,10 +35,12 @@ def student_profile(
     row = db.execute(
         text("""
             SELECT s.id AS student_id, s.current_level,
+                   u.name AS full_name, u.email,
                    c.name AS course_name, b.name AS batch_name,
                    cs.name AS section_name, se.semester_number, se.name AS semester_name,
                    m.name AS mentor_name, ct.name AS career_track_name
             FROM students s
+            JOIN users u ON u.id = s.user_id
             LEFT JOIN courses c ON c.id = s.course_id
             LEFT JOIN batches b ON b.id = s.batch_id
             LEFT JOIN class_sections cs ON cs.id = s.current_section_id
@@ -44,6 +56,8 @@ def student_profile(
     return {
         "student_id": row.student_id,
         "current_level": row.current_level,
+        "full_name": row.full_name,
+        "email": row.email,
         "course_name": row.course_name,
         "batch_name": row.batch_name,
         "section_name": row.section_name,
@@ -51,6 +65,11 @@ def student_profile(
         "semester_name": row.semester_name,
         "mentor_name": row.mentor_name,
         "career_track_name": row.career_track_name,
+        "mentor": (
+            {"name": row.mentor_name, "initials": mentor_initials(row.mentor_name)}
+            if row.mentor_name
+            else None
+        ),
     }
 
 
@@ -140,6 +159,8 @@ def student_dashboard_summary(
         {"student_id": student_id},
     ).fetchone()
 
+    matrix = capability_engine.get_capability_matrix(db, student_id)
+
     result = {
         "overall_capability_score": round(float(overall_score), 1) if overall_score is not None else 0,
         "capability_scores": [
@@ -149,6 +170,10 @@ def student_dashboard_summary(
         "pending_simulations": int(pending_simulations),
         "completed_simulations": int(completed_simulations),
         "current_level": student_row.current_level,
+        "level_label": capability_engine.get_level_label(student_row.current_level),
+        "hero_message": capability_engine.get_hero_message(
+            matrix["categories"], matrix["total_attempts"]
+        ),
         "active_case": {
             "case_id": active_case_row.case_id,
             "title": active_case_row.title,
@@ -167,6 +192,21 @@ def student_dashboard_summary(
         } if upcoming_session_row else None,
     }
     return cache_set(cache_key, result)
+
+
+@student_router.get("/dashboard/capabilities")
+def student_dashboard_capabilities(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_student(current_user)
+    student_row = db.execute(
+        text("SELECT id FROM students WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]},
+    ).fetchone()
+    if not student_row:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    return capability_engine.get_capability_matrix(db, student_row.id)
 
 
 SIMULATION_GROUPS = [

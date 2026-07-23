@@ -18,6 +18,7 @@ import FacultyPortal from "./pages/faculty/FacultyPortal"
 import MentorPortal from "./pages/mentor/MentorPortal"
 import MentorSupport from "./pages/mentor/MentorSupport"
 import Dashboard from "./pages/student/Dashboard"
+import Profile from "./pages/student/Profile"
 import Unauthorized from "./pages/Unauthorized"
 import { getUserRole, isAuthenticated, portalPathForRole } from "./utils/auth"
 
@@ -46,6 +47,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRole="student">
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/profile"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <Profile />
               </ProtectedRoute>
             }
           />

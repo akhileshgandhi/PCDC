@@ -859,30 +859,47 @@ def update_single_capability_score(
 ) -> None:
     row = db.execute(
         text("""
-            SELECT id, current_score
+            SELECT id, current_score, attempt_count
             FROM student_capabilities
             WHERE student_id = :student_id AND capability_id = :capability_id
         """),
         {"student_id": student_id, "capability_id": capability_id},
     ).fetchone()
-    recency_weight = get_recency_weight(db)
-    if row:
+
+    # A row can already exist with attempt_count = 0 (e.g. a seed script
+    # pre-creating a zero score for every capability). That's not a real
+    # attempt yet, so it still counts as the "first attempt" and should set
+    # the score directly rather than blending against a placeholder zero.
+    if row and row.attempt_count:
+        recency_weight = get_recency_weight(db)
         old_score = row.current_score or 0
         new_score = round((old_score * (1 - recency_weight)) + (total_score * recency_weight))
         db.execute(
             text("""
                 UPDATE student_capabilities
-                SET current_score = :new_score, last_updated = NOW()
+                SET current_score = :new_score, attempt_count = attempt_count + 1, last_updated = NOW()
                 WHERE id = :id
             """),
             {"new_score": new_score, "id": row.id},
         )
         maybe_create_score_drop_alert(db, student_id, capability_id, old_score, new_score)
         return
+
+    if row:
+        db.execute(
+            text("""
+                UPDATE student_capabilities
+                SET current_score = :new_score, attempt_count = 1, last_updated = NOW()
+                WHERE id = :id
+            """),
+            {"new_score": total_score, "id": row.id},
+        )
+        return
+
     db.execute(
         text("""
-            INSERT INTO student_capabilities (student_id, capability_id, current_score)
-            VALUES (:student_id, :capability_id, :current_score)
+            INSERT INTO student_capabilities (student_id, capability_id, current_score, attempt_count)
+            VALUES (:student_id, :capability_id, :current_score, 1)
         """),
         {
             "student_id": student_id,
