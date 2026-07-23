@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from anthropic import Anthropic
+from openai import OpenAI
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -577,7 +577,7 @@ def generate_opening_discussion_message(
         f"Situation: {case_situation}\n\n"
         f"Student's initial analysis:\n{initial_analysis}"
     )
-    message = call_claude(OPENING_DISCUSSION_PROMPT, [{"role": "user", "content": prompt}], 300)
+    message = call_llm(OPENING_DISCUSSION_PROMPT, [{"role": "user", "content": prompt}], 300)
     log_conversation(db, attempt_id, "ai", "discussion", message)
     return message
 
@@ -648,7 +648,7 @@ def send_ai_message(
     if attempt.status != "ai_discussion":
         raise HTTPException(status_code=403, detail="Please submit your initial analysis first")
     messages = build_discussion_messages(db, attempt, message)
-    response = call_claude(DISCUSSION_SYSTEM_PROMPT, messages, 900)
+    response = call_llm(DISCUSSION_SYSTEM_PROMPT, messages, 900)
     log_conversation(db, attempt_id, "student", "discussion", message)
     log_conversation(db, attempt_id, "ai", "discussion", response)
     db.commit()
@@ -707,7 +707,7 @@ def generate_defense_questions(db: Session, attempt_id: int, final_solution: str
         f"Initial analysis:\n{attempt_context['initial_analysis']}\n\n"
         f"Final solution:\n{final_solution}"
     )
-    response = call_claude(DEFENSE_PROMPT, [{"role": "user", "content": prompt}], 500)
+    response = call_llm(DEFENSE_PROMPT, [{"role": "user", "content": prompt}], 500)
     questions = parse_json_response(response)
     if not isinstance(questions, list) or len(questions) != 3:
         raise HTTPException(status_code=500, detail="AI defense generation failed")
@@ -825,7 +825,7 @@ def get_or_create_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]:
 
 def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]:
     attempt_context = get_attempt_context(db, attempt_id)
-    response = call_claude(
+    response = call_llm(
         EVALUATION_PROMPT,
         [{"role": "user", "content": json.dumps(attempt_context)}],
         1200,
@@ -1350,22 +1350,20 @@ def log_conversation(
     )
 
 
-def call_claude(
+def call_llm(
     system_prompt: str, messages: List[Dict[str, str]], max_tokens: int
 ) -> str:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="AI service is not configured")
-    client = Anthropic(api_key=api_key)
-    result = client.messages.create(
-        model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+    client = OpenAI(api_key=api_key)
+    result = client.chat.completions.create(
+        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         max_tokens=max_tokens,
-        system=system_prompt,
-        messages=messages,
+        messages=[{"role": "system", "content": system_prompt}, *messages],
+        timeout=60,
     )
-    return "".join(
-        block.text for block in result.content if getattr(block, "type", None) == "text"
-    ).strip()
+    return (result.choices[0].message.content or "").strip()
 
 
 def parse_json_response(response: str) -> Any:

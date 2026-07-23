@@ -92,6 +92,43 @@ implementation starts.
 
 ## History
 
+- 2026-07-23: Fixed the actual root cause behind SPEC_20's Bugs 3 and 5 (AI
+  chat not responding / solution submission failing), per user correction:
+  `backend/services/simulation/service.py` was calling the **Anthropic**
+  SDK (`from anthropic import Anthropic`, reading `ANTHROPIC_API_KEY`), but
+  this environment only has a real, working **OpenAI** key configured
+  (`ANTHROPIC_API_KEY` is commented out in `.env` as a placeholder) — a
+  provider mismatch, not a missing route or misconfigured key as previously
+  assumed. This also matches the project's other existing AI integration
+  (`backend/services/faculty/router.py`'s case-generation endpoints), which
+  already uses OpenAI/`gpt-4o-mini` — so this brings the attempt-flow AI
+  calls in line with the pattern already established elsewhere in the
+  codebase.
+
+  Migrated `call_claude()` → `call_llm()`: swapped the Anthropic client for
+  `OpenAI` (`client.chat.completions.create`, system prompt folded into the
+  `messages` array per OpenAI's shape instead of Anthropic's separate
+  `system` param), reads `OPENAI_API_KEY`/`OPENAI_MODEL` (default
+  `gpt-4o-mini`, matching the faculty router's model choice) instead of
+  `ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL`. All 4 call sites (opening
+  discussion message, AI chat replies, defense-question generation,
+  evaluation generation) updated to the new name; no other logic changed.
+  Removed the now-unused `anthropic` package from `requirements.txt`
+  (confirmed nothing else in the codebase imports it).
+
+  Verified directly: a standalone OpenAI SDK call with the real key
+  succeeded. Then re-ran the full attempt flow over real HTTP against the
+  user's own running dev server (case id 7, seed student) with **no
+  mocking needed this time** — start attempt, submit-analysis (real opening
+  AI message generated), ai-message (real coaching response), submit-solution
+  (3 real AI-generated defense questions), submit-defense (real evaluation,
+  `total_score: 63`), submit-reflection (`status: evaluated`), and the
+  detail endpoint correctly surfacing `grade_label: "Improving"` at the end
+  — the entire chain that was previously blocked by the invalid key now
+  works for real. All test data (attempt, evaluation, conversations,
+  capability scores, notification, assigned_cases status) cleaned up
+  afterward. `tsc -b` and `py_compile` both passed.
+
 - 2026-07-23: Worked through `context/features/SPEC_20_ATTEMPT_FLOW_BUG_FIXES.md`
   (bug reports from testing the SPEC_19 attempt-flow wiring above), per
   direction skipping its Bug 4 (Solution Form pre-filled with Lorem Ipsum —
