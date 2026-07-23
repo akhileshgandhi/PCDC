@@ -3,78 +3,296 @@
 
 ## Status
 
-Complete
+In Progress
 
 ## Feature
 
-SPEC_17 Student Portal — Dynamic Dashboard + Profile
+SPEC_19 Student Case Detail Page — Dynamic
 
 ## Spec File
 
-`context/features/SPEC_17_STUDENT_DASHBOARD_PROFILE.md`
+`context/features/SPEC_19_CASE_DETAIL_PAGE.md`
 
-Note: this spec number collides with two already-completed spec files —
-`SPEC_17_CASE_STUDIES.md` (Case Studies backend) and
-`SPEC_17_FIX_INTERNAL_NETWORK_ACCESS.md`/network-access fix — same
-duplicate-numbering pattern noted elsewhere in this project's history.
-Treating this file (`SPEC_17_STUDENT_DASHBOARD_PROFILE.md`) as authoritative
-for "SPEC_17" going forward since it's the one now referenced as current.
+Note: the spec file's own internal heading reads "SPEC_18: Student Case
+Study Detail Page — Dynamic" even though the filename is
+`SPEC_19_CASE_DETAIL_PAGE.md` — the identical filename/in-document-title
+mismatch pattern seen one number earlier with SPEC_18 Case Builder Form
+(see the 2026-07-08 history entry below), on top of this project's
+existing pattern of duplicate spec numbers. Treating the filename
+(`SPEC_19`) as authoritative here, consistent with how that same situation
+was resolved for SPEC_18.
+
+Also note before implementation starts: the spec's DB references
+(`simulations`, `simulation_attempts`, `case_questions`, columns like
+`simulations.situation`/`targeted_capabilities`/`recommended_courses`) don't
+match this codebase's actual Case Studies schema, which uses `case_studies`
+and `case_study_attempts` (the same tables the SPEC_17 capability engine
+reads/writes), plus `case_study_tags` for capability tagging — there is no
+`simulations`/`case_questions` table backing the Case Studies feature as far
+as prior sessions have found. The spec's route (`/student/case/:id`) also
+doesn't match the app's existing pattern (`/student/case-studies/:id`), and
+a static `CaseDetail.tsx` page already exists there from SPEC_06 — this spec
+appears to intend making that existing page dynamic rather than building a
+new one, but the schema/route mismatches need to be resolved before
+implementation starts.
 
 ## Goals
 
-- Hero panel (welcome text, course/semester/batch/section, Overall Score, Level) made dynamic — currently hardcoded; new `GET /api/student/dashboard/hero` endpoint
-- Hero motivational message picks the student's lowest-scoring capability category via a fixed `HERO_MESSAGES` map (with a `no_attempts` default before any attempts exist)
-- Hero CTA button: "Continue Active Case →" if an active in-progress attempt exists, else "Browse Case Studies →"
-- Top-right header made dynamic (name, role) and fixes an existing bug where role is shown twice (should show "Student", not the program repeated) — sourced from JWT, no separate API call
-- Header gains a dropdown menu (My Profile / Career Pathway / Logout) on avatar/name click
-- Capability Matrix (SPEC_13's hardcoded 4-category/20-sub-capability grid) replaced with a real API call — new `GET /api/student/dashboard/capabilities` endpoint; loading skeleton while fetching
-- New Capability Score Algorithm (backend engine): per-attempt score attribution to targeted capabilities, rolling weighted average (`RECENCY_WEIGHT = 0.3`, first attempt sets score directly), category score = average of its 5 sub-capabilities, overall score = average of all 20, level derived from a 5-tier threshold table (Foundation/Regular/Pro/Expert/Champion)
-- Engine runs on attempt completion (same DB transaction as `simulation_attempts.status = 'completed'`); dashboard load only reads the stored `student_capability` table, no recompute
-- New Student Profile page at `/student/profile` — fully read-only (name, email, course, batch, semester, section, mentor, career track), with an info banner explaining why academic fields aren't editable and a link to change Career Pathway
-- New `GET /api/student/profile` endpoint
-- Out of scope / stays static per spec: Active Engagements, AI Coaches, Mentor Support, Recent Evaluations, Achievements, Career Pathway page itself
+- Case content (left panel) sourced from the DB instead of hardcoded: industry, difficulty/level, title, short description, estimated time (reading + writing + 8min rapid-fire constant), added date, created-by name, full "Situation" text, "What You Will Develop" learning outcomes list, and the 3 reflection questions shown greyed-out (preview only, not interactive)
+- Attempt state (right panel) fully dynamic with 4 states: Not Started (Start Attempt CTA), In Progress (Continue Attempt CTA + "Stage X of 6"), Completed (View My Results CTA + score/grade label), Ineligible (View Submission CTA, no retry — one attempt only)
+- Grade label mapping for completed attempts: 9.0–10.0 Exceptional, 7.5–8.9 Excellent, 6.5–7.4 Good, 5.5–6.4 Improving, 0–5.4 Needs Work
+- Capabilities Assessed chips from the case's targeted capabilities, with an up/unchanged/down score-change indicator once the student has an attempt
+- Relevant Career Tracks chips — spec flags this as needing a new `recommended_career_tracks` array field/column, faculty-set in Case Builder
+- New `GET /api/student/cases/:case_id` endpoint returning case content + attempt state in one payload
+- New `POST /api/student/cases/:case_id/start` endpoint — creates the attempt record (409 + existing attempt info if one already exists) and redirects into the attempt flow
+- Page should 403/redirect if the case isn't assigned to the student's section or by their mentor
 
 ## References
 
 - `context/project-overview.md`
-- `context/features/SPEC_17_STUDENT_DASHBOARD_PROFILE.md`
-- `backend/services/student/router.py` — add 3 new endpoints (`dashboard/hero`, `dashboard/capabilities`, `profile`)
-- `backend/services/student/service.py` — hero data query, capability score read, profile query
-- `backend/services/student/capability_engine.py` — **new file**, isolated scoring algorithm (Steps 1–4 of spec Section 4) so it can be called from attempt completion and tested independently
-- `backend/services/attempts/service.py` (or equivalent) — call `capability_engine.update_scores()` on attempt completion
-- `frontend/src/pages/student/Dashboard.tsx` — replace hardcoded hero + capability data with API calls (spec's illustrative path is `Dashboard.jsx`; this project uses `.tsx`)
-- `frontend/src/components/student/CapabilityMatrix.tsx` (from SPEC_13) — add fetch + loading skeleton, drop hardcoded data prop
-- Student header/layout component (dropdown menu, duplicate-role fix) — likely `frontend/src/layouts/DashboardLayout.tsx` per prior SPEC_14 bugfix history; confirm exact file before editing
-- `frontend/src/pages/student/Profile.tsx` — **new page**, read-only profile (spec's illustrative path is `Profile.jsx`)
-- Router file (`App.tsx` or equivalent) — add `/student/profile` route
-- `student_capability` table — confirm existing schema matches spec's `student_id/capability_name/current_score/attempt_count/last_updated` shape before building the engine against it
+- `context/features/SPEC_19_CASE_DETAIL_PAGE.md`
+- `context/current-feature.md` History (SPEC_17 entry) — the live capability-scoring engine and real schema (`case_studies`, `case_study_attempts`, `case_study_tags`, `student_capabilities`) this spec's attempt-state logic will actually need to read, in place of the spec's assumed `simulations`/`simulation_attempts`/`case_questions` tables
+- `frontend/src/pages/cases/CaseDetail.tsx` — existing static page from SPEC_06 at `/student/case-studies/:id`; most likely target to make dynamic rather than a new page at the spec's illustrative `/student/case/:id` route
+- `backend/services/student/router.py` — likely home for the new `GET /cases/:case_id` and `POST /cases/:case_id/start` endpoints, matching this router's existing student-scoped-by-JWT pattern
+- `backend/services/student/capability_engine.py` (from SPEC_17) — source of truth for capability scores if the up/unchanged/down indicator needs before/after comparison
+- Alembic migrations — will need `current_stage` on the real attempt table (if not already present) and a `recommended_career_tracks` column/table, once the schema mismatch above is resolved
 
 ## Implementation Order
 
-1. Confirm `student_capability` table shape and existing capability data flow (this dashboard already has partial live wiring from SPEC_10/SPEC_13/prior Bugs-fixes work — audit what's real vs hardcoded before changing anything)
-2. Build `capability_engine.py` (Section 4 algorithm) as an isolated, independently callable/testable module
-3. Wire engine into attempt-completion flow (Trigger 1)
-4. `GET /api/student/dashboard/capabilities` + frontend `CapabilityMatrix` fetch/skeleton wiring
-5. `GET /api/student/dashboard/hero` + frontend hero panel wiring, including CTA and hero-message logic
-6. Header dynamic name/role fix + duplicate-role bug fix + dropdown menu
-7. `GET /api/student/profile` + new `/student/profile` page + route
-8. Verify against Acceptance Criteria checklist in the spec end-to-end against the live dev DB
+1. Resolve the schema/route mismatch first: confirm which real tables and route this spec should target (`case_studies`/`case_study_attempts` vs. the spec's `simulations`/`simulation_attempts`, and `/student/case-studies/:id` vs `/student/case/:id`) before writing any code
+2. Confirm which of the spec's assumed columns already exist vs. need a migration (`current_stage`, `recommended_career_tracks`, reflection questions storage)
+3. Build `GET /api/student/cases/:case_id` (or the router's existing case-detail endpoint, extended) returning case content + attempt state
+4. Build `POST /api/student/cases/:case_id/start` with the 409-if-exists behavior
+5. Wire `CaseDetail.tsx`'s left panel to live case content
+6. Build the right panel as its own component handling all 4 attempt states, including grade-label mapping and the capability score-change indicator
+7. Verify against the Acceptance Criteria checklist end-to-end against the live dev DB
 
 ## Definition of Done
 
-- [x] Hero panel: name, course/semester/batch/section, Overall Score, Level (numeric + label) all sourced from the database
-- [x] Hero message reflects weakest capability category, or the `no_attempts` default
-- [x] Hero CTA correctly toggles between "Continue Active Case" and "Browse Case Studies"
-- [x] Header name/role sourced from JWT; duplicate-role bug fixed ("Student" shown, not program twice)
-- [x] Header dropdown opens with Profile / Career Pathway / Logout
-- [x] Capability Matrix shows real sub-capability scores (0 before any attempts) with correct category averages — 2 real sub-capabilities per category (8 total), not 20, per the reconciliation decision recorded in History below
-- [x] Capability Matrix shows a loading skeleton while fetching; accordion interaction still works
-- [x] Capability engine: immediate update on attempt completion (pre-existing trigger, confirmed wired), rolling weighted average with RECENCY_WEIGHT=0.3 (pre-existing, admin-configurable), first attempt sets score directly (was broken — fixed this session), all targeted capabilities updated equally, overall score = average of the matrix's real capabilities
-- [x] `/student/profile` page: all fields read-only, course/semester/section/batch/mentor display correctly, info banner present, Career Pathway link present, reachable from header dropdown
+- [x] Case title, domain (spec's "industry"), difficulty, description load from DB
+- [x] "Created by" shows faculty's real name from DB (null-safe; falls back to "PCDC Faculty" in the UI if the case has no creator on record)
+- [x] "Estimated time" is calculated as reading + writing + rapid-fire minutes (falls back to `estimated_minutes` if all three are unset)
+- [x] "Added" date shows `created_at` formatted correctly
+- [x] The Situation text comes from the DB (`case_studies.content` JSON's `sections.situation`)
+- [x] Learning outcomes render as a bullet list from the DB
+- [x] Reflection questions show greyed out, sourced from the DB
+- [x] Capabilities Assessed chips come from the case's targeted capabilities (`case_study_tags`, tag_type='capability')
+- [~] Relevant Career Tracks — **skipped per decision** (no backing data anywhere; would require Case Builder scope)
+- [x] Right panel shows State A (Not Started) if no attempt exists
+- [x] Right panel shows State B (In Progress) with correct stage number if attempt is active (stage derived from `status`, not a persisted column — see History)
+- [x] Right panel shows State C (Completed) with score + grade label if attempt is completed
+- [~] Right panel State D (Ineligible) — **skipped per decision** (no precedent for what "70% completion" means; States A/B/C only)
+- [x] "Start Attempt" creates a new attempt record and redirects into the attempt flow
+- [x] "Start Attempt" is blocked (409 handled) if attempt already exists (pre-existing backend behavior, reused as-is)
+- [x] "Continue Attempt" redirects to the correct current stage (resume logic reconstructs analysis/chat/defense-questions/evaluation from the real attempt record)
+- [x] "View My Results" shows the real evaluation (reuses the attempt page rather than a separate results page — see History)
+- [x] Page shows 403 if this case is not assigned to the student
 
 ---
 
 ## History
+
+- 2026-07-23: Worked through `context/features/SPEC_20_ATTEMPT_FLOW_BUG_FIXES.md`
+  (bug reports from testing the SPEC_19 attempt-flow wiring above), per
+  direction skipping its Bug 4 (Solution Form pre-filled with Lorem Ipsum —
+  didn't investigate this one at all). Note the spec itself is written
+  against illustrative table/route names (`simulation_attempts`,
+  `ai_conversations`, `OPENAI_API_KEY`, `/attempts/:id/chat`) that don't
+  match this codebase's real schema (`case_study_attempts`,
+  `cs_ai_conversations`, `ANTHROPIC_API_KEY`, `/cases/attempt/*`) — same
+  pattern as SPEC_19's original draft; investigated against the real code
+  rather than following the spec's illustrative snippets literally.
+
+  Bug 1 (stepper shows 5 vs 6 stages) — could not reproduce structurally.
+  Grepped the whole frontend for any stage-stepper array; only one exists
+  (`ProgressBar.tsx`'s `stages` constant), and it's a fixed 6-item array
+  with no data-dependent length — it cannot render 5 items in the current
+  code. Left uninvestigated further absent a reproducible page/screenshot;
+  flagged back to the user rather than guessing at a fix for a bug that
+  doesn't appear to exist in the current code.
+
+  Bugs 3 and 5 (AI chat not responding; solution submission failing) —
+  confirmed both share the root cause already found and flagged during
+  SPEC_19 verification: the environment's `ANTHROPIC_API_KEY` is still
+  invalid (401 `invalid x-api-key`, re-checked directly against the
+  Anthropic SDK). This is not a missing/misregistered route — both
+  `POST /cases/attempt/ai-message` and `POST /cases/attempt/submit-solution`
+  exist and are wired correctly (re-confirmed via a direct service-level
+  call with `call_claude` mocked, matching the SPEC_19 verification
+  approach) — they only fail at the point of actually calling Claude. This
+  needs a real, valid API key before students can use AI chat, defense
+  question generation, or evaluation for real; not something fixable from
+  this session.
+
+  Bug 2 (AI chat opens completely empty, no opening message) — this one was
+  real and is now fixed. `submit_initial_analysis`
+  (`backend/services/simulation/service.py`) now generates and stores an
+  opening AI message (new `generate_opening_discussion_message()`, using a
+  short dedicated system prompt) immediately when a student unlocks AI
+  discussion, using the real case's title + situation text (reusing
+  `parse_situation()` from the SPEC_19 work) + the student's own submitted
+  analysis. Logged into `cs_ai_conversations` exactly like any other
+  discussion message, so it appears naturally in `conversations` on resume
+  with no special-casing needed there. `SubmitAnalysisResponse` gained an
+  `opening_message` field; `CaseAttempt.tsx` seeds the chat with it
+  immediately after a successful submission. Added a defensive fallback for
+  attempts that reached `ai_discussion` before this fix existed and have
+  zero discussion messages on resume: shows a static (non-AI-generated,
+  no API call) prompt bubble instead of a blank window, so the chat is
+  never empty regardless of when the attempt started.
+
+  Section 6's "verify Stage 2 saves correctly" check was already covered by
+  SPEC_19's own verification (`submit-analysis` confirmed returning 200 and
+  persisting `initial_analysis`/`current_stage` correctly); re-confirmed
+  here as part of the same opening-message test run.
+
+  Verified end-to-end with `call_claude` mocked (same technique as SPEC_19,
+  for the same reason — the invalid API key blocks real Claude calls):
+  started a fresh attempt, submitted a 210-word analysis, confirmed the
+  response includes a real `opening_message` and that it's persisted and
+  retrievable via `get_attempt_detail` afterward; cleaned up all test data.
+  `tsc -b`, `vite build`, and `py_compile` all passed.
+
+- 2026-07-23: Implemented SPEC_19 on `main` directly (no feature branch —
+  continuing straight from the SPEC_17 session per direction). Investigated
+  first and found the real schema diverges heavily from the spec's assumed
+  `simulations`/`simulation_attempts`/`case_questions` tables (confirmed
+  dead/unused) — the real tables are `case_studies`/`case_study_attempts`,
+  same ones SPEC_17's capability engine already reads/writes. Asked the user
+  four scope questions before writing code (all answered "recommended"
+  except one): skip State D/Ineligible (the `eligible_for_evaluation` column
+  is dead, no precedent for a completion-percentage formula); skip
+  Relevant Career Tracks (no backing data anywhere, `case_study_tags`'
+  `career_track` type is never written); show plain capability scores with
+  no up/down indicator (no score-history/snapshot mechanism exists); and
+  — this one reversed after digging further — **wire the full attempt flow
+  to the real backend**, not just add stage tracking to the Case Detail
+  page.
+
+  That last one uncovered the session's biggest surprise: `CaseAttempt.tsx`
+  (the entire 6-screen attempt flow) was **100% mock** — hardcoded AI
+  responses, hardcoded defense questions, hardcoded evaluation — despite a
+  fully working backend attempt API (`POST /cases/attempt/start`,
+  `submit-analysis`, `ai-message`, `submit-solution`, `submit-defense`,
+  `submit-reflection`, all in `services/simulation/service.py`) that nothing
+  on the frontend had ever called. Flagged this to the user with the real
+  cost (wiring the whole flow, not a column) before proceeding, since they'd
+  answered the original stage-persistence question without that context;
+  they confirmed wiring it fully. A second gap surfaced once inside the
+  wiring: the backend requires a `submit-reflection` call with real text
+  before scores finalize, but no screen ever collected it — added a new
+  `ReflectionStep.tsx` component (a short textarea) as the missing step
+  between Defense and the Evaluation screen, per the user's choice over
+  auto-submitting a placeholder.
+
+  Technical simplification made without re-asking (same outcome, less
+  complexity): rather than add a persisted `current_stage` column that
+  would need to be kept in sync with `case_study_attempts.status`, discovered
+  the display stage (1-6) is fully derivable from `status` alone via a
+  static map (`ATTEMPT_STATUS_STAGE` in `simulation/service.py`), since every
+  status transition already corresponds 1:1 with a screen. No migration
+  needed at all for this spec.
+
+  Backend: added `get_case_detail()` + `GET /cases/{case_id}/detail`
+  (`services/simulation/router.py`/`service.py`) — case content (parses
+  `content` JSON for the situation text, splits the `learning_outcomes`/
+  `reflection_questions` TEXT columns by newline, pulls capability tags),
+  assignment check (403 if not in `assigned_cases`), and attempt state
+  (derived stage/stage_label, `total_score`/`grade_label` once evaluated).
+  Grade-label thresholds rescaled ×10 from the spec's 0–10 scale to the real
+  `cs_evaluations.total_score`'s 0–100 scale (90 Exceptional / 75 Excellent /
+  65 Good / 55 Improving / else Needs Work) — the spec's `marks_total`
+  column exists on `case_study_attempts` but is never written anywhere;
+  `cs_evaluations.total_score` is the real score. Everything else (start,
+  submit-analysis, ai-message, submit-solution, submit-defense,
+  submit-reflection, 409-on-duplicate-attempt) reused the existing backend
+  as-is — no changes needed.
+
+  Frontend: `CaseDetail.tsx` rewritten to fetch `getCaseDetail()`, render
+  States A/B/C (dropped the Career Tracks card), and call
+  `startCaseAttempt()` for the Start button. `CaseAttempt.tsx` fully
+  rewritten: resolves the attempt via the same detail endpoint on mount
+  (starting one if none exists), fetches full attempt state via
+  `GET /cases/attempt/{id}` to reconstruct resume state (analysis text,
+  chat history filtered by `conversations[].stage`, defense questions
+  parsed back out of the logged AI conversation entry, evaluation), derives
+  the resume screen from `status`, and wires every screen's "Next"/submit
+  action to the real endpoint instead of local mock state. Small supporting
+  edits: `ProgressBar` takes a `title` prop (was hardcoded to a fictional
+  case name), `Screen6Evaluation`'s `next_case` made optional and hidden
+  when absent (the AI evaluation prompt never actually asks for
+  `next_recommended_case_id`, so it's always null in practice — this was
+  quietly dead in the original mock too). Left `Screen1Briefing`'s
+  scene-setting content (fictional "ABC Electronics" narrative structure)
+  as presentational scaffolding around the real situation text rather than
+  rebuilding it, since the real schema has no structured equivalent for the
+  financial-table/feedback/competitor mock data.
+
+  Fixed one more dead-end found in passing: `CaseCard.tsx`'s "completed"
+  status linked to `/student/case-studies/:id/results`, a placeholder route
+  (`CaseStudyDestination.tsx`) that was never going to be built out
+  separately — repointed it to the attempt page instead, since
+  `CaseAttempt.tsx` now doubles as the results viewer once
+  `status==='evaluated'`.
+
+  Verified end-to-end against the live dev DB (case id 7, "social media
+  marketing growth", assigned to seed student `student@pcdc.com`) two ways.
+  Over real HTTP against the user's own running dev server (confirmed via
+  `tasklist` this was their long-running `--reload` process on port 8000,
+  not a server I should manage — a duplicate instance I'd started myself on
+  the same port was killed immediately once noticed): confirmed
+  `GET /cases/7/detail` returns State A pre-start, `POST .../start` creates
+  the attempt and moves it to State B, `submit-analysis` succeeds and the
+  200-word gate rejects short text exactly like Screen2's client-side gate.
+  Discovered here that the environment's `ANTHROPIC_API_KEY` is invalid
+  (401 `invalid x-api-key`, confirmed via a direct SDK call) — pre-existing
+  and unrelated to this work, but it blocks `ai-message`/`submit-solution`/
+  `submit-defense` end-to-end over HTTP since all three call Claude. Worked
+  around this for verification only (not in any shipped code) by
+  monkeypatching `call_claude` in a standalone script calling the service
+  functions directly, confirming the full remaining chain: AI message →
+  solution → real defense questions → defense submission (evaluation
+  generated, `total_score=73`) → detail endpoint correctly withholds the
+  score until reflection is submitted (`defense_complete` → State B-shaped,
+  no score) → reflection submitted → status `evaluated`, detail endpoint
+  now shows `total_score: 73, grade_label: "Good"` → confirmed the case's 5
+  tagged capabilities (Communication/Entrepreneurship/Leadership/Problem
+  Solving/Professionalism) updated to score 73/attempt_count 1 via SPEC_17's
+  capability engine, while the 3 untagged ones stayed at 0 — the two specs'
+  wiring is confirmed to compose correctly. All test data (attempt,
+  evaluation, conversations, capability scores, assigned_cases status, a
+  stray completion notification) reverted afterward. `tsc -b` and
+  `vite build` both passed. **Flagging for the user:** the invalid
+  `ANTHROPIC_API_KEY` needs to be refreshed before the AI-dependent steps
+  (AI discussion, defense-question generation, evaluation) will work for
+  real students — this is a pre-existing credential issue, not something
+  introduced or fixable by this session's changes.
+
+- 2026-07-23: SPEC_17 Student Portal — Dynamic Dashboard + Profile marked
+  Completed (all Definition of Done items checked — see the entry below for
+  the full implementation history). Committed and merged into `main` via
+  `feature/student-dashboard-profile` (`--no-ff`), local branch deleted, and
+  pushed to `origin/main`. Switched current feature to SPEC_19 Student Case
+  Detail Page — Dynamic (`context/features/SPEC_19_CASE_DETAIL_PAGE.md`),
+  status In Progress. This file's own internal heading calls itself
+  "SPEC_18" while its filename says `SPEC_19` — the same mismatch pattern
+  already seen with the Case Builder Form spec one number earlier — treating
+  the filename as authoritative here too. Scope: make the existing static
+  Student Case Detail page (`CaseDetail.tsx`, from SPEC_06) dynamic — real
+  case content on the left panel, and a 4-state attempt gateway (Not
+  Started / In Progress / Completed / Ineligible) on the right panel driving
+  Start/Continue/View Results actions. Flagged a real blocker before
+  implementation starts: the spec's assumed schema (`simulations`,
+  `simulation_attempts`, `case_questions`, `simulations.situation` /
+  `targeted_capabilities` / `recommended_courses`) doesn't match this
+  codebase's actual Case Studies tables (`case_studies`, `case_study_attempts`,
+  `case_study_tags` — the same tables SPEC_17's capability engine reads/
+  writes), and its illustrative route (`/student/case/:id`) doesn't match
+  the app's existing `/student/case-studies/:id` — this needs to be
+  reconciled against the real schema before any code is written, the same
+  way the SPEC_17/SPEC_18 capability-taxonomy conflicts were resolved by
+  asking first rather than assuming the spec's illustrative shape was
+  literal.
 
 - 2026-07-23: Implemented SPEC_17 on branch `feature/student-dashboard-profile`
   (branched from `main`; the `frontend/src/pages/student/Dashboard.tsx`

@@ -14,13 +14,13 @@ export interface EvaluationData {
   strengths: string
   weaknesses: string
   blind_spots: string
-  next_case: {
+  next_case?: {
     id: number
     title: string
     domain: string
     difficulty: number
     estimated_minutes: number
-  }
+  } | null
 }
 
 interface Screen6EvaluationProps {
@@ -89,23 +89,25 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
         <InsightCard title="Blind Spots" tone="red" text={evaluation.blind_spots} />
       </div>
 
-      <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-semibold text-[#111827]">Next Recommended Case</h3>
-        <div className="mt-4 rounded-xl bg-[#F6F7F9] p-5">
-          <h4 className="text-lg font-semibold text-[#0B1D3A]">{evaluation.next_case.title}</h4>
-          <p className="mt-2 text-sm text-[#6B7280]">
-            {evaluation.next_case.domain} / Level {evaluation.next_case.difficulty} /{" "}
-            {evaluation.next_case.estimated_minutes} min
-          </p>
-          <Link
-            to={`/student/case-studies/${evaluation.next_case.id}`}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
-          >
-            View Case
-            <ArrowRight size={16} aria-hidden="true" />
-          </Link>
-        </div>
-      </article>
+      {evaluation.next_case ? (
+        <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-semibold text-[#111827]">Next Recommended Case</h3>
+          <div className="mt-4 rounded-xl bg-[#F6F7F9] p-5">
+            <h4 className="text-lg font-semibold text-[#0B1D3A]">{evaluation.next_case.title}</h4>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              {evaluation.next_case.domain} / Level {evaluation.next_case.difficulty} /{" "}
+              {evaluation.next_case.estimated_minutes} min
+            </p>
+            <Link
+              to={`/student/case-studies/${evaluation.next_case.id}`}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
+            >
+              View Case
+              <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          </div>
+        </article>
+      ) : null}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Link

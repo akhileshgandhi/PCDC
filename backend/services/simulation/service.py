@@ -334,6 +334,136 @@ def get_case_study(db: Session, case_id: int, current_user: Dict[str, Any]) -> D
     return case_row_to_response(db, row)
 
 
+ATTEMPT_STAGE_LABELS = ["Briefing", "Analysis", "AI Chat", "Solution", "Defense", "Evaluation"]
+
+ATTEMPT_STATUS_STAGE = {
+    "analysis_submitted": 2,
+    "ai_discussion": 3,
+    "solution_submitted": 5,
+    "defense_complete": 6,
+    "evaluated": 6,
+}
+
+GRADE_LABELS = [
+    (90, "Exceptional"),
+    (75, "Excellent"),
+    (65, "Good"),
+    (55, "Improving"),
+    (0, "Needs Work"),
+]
+
+
+def grade_label(total_score: Optional[float]) -> Optional[str]:
+    if total_score is None:
+        return None
+    for threshold, label in GRADE_LABELS:
+        if total_score >= threshold:
+            return label
+    return "Needs Work"
+
+
+def parse_situation(content: Optional[str]) -> str:
+    try:
+        parsed = json.loads(content or "{}")
+    except json.JSONDecodeError:
+        return ""
+    situation = (parsed.get("sections") or {}).get("situation", "")
+    return str(situation or "")
+
+
+def split_lines(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> Dict[str, Any]:
+    require_role(current_user, ["student"], "Only students can view this page")
+    row = db.execute(
+        text("""
+            SELECT cs.id, cs.title, cs.description, cs.domain, cs.difficulty,
+                   cs.difficulty_label, cs.content, cs.learning_outcomes,
+                   cs.reflection_questions, cs.reading_time_minutes,
+                   cs.answer_writing_time_minutes, cs.rapid_fire_time_minutes,
+                   cs.estimated_minutes, cs.created_at, u.name AS created_by_name
+            FROM case_studies cs
+            LEFT JOIN users u ON u.id = cs.created_by
+            WHERE cs.id = :case_id AND cs.status = 'published'
+        """),
+        {"case_id": case_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case study not found")
+
+    assignment = db.execute(
+        text("""
+            SELECT 1
+            FROM assigned_cases ac
+            JOIN students s ON s.id = ac.student_id
+            WHERE s.user_id = :user_id AND ac.case_study_id = :case_id
+        """),
+        {"user_id": current_user["id"], "case_id": case_id},
+    ).fetchone()
+    if not assignment:
+        raise HTTPException(status_code=403, detail="This case has not been assigned to you")
+
+    estimated_minutes = (
+        (row.reading_time_minutes or 0)
+        + (row.answer_writing_time_minutes or 0)
+        + (row.rapid_fire_time_minutes or 8)
+    ) or row.estimated_minutes
+
+    case = {
+        "id": row.id,
+        "title": row.title,
+        "description": row.description,
+        "domain": row.domain,
+        "difficulty": row.difficulty,
+        "difficulty_label": row.difficulty_label,
+        "situation": parse_situation(row.content),
+        "learning_outcomes": split_lines(row.learning_outcomes),
+        "reflection_questions": split_lines(row.reflection_questions),
+        "capabilities": [
+            tag["tag_value"] for tag in get_case_tags(db, row.id) if tag["tag_type"] == "capability"
+        ],
+        "estimated_minutes": estimated_minutes,
+        "created_by_name": row.created_by_name,
+        "created_at": str(row.created_at),
+    }
+
+    attempt_row = db.execute(
+        text("""
+            SELECT id, status
+            FROM case_study_attempts
+            WHERE case_study_id = :case_id AND student_id = :user_id
+        """),
+        {"case_id": case_id, "user_id": current_user["id"]},
+    ).fetchone()
+
+    if not attempt_row:
+        attempt = {"exists": False, "attempt_id": None, "status": None, "stage": None,
+                   "stage_label": None, "total_score": None, "grade_label": None}
+        return {"case": case, "attempt": attempt}
+
+    stage = ATTEMPT_STATUS_STAGE.get(attempt_row.status, 1)
+    total_score = None
+    if attempt_row.status == "evaluated":
+        evaluation = get_evaluation(db, attempt_row.id)
+        if evaluation:
+            total_score = evaluation["total_score"]
+
+    attempt = {
+        "exists": True,
+        "attempt_id": attempt_row.id,
+        "status": attempt_row.status,
+        "stage": stage,
+        "stage_label": ATTEMPT_STAGE_LABELS[stage - 1],
+        "total_score": total_score,
+        "grade_label": grade_label(total_score),
+    }
+    return {"case": case, "attempt": attempt}
+
+
 def update_case_status(
     db: Session, case_id: int, status: str, current_user: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -428,6 +558,30 @@ def get_published_case_content(db: Session, case_study_id: int) -> Any:
     return row
 
 
+OPENING_DISCUSSION_PROMPT = """
+You are an AI business coach helping a student work through a case study.
+Challenge their thinking, ask probing questions, help them see angles they
+may have missed. Do NOT give them the answer.
+
+Start with a brief one-sentence acknowledgment of their analysis, then ask
+one sharp question that challenges an assumption or pushes them to think
+deeper. Keep the whole response to 2-4 sentences.
+"""
+
+
+def generate_opening_discussion_message(
+    db: Session, attempt_id: int, case_title: str, case_situation: str, initial_analysis: str
+) -> str:
+    prompt = (
+        f"Case: {case_title}\n"
+        f"Situation: {case_situation}\n\n"
+        f"Student's initial analysis:\n{initial_analysis}"
+    )
+    message = call_claude(OPENING_DISCUSSION_PROMPT, [{"role": "user", "content": prompt}], 300)
+    log_conversation(db, attempt_id, "ai", "discussion", message)
+    return message
+
+
 def submit_initial_analysis(
     db: Session, attempt_id: int, initial_analysis: str, current_user: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -441,6 +595,15 @@ def submit_initial_analysis(
             status_code=400,
             detail=f"Minimum 200 words required. Current: {word_count} words",
         )
+    case_row = db.execute(
+        text("""
+            SELECT cs.title, cs.content
+            FROM case_study_attempts a
+            JOIN case_studies cs ON cs.id = a.case_study_id
+            WHERE a.id = :attempt_id
+        """),
+        {"attempt_id": attempt.id},
+    ).fetchone()
     db.execute(
         text("""
             UPDATE case_study_attempts
@@ -456,8 +619,11 @@ def submit_initial_analysis(
             "word_count": word_count,
         },
     )
+    opening_message = generate_opening_discussion_message(
+        db, attempt.id, case_row.title, parse_situation(case_row.content), initial_analysis
+    )
     db.commit()
-    return {"ai_unlocked": True, "attempt_id": attempt_id}
+    return {"ai_unlocked": True, "attempt_id": attempt_id, "opening_message": opening_message}
 
 
 def get_student_attempt(db: Session, attempt_id: int, student_id: int) -> Any:

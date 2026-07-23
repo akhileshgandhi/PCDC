@@ -36,7 +36,7 @@ function actionForStatus(caseStudy: CaseStudy) {
   if (caseStudy.status === "completed") {
     return {
       label: "View Results",
-      to: `/student/case-studies/${caseStudy.id}/results`,
+      to: `/student/case-studies/${caseStudy.id}/attempt`,
       className: "border-[#16A34A] text-[#16A34A] hover:bg-[#16A34A] hover:text-white",
       showArrow: false,
     }

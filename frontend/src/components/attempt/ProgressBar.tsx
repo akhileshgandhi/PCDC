@@ -3,6 +3,7 @@ import { Clock3 } from "lucide-react"
 interface ProgressBarProps {
   currentScreen: number
   elapsedTime: number
+  title?: string
 }
 
 const stages = ["Briefing", "Analysis", "AI Chat", "Solution", "Defense", "Evaluation"]
@@ -13,7 +14,7 @@ function formatElapsed(seconds: number) {
   return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
 }
 
-export default function ProgressBar({ currentScreen, elapsedTime }: ProgressBarProps) {
+export default function ProgressBar({ currentScreen, elapsedTime, title }: ProgressBarProps) {
   const currentStage = stages[currentScreen - 1]
   const progressPercent = ((currentScreen - 1) / (stages.length - 1)) * 100
 
@@ -30,7 +31,7 @@ export default function ProgressBar({ currentScreen, elapsedTime }: ProgressBarP
                 PCDC
               </p>
               <h1 className="truncate text-lg font-semibold text-[#111827]">
-                Q3 Market Entry Strategy
+                {title || "Case Attempt"}
               </h1>
             </div>
           </div>

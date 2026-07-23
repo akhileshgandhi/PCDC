@@ -26,6 +26,7 @@ from .models import (
 from .service import (
     create_case_study,
     get_attempt_detail,
+    get_case_detail,
     get_case_study,
     get_student_attempts_for_mentor,
     get_thinking_path_for_mentor,
@@ -80,6 +81,21 @@ def list_cases(
         raise
     except Exception as error:
         print(f"LIST CASES ERROR: {error}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@simulation_router.get("/{case_id}/detail")
+def case_detail(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    try:
+        return get_case_detail(db, case_id, current_user)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"CASE DETAIL ERROR: {error}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

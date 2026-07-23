@@ -11,91 +11,43 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { ReactNode } from "react"
-import { Link } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
 
+import { getCaseDetail, startCaseAttempt, toCaseDomain, type CaseDetail as CaseDetailData } from "../../api/cases"
 import DifficultyBadge from "../../components/cases/DifficultyBadge"
-import DomainTag, { type CaseDomain } from "../../components/cases/DomainTag"
-import type { CaseStatus } from "../../components/cases/StatusBadge"
+import DomainTag from "../../components/cases/DomainTag"
 import DashboardLayout from "../../layouts/DashboardLayout"
 
-interface CaseDetailData {
-  id: number
-  title: string
-  description: string
-  domain: CaseDomain
-  difficulty: number
-  estimated_minutes: number
-  status: CaseStatus
-  current_stage: number
-  created_by: string
-  created_at: string
-  learning_outcomes: string[]
-  reflection_questions: string[]
-  career_tracks: string[]
-  capabilities: string[]
-}
-
-const mockCaseDetail: CaseDetailData = {
-  id: 1,
-  title: "Q3 Market Entry Strategy",
-  description: `ABC Electronics, a mid-sized consumer electronics company,
-    has seen a 25% revenue decline over the past two quarters in Southeast
-    Asia. The company faces stiff competition from Chinese OEMs, a weakening
-    distribution network, and shifting consumer preferences toward
-    premium-segment products.
-
-    As the newly appointed Strategy Head, you have been tasked with
-    developing a comprehensive market re-entry plan. You have access to
-    financial reports, customer feedback data, and competitor analysis.
-    The board expects a presentation in 45 minutes.`,
-  domain: "Business",
-  difficulty: 3,
-  estimated_minutes: 45,
-  status: "in_progress",
-  current_stage: 3,
-  created_by: "Dr. Ananya Rao",
-  created_at: "2025-06-20",
-  learning_outcomes: [
-    "Apply strategic frameworks to diagnose business decline",
-    "Evaluate trade-offs in market re-entry strategies",
-    "Develop data-driven recommendations under time pressure",
-    "Anticipate competitive responses to strategic decisions",
-  ],
-  reflection_questions: [
-    "What assumptions did you make that could be challenged?",
-    "How did your thinking evolve after the AI discussion?",
-    "What would you do differently with more information?",
-  ],
-  career_tracks: ["Consulting", "Marketing"],
-  capabilities: ["Strategic Thinking", "Decision Making", "Analytical Thinking"],
-}
-
-const shortDescription =
-  "A consumer electronics company faces declining market share in Southeast Asia. As the Strategy Head, develop a market re-entry plan."
-
 function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(`${value}T00:00:00`))
+  }).format(date)
 }
 
-function attemptAction(caseDetail: CaseDetailData) {
-  if (caseDetail.status === "completed") {
+function attemptAction(caseId: string, data: CaseDetailData) {
+  const { attempt } = data
+
+  if (attempt.status === "evaluated") {
     return {
-      statusText: "Attempt Completed",
-      to: `/student/case-studies/${caseDetail.id}/results`,
+      statusText: `Completed${attempt.total_score !== null ? ` - Score: ${attempt.total_score}/100` : ""}${
+        attempt.grade_label ? ` (${attempt.grade_label})` : ""
+      }`,
+      to: `/student/case-studies/${caseId}/attempt`,
       buttonText: "View My Results",
       buttonClassName: "bg-white text-[#0B1D3A] hover:bg-[#F6F7F9]",
       icon: CheckCircle2,
     }
   }
 
-  if (caseDetail.status === "in_progress") {
+  if (attempt.exists) {
     return {
-      statusText: `In Progress - Stage ${caseDetail.current_stage}/6`,
-      to: `/student/case-studies/${caseDetail.id}/attempt`,
+      statusText: `In Progress - ${attempt.stage_label} (Stage ${attempt.stage}/6)`,
+      to: `/student/case-studies/${caseId}/attempt`,
       buttonText: "Continue Attempt",
       buttonClassName: "bg-[#C9A227] text-white hover:bg-[#B08D20]",
       icon: Target,
@@ -104,15 +56,91 @@ function attemptAction(caseDetail: CaseDetailData) {
 
   return {
     statusText: "Ready to Start",
-    to: `/student/case-studies/${caseDetail.id}/attempt`,
-    buttonText: "Start My Attempt",
+    to: null,
+    buttonText: "Start Attempt",
     buttonClassName: "bg-[#C9A227] text-white hover:bg-[#B08D20]",
     icon: Target,
   }
 }
 
 export default function CaseDetail() {
-  const action = attemptAction(mockCaseDetail)
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [data, setData] = useState<CaseDetailData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [isStarting, setIsStarting] = useState(false)
+
+  useEffect(() => {
+    if (!id) return
+    let isMounted = true
+
+    async function load() {
+      setIsLoading(true)
+      try {
+        const detail = await getCaseDetail(id!)
+        if (isMounted) {
+          setData(detail)
+          setError("")
+        }
+      } catch {
+        if (isMounted) {
+          setError("Unable to load this case study. It may not be assigned to you.")
+        }
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+
+    load()
+    return () => {
+      isMounted = false
+    }
+  }, [id])
+
+  async function handleStartAttempt() {
+    if (!id) return
+    setIsStarting(true)
+    try {
+      await startCaseAttempt(id)
+      navigate(`/student/case-studies/${id}/attempt`)
+    } catch {
+      setError("Unable to start this attempt right now. Please try again.")
+      setIsStarting(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="rounded-xl border border-[#E6EBEB] bg-white px-5 py-16 text-center shadow-sm">
+          <p className="text-sm font-medium text-[#6B7280]">Loading case study...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-5">
+          <Link
+            to="/student/case-studies"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            My Case Studies
+          </Link>
+          <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-8 text-center text-sm font-medium text-[#B91C1C]">
+            {error || "Case study not found."}
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const { case: caseContent, attempt } = data
+  const action = attemptAction(id!, data)
   const ActionIcon = action.icon
 
   return (
@@ -130,64 +158,76 @@ export default function CaseDetail() {
           <main className="space-y-5">
             <section className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
               <div className="flex flex-wrap gap-2">
-                <DomainTag domain={mockCaseDetail.domain} />
-                <DifficultyBadge level={mockCaseDetail.difficulty} />
+                <DomainTag domain={toCaseDomain(caseContent.domain)} />
+                <DifficultyBadge level={caseContent.difficulty} />
               </div>
 
               <h1 className="mt-5 text-[28px] font-semibold leading-tight text-[#0B1D3A]">
-                {mockCaseDetail.title}
+                {caseContent.title}
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7280]">
-                {shortDescription}
-              </p>
+              {caseContent.description ? (
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7280]">
+                  {caseContent.description}
+                </p>
+              ) : null}
 
               <div className="mt-6 grid gap-3 text-sm font-medium text-[#6B7280] sm:grid-cols-3">
                 <MetaItem
                   icon={Clock3}
-                  label={`Estimated time: ${mockCaseDetail.estimated_minutes} minutes`}
+                  label={`Estimated time: ${caseContent.estimated_minutes} minutes`}
                 />
                 <MetaItem
                   icon={CalendarDays}
-                  label={`Added: ${formatDate(mockCaseDetail.created_at)}`}
+                  label={`Added: ${formatDate(caseContent.created_at)}`}
                 />
-                <MetaItem icon={UserCircle} label={`Created by: ${mockCaseDetail.created_by}`} />
+                <MetaItem
+                  icon={UserCircle}
+                  label={`Created by: ${caseContent.created_by_name || "PCDC Faculty"}`}
+                />
               </div>
             </section>
 
             <ContentSection title="The Situation">
               <div className="max-w-[680px] whitespace-pre-line text-sm leading-[1.8] text-[#374151]">
-                {mockCaseDetail.description}
+                {caseContent.situation || "Case content is being finalized."}
               </div>
             </ContentSection>
 
-            <ContentSection title="What You Will Develop">
-              <ul className="space-y-3">
-                {mockCaseDetail.learning_outcomes.map((outcome) => (
-                  <li key={outcome} className="flex gap-3 text-sm leading-6 text-[#374151]">
-                    <CheckCircle2
-                      className="mt-0.5 shrink-0 text-[#C9A227]"
-                      size={18}
-                      aria-hidden="true"
-                    />
-                    <span>{outcome}</span>
-                  </li>
-                ))}
-              </ul>
-            </ContentSection>
+            {caseContent.learning_outcomes.length > 0 ? (
+              <ContentSection title="What You Will Develop">
+                <ul className="space-y-3">
+                  {caseContent.learning_outcomes.map((outcome) => (
+                    <li key={outcome} className="flex gap-3 text-sm leading-6 text-[#374151]">
+                      <CheckCircle2
+                        className="mt-0.5 shrink-0 text-[#C9A227]"
+                        size={18}
+                        aria-hidden="true"
+                      />
+                      <span>{outcome}</span>
+                    </li>
+                  ))}
+                </ul>
+              </ContentSection>
+            ) : null}
 
-            <ContentSection title="You Will Be Asked To Reflect On">
-              <ol className="space-y-3">
-                {mockCaseDetail.reflection_questions.map((question, index) => (
-                  <li key={question} className="flex gap-3 text-sm italic leading-6 text-[#6B7280]">
-                    <span className="font-semibold text-[#0B1D3A]">{index + 1}.</span>
-                    <span>{question}</span>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-5 rounded-lg bg-[#F6F7F9] px-4 py-3 text-sm font-medium text-[#6B7280]">
-                These questions appear after your AI discussion.
-              </p>
-            </ContentSection>
+            {caseContent.reflection_questions.length > 0 ? (
+              <ContentSection title="You Will Be Asked To Reflect On">
+                <ol className="space-y-3">
+                  {caseContent.reflection_questions.map((question, index) => (
+                    <li
+                      key={question}
+                      className="flex gap-3 text-sm italic leading-6 text-[#6B7280]"
+                    >
+                      <span className="font-semibold text-[#0B1D3A]">{index + 1}.</span>
+                      <span>{question}</span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-5 rounded-lg bg-[#F6F7F9] px-4 py-3 text-sm font-medium text-[#6B7280]">
+                  These questions appear after your AI discussion.
+                </p>
+              </ContentSection>
+            ) : null}
           </main>
 
           <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
@@ -195,10 +235,12 @@ export default function CaseDetail() {
               <h2 className="text-xl font-semibold">Your Attempt</h2>
 
               <div className="mt-6 space-y-4 text-sm">
-                <InfoRow icon={Clock3} text={`${mockCaseDetail.estimated_minutes} minutes`} />
+                <InfoRow icon={Clock3} text={`${caseContent.estimated_minutes} minutes`} />
                 <InfoRow
                   icon={BarChart3}
-                  text={`Level ${mockCaseDetail.difficulty} - Decision Making`}
+                  text={`Level ${caseContent.difficulty}${
+                    caseContent.difficulty_label ? ` - ${caseContent.difficulty_label}` : ""
+                  }`}
                 />
                 <InfoRow icon={Target} text="One attempt only" />
               </div>
@@ -217,17 +259,30 @@ export default function CaseDetail() {
                 <span>{action.statusText}</span>
               </div>
 
-              <Link
-                to={action.to}
-                className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition ${action.buttonClassName}`}
-              >
-                {action.buttonText}
-                <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              {action.to ? (
+                <Link
+                  to={action.to}
+                  className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition ${action.buttonClassName}`}
+                >
+                  {action.buttonText}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStartAttempt}
+                  disabled={isStarting}
+                  className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${action.buttonClassName}`}
+                >
+                  {isStarting ? "Starting..." : action.buttonText}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </button>
+              )}
             </section>
 
-            <TagCard title="Capabilities Assessed" variant="outline" tags={mockCaseDetail.capabilities} />
-            <TagCard title="Relevant Career Tracks" variant="filled" tags={mockCaseDetail.career_tracks} />
+            {caseContent.capabilities.length > 0 ? (
+              <TagCard title="Capabilities Assessed" tags={caseContent.capabilities} />
+            ) : null}
           </aside>
         </div>
       </div>
@@ -280,10 +335,9 @@ function InfoRow({ icon: Icon, text }: InfoRowProps) {
 interface TagCardProps {
   title: string
   tags: string[]
-  variant: "outline" | "filled"
 }
 
-function TagCard({ title, tags, variant }: TagCardProps) {
+function TagCard({ title, tags }: TagCardProps) {
   return (
     <section className="rounded-xl border border-[#E6EBEB] bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-[#111827]">{title}</h2>
@@ -291,11 +345,7 @@ function TagCard({ title, tags, variant }: TagCardProps) {
         {tags.map((tag) => (
           <span
             key={tag}
-            className={
-              variant === "outline"
-                ? "rounded-full border border-[#C9A227] px-3 py-1 text-xs font-semibold text-[#0B1D3A]"
-                : "rounded-full bg-[#0B1D3A] px-3 py-1 text-xs font-semibold text-white"
-            }
+            className="rounded-full border border-[#C9A227] px-3 py-1 text-xs font-semibold text-[#0B1D3A]"
           >
             {tag}
           </span>

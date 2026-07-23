@@ -68,6 +68,7 @@ class SubmitAnalysisRequest(BaseModel):
 class SubmitAnalysisResponse(BaseModel):
     ai_unlocked: bool
     attempt_id: int
+    opening_message: Optional[str] = None
 
 
 class AIMessageRequest(BaseModel):
