@@ -1824,7 +1824,8 @@ def call_llm(
         "model": get_llm_model(),
         "max_tokens": effective_max,
         "messages": [{"role": "system", "content": system_prompt}, *messages],
-        "timeout": 90,
+        # Lower this on serverless hosts with short function limits (e.g. Vercel).
+        "timeout": int(os.getenv("LLM_TIMEOUT_SECONDS", "90")),
     }
     # Force valid JSON for the calls that parse it (evaluation, rapid fire,
     # defense). json_object mode works for both OpenAI and Gemini and stops
