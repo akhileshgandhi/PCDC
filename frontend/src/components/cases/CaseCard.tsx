@@ -118,7 +118,7 @@ export default function CaseCard({ caseStudy }: CaseCardProps) {
         </span>
         {caseStudy.total_marks ? (
           <span className="inline-flex items-center gap-2">
-            {caseStudy.total_marks}/10 marks
+            {caseStudy.total_marks} marks
           </span>
         ) : null}
         {caseStudy.due_date && caseStudy.status !== "completed" ? (

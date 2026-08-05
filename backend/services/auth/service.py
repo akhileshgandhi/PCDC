@@ -108,6 +108,70 @@ def login_user(db: Session, email: str, password: str):
     )
     return {"access_token": token, "token_type": "bearer"}
 
+def login_with_google(db: Session, credential: str):
+    """Login-only Google Sign-In: verify the Google ID token, then match an
+    existing (admin-created) user by verified email. Unknown emails are
+    rejected — there is no self-signup."""
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Google login is not configured")
+
+    # Imported lazily so the app still boots if the dependency is absent.
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token as google_id_token
+
+    try:
+        info = google_id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            client_id,
+            clock_skew_in_seconds=10,  # tolerate minor server clock drift
+        )
+    except ValueError as error:
+        print(f"GOOGLE VERIFY FAILED: {error}")
+        raise HTTPException(status_code=401, detail=f"Google sign-in failed: {error}")
+
+    if not info.get("email_verified"):
+        raise HTTPException(status_code=401, detail="Your Google email is not verified.")
+
+    email = (info.get("email") or "").lower()
+    google_sub = info.get("sub")
+    if not email:
+        raise HTTPException(status_code=401, detail="Google account has no email.")
+
+    user = db.execute(
+        text("""
+            SELECT id, name, email, role, COALESCE(status, 'active') AS status
+            FROM users
+            WHERE LOWER(email) = :email
+        """),
+        {"email": email},
+    ).fetchone()
+    if not user:
+        raise HTTPException(
+            status_code=403,
+            detail="No PCDC account found for this email. Ask your admin to add you.",
+        )
+    if user[4] != "active":
+        raise HTTPException(status_code=403, detail="Account is inactive")
+
+    db.execute(
+        text("""
+            UPDATE users
+            SET google_sub = :google_sub, last_login_at = NOW(), updated_at = NOW()
+            WHERE id = :id
+        """),
+        {"google_sub": google_sub, "id": user[0]},
+    )
+    db.execute(text("INSERT INTO login_events (user_id) VALUES (:id)"), {"id": user[0]})
+    db.commit()
+
+    token = create_access_token(
+        {"sub": str(user[0]), "name": user[1], "email": user[2], "role": user[3]}
+    )
+    return {"access_token": token, "token_type": "bearer"}
+
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])

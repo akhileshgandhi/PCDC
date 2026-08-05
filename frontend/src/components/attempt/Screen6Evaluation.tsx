@@ -1,7 +1,8 @@
-import { ArrowRight, MessageSquare, Share2 } from "lucide-react"
+import { ArrowRight, CheckCircle, MessageSquare, TrendingUp, Zap } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import RadarChart, { type RadarMetric } from "./RadarChart"
+import type { QuestionScore } from "../../api/cases"
 
 export interface EvaluationData {
   total_score: number
@@ -14,6 +15,12 @@ export interface EvaluationData {
   strengths: string
   weaknesses: string
   blind_spots: string
+  improvement_areas: string
+  question_scores: QuestionScore[]
+  rapid_fire_score: number
+  rapid_fire_feedback: string
+  overall_grade: string
+  grade_comment: string
   next_case?: {
     id: number
     title: string
@@ -27,104 +34,199 @@ interface Screen6EvaluationProps {
   evaluation: EvaluationData
 }
 
-function scoreLabel(score: number) {
-  if (score >= 90) return { label: "Excellent", className: "text-[#16A34A]" }
-  if (score >= 75) return { label: "Good", className: "text-[#16A34A]" }
-  if (score >= 60) return { label: "Improving", className: "text-[#C9A227]" }
-  return { label: "Needs Work", className: "text-[#F59E0B]" }
+function gradeColor(grade: string) {
+  if (grade === "A") return "text-[#16A34A] bg-[#F0FDF4]"
+  if (grade === "B") return "text-[#0284C7] bg-[#F0F9FF]"
+  if (grade === "C") return "text-[#C9A227] bg-[#FFFBEB]"
+  if (grade === "D") return "text-[#EA580C] bg-[#FFF7ED]"
+  return "text-[#DC2626] bg-[#FEF2F2]"
 }
 
-function barSegments(score: number) {
-  const filled = Math.round(score / 10)
-  return "#".repeat(filled) + "-".repeat(10 - filled)
+function scoreColor(score: number) {
+  if (score >= 80) return "text-[#16A34A]"
+  if (score >= 60) return "text-[#C9A227]"
+  return "text-[#DC2626]"
+}
+
+function ScoreBar({ score, max }: { score: number; max: number }) {
+  const pct = Math.min((score / max) * 100, 100)
+  const color = score / max >= 0.8 ? "bg-[#16A34A]" : score / max >= 0.6 ? "bg-[#C9A227]" : "bg-[#DC2626]"
+  return (
+    <div className="h-2 w-full rounded-full bg-[#E6EBEB]">
+      <div className={`h-2 rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
+// Renders improvement points cleanly whether the value arrives as bullet/newline
+// text or as a legacy stringified list like ['a', 'b', 'c'].
+function toBulletItems(raw: string): string[] {
+  const text = raw.trim()
+  if (text.startsWith("[") && text.endsWith("]")) {
+    const inner = text.slice(1, -1)
+    const items = inner
+      .split(/['"]\s*,\s*['"]/)
+      .map((part) => part.replace(/^['"]|['"]$/g, "").trim())
+      .filter(Boolean)
+    if (items.length > 0) return items
+  }
+  return text
+    .split("\n")
+    .map((line) => line.replace(/^[•\-\d.)\s]+/, "").trim())
+    .filter(Boolean)
 }
 
 export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps) {
-  const label = scoreLabel(evaluation.total_score)
   const metrics: RadarMetric[] = [
-    { label: "Thinking Depth", score: evaluation.thinking_depth },
+    { label: "Thinking", score: evaluation.thinking_depth },
     { label: "Logic", score: evaluation.logic_score },
     { label: "Creativity", score: evaluation.creativity_score },
     { label: "Practicality", score: evaluation.practicality_score },
-    { label: "Risk Awareness", score: evaluation.risk_awareness_score },
+    { label: "Risk", score: evaluation.risk_awareness_score },
     { label: "Reflection", score: evaluation.reflection_score },
   ]
+  const grade = evaluation.overall_grade || "—"
+  const gc = gradeColor(grade)
 
   return (
     <section className="mx-auto max-w-[900px] space-y-5">
-      <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 text-center shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
-          Evaluation Complete
-        </p>
-        <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Overall Score</h2>
-        <div className="mt-6 text-6xl font-semibold text-[#111827]">
-          {evaluation.total_score}
-          <span className="text-2xl text-[#6B7280]"> / 100</span>
+
+      {/* Header — Grade + Score */}
+      <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">Report Card</p>
+        <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-3xl font-semibold text-[#0B1D3A]">
+              Overall Score: <span className={scoreColor(evaluation.total_score)}>{evaluation.total_score}</span>
+              <span className="text-lg text-[#6B7280]"> / 100</span>
+            </h2>
+            {evaluation.grade_comment && (
+              <p className="mt-2 text-sm text-[#6B7280]">{evaluation.grade_comment}</p>
+            )}
+          </div>
+          {grade !== "—" && (
+            <div className={`flex size-20 shrink-0 items-center justify-center rounded-2xl text-4xl font-bold ${gc}`}>
+              {grade}
+            </div>
+          )}
         </div>
-        <p className={`mt-2 text-lg font-semibold ${label.className}`}>{label.label}</p>
       </article>
 
+      {/* Per-Question Scores */}
+      {evaluation.question_scores.length > 0 && (
+        <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-[#111827]">Written Question Scores</h3>
+          <div className="mt-4 space-y-5">
+            {evaluation.question_scores.map((qs) => (
+              <div key={qs.question_number} className="rounded-lg border border-[#E6EBEB] p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
+                    Question {qs.question_number}
+                  </p>
+                  <span className={`text-base font-bold ${scoreColor(qs.marks_awarded / qs.marks_total * 100)}`}>
+                    {qs.marks_awarded} / {qs.marks_total} marks
+                  </span>
+                </div>
+                <ScoreBar score={qs.marks_awarded} max={qs.marks_total} />
+                <p className="mt-3 text-sm leading-6 text-[#374151]">{qs.feedback}</p>
+                {qs.improvement && (
+                  <div className="mt-2 flex gap-2 rounded-lg bg-[#FFFBEB] p-3">
+                    <TrendingUp size={15} className="mt-0.5 shrink-0 text-[#C9A227]" />
+                    <p className="text-xs leading-5 text-[#92400E]"><span className="font-semibold">Improve: </span>{qs.improvement}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </article>
+      )}
+
+      {/* Rapid Fire Score */}
+      {(evaluation.rapid_fire_score > 0 || evaluation.rapid_fire_feedback) && (
+        <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Zap size={18} className="text-[#C9A227]" />
+            <h3 className="text-lg font-semibold text-[#111827]">Rapid Fire Round</h3>
+            <span className={`ml-auto text-lg font-bold ${scoreColor(evaluation.rapid_fire_score)}`}>
+              {Math.round((evaluation.rapid_fire_score / 100) * 3 * 10) / 10} / 3 marks
+            </span>
+          </div>
+          <div className="mt-2">
+            <ScoreBar score={evaluation.rapid_fire_score} max={100} />
+          </div>
+          {evaluation.rapid_fire_feedback && (
+            <p className="mt-3 text-sm leading-6 text-[#374151]">{evaluation.rapid_fire_feedback}</p>
+          )}
+        </article>
+      )}
+
+      {/* Capability Radar */}
       <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-semibold text-[#111827]">Capability Breakdown</h3>
-        <div className="mt-5 grid gap-6 lg:grid-cols-[320px_1fr] lg:items-center">
+        <h3 className="text-lg font-semibold text-[#111827]">Capability Breakdown</h3>
+        <div className="mt-5 grid gap-6 lg:grid-cols-[300px_1fr] lg:items-center">
           <RadarChart metrics={metrics} />
           <div className="space-y-3">
-            {metrics.map((metric) => (
-              <div
-                key={metric.label}
-                className="grid grid-cols-[140px_1fr_36px] items-center gap-3 text-sm"
-              >
-                <span className="font-medium text-[#374151]">{metric.label}</span>
-                <span className="font-mono text-[#0B1D3A]">{barSegments(metric.score)}</span>
-                <span className="font-semibold text-[#111827]">{metric.score}</span>
+            {metrics.map((m) => (
+              <div key={m.label} className="flex items-center gap-3 text-sm">
+                <span className="w-24 font-medium text-[#374151]">{m.label}</span>
+                <div className="flex-1">
+                  <ScoreBar score={m.score} max={100} />
+                </div>
+                <span className={`w-8 text-right font-semibold ${scoreColor(m.score)}`}>{m.score}</span>
               </div>
             ))}
           </div>
         </div>
       </article>
 
+      {/* Insights */}
       <div className="grid gap-4 md:grid-cols-3">
-        <InsightCard title="Strengths" tone="green" text={evaluation.strengths} />
-        <InsightCard title="Areas to Improve" tone="gold" text={evaluation.weaknesses} />
-        <InsightCard title="Blind Spots" tone="red" text={evaluation.blind_spots} />
+        <InsightCard title="Strengths" tone="green" icon={<CheckCircle size={15} />} text={evaluation.strengths} />
+        <InsightCard title="Areas to Improve" tone="gold" icon={<TrendingUp size={15} />} text={evaluation.weaknesses} />
+        <InsightCard title="Blind Spots" tone="red" icon={<Zap size={15} />} text={evaluation.blind_spots} />
       </div>
 
-      {evaluation.next_case ? (
+      {/* Improvement Areas */}
+      {evaluation.improvement_areas && (
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-semibold text-[#111827]">Next Recommended Case</h3>
+          <h3 className="text-lg font-semibold text-[#111827]">Specific Improvement Actions</h3>
+          <ul className="mt-3 space-y-2 text-sm leading-7 text-[#374151]">
+            {toBulletItems(evaluation.improvement_areas).map((item, index) => (
+              <li key={index} className="flex gap-2">
+                <span className="text-[#C9A227]">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+      )}
+
+      {/* Next Case */}
+      {evaluation.next_case && (
+        <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-[#111827]">Next Recommended Case</h3>
           <div className="mt-4 rounded-xl bg-[#F6F7F9] p-5">
-            <h4 className="text-lg font-semibold text-[#0B1D3A]">{evaluation.next_case.title}</h4>
-            <p className="mt-2 text-sm text-[#6B7280]">
-              {evaluation.next_case.domain} / Level {evaluation.next_case.difficulty} /{" "}
-              {evaluation.next_case.estimated_minutes} min
+            <h4 className="text-base font-semibold text-[#0B1D3A]">{evaluation.next_case.title}</h4>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              {evaluation.next_case.domain} · Level {evaluation.next_case.difficulty} · {evaluation.next_case.estimated_minutes} min
             </p>
             <Link
               to={`/student/case-studies/${evaluation.next_case.id}`}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B08D20]"
             >
-              View Case
-              <ArrowRight size={16} aria-hidden="true" />
+              View Case <ArrowRight size={14} />
             </Link>
           </div>
         </article>
-      ) : null}
+      )}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Link
-          to="/student/case-studies"
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-[#0B1D3A] px-5 py-3 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#0B1D3A] hover:text-white"
-        >
-          <MessageSquare size={16} aria-hidden="true" />
-          Back to My Case Studies
-        </Link>
-        <button
-          type="button"
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0B1D3A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#122A54]"
-        >
-          <Share2 size={16} aria-hidden="true" />
-          Share with Mentor
-        </button>
-      </div>
+      <Link
+        to="/student/case-studies"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#0B1D3A] px-5 py-3 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#0B1D3A] hover:text-white"
+      >
+        <MessageSquare size={16} />
+        Back to My Case Studies
+      </Link>
     </section>
   )
 }
@@ -133,19 +235,27 @@ interface InsightCardProps {
   title: string
   text: string
   tone: "green" | "gold" | "red"
+  icon: React.ReactNode
 }
 
-function InsightCard({ title, text, tone }: InsightCardProps) {
-  const toneClass = {
-    green: "border-[#16A34A]",
-    gold: "border-[#F59E0B]",
-    red: "border-[#EF4444]",
+function InsightCard({ title, text, tone, icon }: InsightCardProps) {
+  const styles = {
+    green: "border-[#16A34A] text-[#16A34A]",
+    gold: "border-[#F59E0B] text-[#F59E0B]",
+    red: "border-[#EF4444] text-[#EF4444]",
   }[tone]
-
   return (
-    <article className={`rounded-xl border-l-4 bg-white p-5 shadow-sm ${toneClass}`}>
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-[#111827]">{title}</h3>
-      <p className="mt-3 text-sm leading-6 text-[#6B7280]">{text}</p>
+    <article className={`rounded-xl border-l-4 bg-white p-5 shadow-sm ${styles}`}>
+      <div className={`flex items-center gap-1.5 ${styles}`}>
+        {icon}
+        <h3 className="text-xs font-semibold uppercase tracking-wide">{title}</h3>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-[#6B7280]">{text || "—"}</p>
     </article>
   )
 }
+
+
+
+
+

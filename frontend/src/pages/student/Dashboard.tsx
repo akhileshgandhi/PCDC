@@ -20,12 +20,18 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 
 import {
+  getStudentAchievements,
   getStudentActiveEngagements,
+  getStudentCareerPathway,
   getStudentDashboardSummary,
   getStudentProfile,
+  getStudentRecentEvaluations,
+  type StudentAchievements,
   type StudentActiveEngagements,
+  type StudentCareerPathway,
   type StudentDashboardSummary,
   type StudentProfile,
+  type StudentRecentEvaluation,
 } from "../../api/student"
 import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
@@ -118,11 +124,14 @@ const coaches: CoachItem[] = [
   { name: "Reflection Coach", description: "Deepen self-awareness", icon: Lightbulb },
 ]
 
-const evaluations: EvaluationItem[] = [
-  { title: "Q2 Pricing Strategy Challenge", date: "Jun 20, 2025", score: 76, status: "Good" },
-  { title: "Leadership Conflict Simulation", date: "Jun 15, 2025", score: 69, status: "Improving" },
-  { title: "Startup Opportunity Assessment", date: "Jun 10, 2025", score: 81, status: "Excellent" },
-]
+function formatEvaluationDate(value: string | null): string {
+  if (!value) return ""
+  const parsed = new Date(value.replace(" ", "T"))
+  if (Number.isNaN(parsed.getTime())) return value.slice(0, 10)
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(
+    parsed,
+  )
+}
 
 const pathwayItems: PathwayItem[] = [
   { title: "Market Entry Case", level: "Level 3" },
@@ -139,6 +148,9 @@ export default function Dashboard() {
   const [activeMatrixFilter, setActiveMatrixFilter] = useState<MatrixFilter>("case_study")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
+  const [recentEvaluations, setRecentEvaluations] = useState<StudentRecentEvaluation[]>([])
+  const [achievements, setAchievements] = useState<StudentAchievements | null>(null)
+  const [careerPathway, setCareerPathway] = useState<StudentCareerPathway | null>(null)
   const currentUser = getCurrentUser()
   const firstName = currentUser?.name?.split(" ")[0] ?? "Student"
 
@@ -147,15 +159,28 @@ export default function Dashboard() {
 
     async function loadDashboard() {
       try {
-        const [summaryData, profileData, activeEngagementsData] = await Promise.all([
+        const [
+          summaryData,
+          profileData,
+          activeEngagementsData,
+          recentEvaluationsData,
+          achievementsData,
+          careerPathwayData,
+        ] = await Promise.all([
           getStudentDashboardSummary(),
           getStudentProfile(),
           getStudentActiveEngagements(),
+          getStudentRecentEvaluations().catch(() => []),
+          getStudentAchievements().catch(() => null),
+          getStudentCareerPathway().catch(() => null),
         ])
         if (isMounted) {
           setSummary(summaryData)
           setProfile(profileData)
           setActiveEngagements(activeEngagementsData)
+          setRecentEvaluations(recentEvaluationsData)
+          setAchievements(achievementsData)
+          setCareerPathway(careerPathwayData)
           setError("")
         }
       } catch (err) {
@@ -378,7 +403,7 @@ export default function Dashboard() {
           />
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-2">
+        <section className="grid gap-5">
           <Card title="AI Coaches">
             <div className="divide-y divide-[#e6e8eb]">
               {coaches.map((coach) => {
@@ -413,107 +438,174 @@ export default function Dashboard() {
             </button>
           </Card>
 
-          <Card title="Mentor Support">
-            <div className="flex items-center gap-3">
-              <div className="grid size-14 place-items-center rounded-lg bg-[#f4e4c1] text-lg font-semibold text-[#081d3a]">
-                AR
-              </div>
-              <div>
-                <h3 className="font-semibold">Dr. Ananya Rao</h3>
-                <p className="text-xs font-semibold uppercase text-[#92702a]">
-                  Assigned Executive Mentor
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 rounded-lg bg-[#f6f7fb] p-4">
-              {summary.upcoming_session ? (
-                <>
-                  <p className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <CalendarDays size={17} aria-hidden="true" />
-                    {formatSessionTime(summary.upcoming_session.scheduled_at)}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">
-                    {summary.upcoming_session.session_type} with{" "}
-                    {summary.upcoming_session.mentor_name}
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm font-semibold text-[#6b7280]">
-                  {isLoading ? "Loading session details..." : "No upcoming session scheduled"}
-                </p>
-              )}
-            </div>
-            <button
-              type="button"
-              className="mt-5 w-full rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold transition hover:bg-[#081d3a] hover:text-white"
-            >
-              View Mentor Feedback
-            </button>
-          </Card>
         </section>
 
         <section className="grid gap-5 xl:grid-cols-3">
           <Card title="Recent Evaluations">
-            <div className="divide-y divide-[#e6e8eb]">
-              {evaluations.map((evaluation) => (
-                <div key={evaluation.title} className="flex items-center gap-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold">{evaluation.title}</h3>
-                    <p className="mt-1 text-xs text-[#6b7280]">{evaluation.date}</p>
+            {recentEvaluations.length > 0 ? (
+              <div className="divide-y divide-[#e6e8eb]">
+                {recentEvaluations.map((evaluation, index) => (
+                  <div key={`${evaluation.title}-${index}`} className="flex items-center gap-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold">{evaluation.title}</h3>
+                      <p className="mt-1 text-xs text-[#6b7280]">
+                        {formatEvaluationDate(evaluation.date)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-semibold">{evaluation.score}</p>
+                      <p className="text-xs font-semibold text-[#16a34a]">{evaluation.status}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xl font-semibold">{evaluation.score}</p>
-                    <p className="text-xs font-semibold text-[#16a34a]">{evaluation.status}</p>
-                  </div>
-                  <div className="h-2 w-11 rounded-full bg-[#081d3a]" />
-                </div>
-              ))}
-            </div>
-            <CardLink label="View All Evaluations" />
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-sm text-[#6b7280]">
+                {isLoading ? "Loading evaluations..." : "No evaluations yet. Complete a case study to see your results here."}
+              </p>
+            )}
           </Card>
 
           <Card title="Achievements">
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <Achievement icon={ShieldCheck} label="Critical Thinker" />
-              <Achievement icon={Trophy} label="AI-Aware Learner" />
-              <Achievement icon={Award} label="Consistent Performer" />
-            </div>
-            <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-[#f59e0b]">
-              <Flame size={17} aria-hidden="true" />
-              5 Day Streak
-            </div>
-            <div className="mt-5 rounded-lg bg-[#f6f7fb] p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold">Next Milestone</span>
-                <span className="font-semibold">2 / 3</span>
-              </div>
-              <p className="mt-1 text-xs text-[#6b7280]">Complete 3 Level-3 cases</p>
-              <div className="mt-4 h-2 rounded-full bg-[#e6e8eb]">
-                <div className="h-2 w-2/3 rounded-full bg-[#081d3a]" />
-              </div>
-            </div>
+            {achievements ? (
+              <>
+                <p className="text-sm text-[#6b7280]">
+                  {achievements.earned_count} of {achievements.badges.length} badges earned
+                </p>
+                {achievements.earned_count > 0 ? (
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    {achievements.badges
+                      .filter((badge) => badge.earned)
+                      .map((badge) => (
+                        <div
+                          key={badge.key}
+                          title={badge.description}
+                          className="flex flex-col items-center gap-1.5 rounded-lg border border-[#f4e4c1] bg-[#fffaf0] p-3 text-center"
+                        >
+                          <div className="grid size-9 place-items-center rounded-full bg-[#f4e4c1] text-[#92702a]">
+                            <Trophy size={16} aria-hidden="true" />
+                          </div>
+                          <span className="text-xs font-semibold leading-tight text-[#111827]">
+                            {badge.label}
+                          </span>
+                          <span className="text-[10px] font-semibold uppercase text-[#16a34a]">
+                            Earned
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-lg bg-[#f6f7fb] p-4 text-center text-sm text-[#6b7280]">
+                    Complete a case study to earn your first badge.
+                  </p>
+                )}
+                <div className="mt-5 rounded-lg bg-[#f6f7fb] p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold">Next Milestone</span>
+                    <span className="font-semibold">
+                      {achievements.next_milestone.current} / {achievements.next_milestone.target}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#6b7280]">{achievements.next_milestone.label}</p>
+                  <div className="mt-4 h-2 rounded-full bg-[#e6e8eb]">
+                    <div
+                      className="h-2 rounded-full bg-[#081d3a] transition-all"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (achievements.next_milestone.current /
+                            Math.max(1, achievements.next_milestone.target)) *
+                            100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="py-6 text-center text-sm text-[#6b7280]">
+                {isLoading ? "Loading achievements..." : "No achievements yet."}
+              </p>
+            )}
           </Card>
 
           <Card title="Career Pathway">
-            <div className="flex items-center gap-3">
-              <BriefcaseBusiness size={22} aria-hidden="true" />
-              <div>
-                <p className="text-xs text-[#6b7280]">Current Pathway</p>
-                <h3 className="font-semibold">Management Consulting</h3>
-              </div>
-            </div>
-            <div className="mt-5 space-y-2">
-              {pathwayItems.map((item) => (
-                <div
-                  key={item.title}
-                  className="flex items-center justify-between rounded-md bg-[#f6f7fb] px-3 py-3 text-sm"
-                >
-                  <span>{item.title}</span>
-                  <span className="text-xs font-semibold text-[#6b7280]">{item.level}</span>
+            {careerPathway ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <BriefcaseBusiness size={22} aria-hidden="true" />
+                  <div>
+                    <p className="text-xs text-[#6b7280]">Current Pathway</p>
+                    <h3 className="font-semibold">{careerPathway.pathway_name}</h3>
+                  </div>
                 </div>
-              ))}
-            </div>
-            <CardLink label="View Full Pathway" />
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-xs text-[#6b7280]">
+                    <span>Capabilities developed</span>
+                    <span className="font-semibold text-[#111827]">
+                      {careerPathway.progress.developed}/{careerPathway.progress.total}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-[#e6e8eb]">
+                    <div
+                      className="h-2 rounded-full bg-[#c9a227] transition-all"
+                      style={{
+                        width: `${
+                          careerPathway.progress.total
+                            ? (careerPathway.progress.developed / careerPathway.progress.total) * 100
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {careerPathway.focus_areas.length > 0 ? (
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase text-[#6b7280]">Focus Areas</p>
+                    <div className="mt-2 space-y-2">
+                      {careerPathway.focus_areas.map((focus) => (
+                        <div
+                          key={focus.capability}
+                          className="flex items-center justify-between rounded-md bg-[#f6f7fb] px-3 py-2 text-sm"
+                        >
+                          <span className="truncate">{focus.capability}</span>
+                          <span className="text-xs font-semibold text-[#6b7280]">
+                            {focus.score}/100
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {careerPathway.recommended_cases.length > 0 ? (
+                  <div className="mt-5">
+                    <p className="text-xs font-semibold uppercase text-[#6b7280]">
+                      Recommended Next
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {careerPathway.recommended_cases.map((item) => (
+                        <div
+                          key={item.title}
+                          className="flex items-center justify-between rounded-md bg-[#f6f7fb] px-3 py-2 text-sm"
+                        >
+                          <span className="truncate">{item.title}</span>
+                          <span className="ml-2 shrink-0 text-xs font-semibold text-[#6b7280]">
+                            {item.level}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="py-6 text-center text-sm text-[#6b7280]">
+                {isLoading ? "Loading pathway..." : "No pathway data yet."}
+              </p>
+            )}
           </Card>
         </section>
       </div>

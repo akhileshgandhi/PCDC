@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
-from openai import OpenAI
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -14,6 +13,12 @@ from sqlalchemy.orm import Session
 from services.auth.service import get_current_user
 from shared.cache import cache_get, cache_set
 from shared.database import SessionLocal, get_db
+from shared.llm import (
+    get_llm_client,
+    get_llm_model,
+    json_response_format,
+    parse_json_content,
+)
 
 faculty_router = APIRouter(prefix="/faculty", tags=["faculty"])
 
@@ -88,7 +93,7 @@ CASE_GENERATION_JOBS_LOCK = threading.Lock()
 
 DIFFICULTY_LABELS = ["Foundation", "Regular", "Pro", "Expert", "Champion"]
 FIXED_QUESTION_MARKS = [2, 2, 3]
-RAPID_FIRE_GENERATION_COUNT = 6
+RAPID_FIRE_GENERATION_COUNT = 3
 
 GENERATE_QUESTIONS_PROMPT = """
 You are generating Structured Written Questions for an MBA/PGDM business
@@ -104,8 +109,8 @@ Output must match the provided JSON schema exactly.
 GENERATE_RAPID_FIRE_PROMPT = """
 You are generating Rapid Fire round questions for an MBA/PGDM business case
 study simulation. Given the case's core fields and a short case summary,
-produce exactly 6 short-answer factual questions that test recall and
-understanding of the case facts, appropriate for a timed 8-minute round, each
+produce exactly 3 short-answer factual questions that test recall and
+understanding of the case facts, each worth 1 mark (3 rapid fire marks total),
 with a concise 1-2 sentence answer. Output must match the provided JSON
 schema exactly.
 """
@@ -231,7 +236,9 @@ def normalize_section_value(section: str, value: Any) -> Any:
                 parsed = None
             if isinstance(parsed, list):
                 return [str(item).strip() for item in parsed if str(item).strip()]
-            return [line.strip() for line in stripped.splitlines() if line.strip()]
+            # Handle literal \n (two chars) from textarea input
+            normalized = stripped.replace("\\n", "\n")
+            return [line.strip() for line in normalized.splitlines() if line.strip()]
         return []
     if isinstance(value, list):
         return "\n".join(str(item).strip() for item in value if str(item).strip())
@@ -307,9 +314,9 @@ def normalize_case_metadata(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-# Rapid Fire time/marks and the written/total marks split are fixed platform
-# constants, not faculty-configurable — applied silently on every case save
-# regardless of what (if anything) the client sends for them.
+# Rapid Fire is always 3 AI-generated questions worth 1 mark each. The rapid
+# fire time default and the total-marks default are platform constants; the
+# faculty-entered Total Marks now drives the written/total split.
 RAPID_FIRE_TIME_MINUTES = 8
 RAPID_FIRE_MARKS = 3
 WRITTEN_MARKS = 7
@@ -326,10 +333,21 @@ def normalize_case_timing(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def normalize_case_marks(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Total Marks is faculty-configurable. Rapid fire stays a fixed 3 (three
+    AI-generated questions, 1 mark each); written marks is the remainder so the
+    parts always sum to the declared total."""
+    data = data or {}
+    total = float_value((data or {}).get("total_marks"))
+    if total is None or total <= 0:
+        total = float(TOTAL_MARKS)
+    rapid = float(RAPID_FIRE_MARKS)
+    written = round(total - rapid, 2)
+    if written < 0:
+        written = 0.0
     return {
-        "total_marks": TOTAL_MARKS,
-        "written_marks": WRITTEN_MARKS,
-        "rapid_fire_marks": RAPID_FIRE_MARKS,
+        "total_marks": total,
+        "written_marks": written,
+        "rapid_fire_marks": rapid,
     }
 
 
@@ -854,13 +872,9 @@ def call_openai_case_generation(
     existing_sections: Dict[str, Any],
     requested_sections: List[str],
 ) -> Dict[str, Any]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OpenAI API key is not configured")
-
-    client = OpenAI(api_key=api_key)
+    client = get_llm_client()
     response = client.chat.completions.create(
-        model=CASE_GENERATION_MODEL,
+        model=get_llm_model(CASE_GENERATION_MODEL),
         messages=[
             {"role": "system", "content": CASE_GENERATION_PROMPT},
             {
@@ -874,20 +888,13 @@ def call_openai_case_generation(
                 ),
             },
         ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "faculty_case_generation",
-                "strict": True,
-                "schema": build_case_generation_schema(requested_sections),
-            },
-        },
+        response_format=json_response_format(
+            build_case_generation_schema(requested_sections), "faculty_case_generation"
+        ),
         timeout=60,
     )
     content = response.choices[0].message.content
-    if not content:
-        raise RuntimeError("OpenAI returned an empty response")
-    return validate_generated_sections(json.loads(content), requested_sections)
+    return validate_generated_sections(parse_json_content(content), requested_sections)
 
 
 def build_generate_questions_schema() -> Dict[str, Any]:
@@ -952,13 +959,9 @@ def call_openai_generate_questions(
     difficulty_label: str,
     summary: str,
 ) -> List[Dict[str, Any]]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OpenAI API key is not configured")
-
-    client = OpenAI(api_key=api_key)
+    client = get_llm_client()
     response = client.chat.completions.create(
-        model=CASE_GENERATION_MODEL,
+        model=get_llm_model(CASE_GENERATION_MODEL),
         messages=[
             {"role": "system", "content": GENERATE_QUESTIONS_PROMPT},
             {
@@ -968,20 +971,13 @@ def call_openai_generate_questions(
                 ),
             },
         ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "faculty_generate_questions",
-                "strict": True,
-                "schema": build_generate_questions_schema(),
-            },
-        },
+        response_format=json_response_format(
+            build_generate_questions_schema(), "faculty_generate_questions"
+        ),
         timeout=60,
     )
     content = response.choices[0].message.content
-    if not content:
-        raise RuntimeError("OpenAI returned an empty response")
-    questions = json.loads(content).get("questions")
+    questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != 3:
         raise ValueError("AI did not return exactly 3 questions")
 
@@ -1052,13 +1048,9 @@ def call_openai_generate_rapid_fire(
     difficulty_label: str,
     summary: str,
 ) -> List[Dict[str, Any]]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OpenAI API key is not configured")
-
-    client = OpenAI(api_key=api_key)
+    client = get_llm_client()
     response = client.chat.completions.create(
-        model=CASE_GENERATION_MODEL,
+        model=get_llm_model(CASE_GENERATION_MODEL),
         messages=[
             {"role": "system", "content": GENERATE_RAPID_FIRE_PROMPT},
             {
@@ -1068,22 +1060,17 @@ def call_openai_generate_rapid_fire(
                 ),
             },
         ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "faculty_generate_rapid_fire",
-                "strict": True,
-                "schema": build_generate_rapid_fire_schema(),
-            },
-        },
+        response_format=json_response_format(
+            build_generate_rapid_fire_schema(), "faculty_generate_rapid_fire"
+        ),
         timeout=60,
     )
     content = response.choices[0].message.content
-    if not content:
-        raise RuntimeError("OpenAI returned an empty response")
-    questions = json.loads(content).get("questions")
+    questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != RAPID_FIRE_GENERATION_COUNT:
-        raise ValueError("AI did not return exactly 6 rapid fire questions")
+        raise ValueError(
+            f"AI did not return exactly {RAPID_FIRE_GENERATION_COUNT} rapid fire questions"
+        )
 
     return [
         {
@@ -1301,6 +1288,7 @@ def faculty_cases(
                 cs.difficulty,
                 cs.estimated_minutes,
                 cs.status,
+                cs.evaluation_rubric,
                 cs.created_at,
                 cs.updated_at,
                 COUNT(csa.id) AS attempts_count
@@ -1323,6 +1311,7 @@ def faculty_cases(
             "estimated_minutes": row.estimated_minutes,
             "status": row.status,
             "attempts_count": row.attempts_count,
+            "rubric_exists": bool(row.evaluation_rubric),
             "created_at": str(row.created_at),
             "updated_at": str(row.updated_at),
         }
@@ -1349,9 +1338,11 @@ def faculty_analytics_summary(
                     WHERE ss.section_id = cs.id AND ss.status = 'active'
                 ) AS student_count,
                 (
-                    SELECT COALESCE(AVG(sc.current_score), 0)
+                    SELECT COALESCE(AVG(ev.total_score), 0)
                     FROM student_sections ss
-                    JOIN student_capabilities sc ON sc.student_id = ss.student_id
+                    JOIN students s ON s.id = ss.student_id
+                    JOIN case_study_attempts csa ON csa.student_id = s.user_id
+                    JOIN cs_evaluations ev ON ev.attempt_id = csa.id
                     WHERE ss.section_id = cs.id AND ss.status = 'active'
                 ) AS average_score,
                 (
@@ -1609,6 +1600,198 @@ def get_faculty_case(
     require_faculty(current_user)
     row = get_owned_case_row(db, case_id, current_user)
     return case_editor_response(db, row)
+
+
+@faculty_router.delete("/cases/{case_id}")
+def delete_faculty_case(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    owned = db.execute(
+        text("SELECT id, title FROM case_studies WHERE id = :cid AND created_by = :faculty_id"),
+        {"cid": case_id, "faculty_id": current_user["id"]},
+    ).fetchone()
+    if not owned:
+        raise HTTPException(status_code=404, detail="Case study not found")
+
+    params = {"cid": case_id}
+    attempt_filter = (
+        "attempt_id IN (SELECT id FROM case_study_attempts WHERE case_study_id = :cid)"
+    )
+    statements = [
+        f"DELETE FROM cs_ai_conversations WHERE {attempt_filter}",
+        f"DELETE FROM cs_evaluations WHERE {attempt_filter}",
+        f"DELETE FROM case_question_responses WHERE {attempt_filter}",
+        f"DELETE FROM rapid_fire_responses WHERE {attempt_filter}",
+        f"DELETE FROM mentor_attempt_comments WHERE {attempt_filter}",
+        "DELETE FROM assigned_cases WHERE case_study_id = :cid",
+        "DELETE FROM case_study_attempts WHERE case_study_id = :cid",
+        "DELETE FROM case_section_assignments WHERE case_study_id = :cid",
+        "DELETE FROM case_questions WHERE case_study_id = :cid",
+        "DELETE FROM rapid_fire_questions WHERE case_study_id = :cid",
+        "DELETE FROM case_study_tags WHERE case_study_id = :cid",
+        "UPDATE case_imports SET approved_case_id = NULL WHERE approved_case_id = :cid",
+    ]
+    for stmt in statements:
+        db.execute(text(stmt), params)
+    db.execute(
+        text("DELETE FROM case_studies WHERE id = :cid AND created_by = :faculty_id"),
+        {"cid": case_id, "faculty_id": current_user["id"]},
+    )
+    db.commit()
+    return {"status": "deleted", "id": case_id, "title": owned.title}
+
+
+def attempt_marks_summary(evaluation: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not evaluation:
+        return None
+    question_scores = evaluation.get("question_scores") or []
+    written_awarded = sum(
+        float(q.get("marks_awarded") or 0) for q in question_scores if isinstance(q, dict)
+    )
+    written_total = sum(
+        float(q.get("marks_total") or 0) for q in question_scores if isinstance(q, dict)
+    )
+    written_total = round(written_total, 1) or float(WRITTEN_MARKS)
+    rapid_score = float(evaluation.get("rapid_fire_score") or 0)
+    rapid_awarded = round(rapid_score / 100 * RAPID_FIRE_MARKS, 1)
+    return {
+        "written_awarded": round(written_awarded, 1),
+        "written_total": written_total,
+        "rapid_awarded": rapid_awarded,
+        "rapid_total": float(RAPID_FIRE_MARKS),
+        "total_awarded": round(written_awarded + rapid_awarded, 1),
+        "total_max": round(written_total + RAPID_FIRE_MARKS, 1),
+    }
+
+
+def attempt_list_item(db: Session, row: Any) -> Dict[str, Any]:
+    from services.simulation.service import get_evaluation
+
+    evaluation = get_evaluation(db, row.attempt_id)
+    return {
+        "attempt_id": row.attempt_id,
+        "student_id": row.student_user_id,
+        "student_name": row.name,
+        "student_email": row.email,
+        "case_id": row.case_id,
+        "case_title": row.case_title,
+        "status": row.status,
+        "attempted_at": str(row.attempted_at) if row.attempted_at else None,
+        "total_score": evaluation.get("total_score") if evaluation else None,
+        "grade": evaluation.get("overall_grade") if evaluation else None,
+        "marks": attempt_marks_summary(evaluation),
+    }
+
+
+_ATTEMPT_LIST_SQL = """
+    SELECT csa.id AS attempt_id, csa.student_id AS student_user_id,
+           u.name, u.email, csa.case_study_id AS case_id,
+           cs.title AS case_title, csa.status,
+           COALESCE(csa.end_time, csa.start_time) AS attempted_at
+    FROM case_study_attempts csa
+    JOIN users u ON u.id = csa.student_id
+    JOIN case_studies cs ON cs.id = csa.case_study_id
+    WHERE {filter}
+    ORDER BY {order}
+"""
+
+
+@faculty_router.get("/cases/{case_id}/attempts")
+def faculty_case_attempts(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    owned = db.execute(
+        text("SELECT id, title FROM case_studies WHERE id = :cid AND created_by = :fid"),
+        {"cid": case_id, "fid": current_user["id"]},
+    ).fetchone()
+    if not owned:
+        raise HTTPException(status_code=404, detail="Case study not found")
+    rows = db.execute(
+        text(_ATTEMPT_LIST_SQL.format(filter="csa.case_study_id = :cid", order="u.name ASC")),
+        {"cid": case_id},
+    ).fetchall()
+    return {
+        "context": "case",
+        "context_id": case_id,
+        "title": owned.title,
+        "items": [attempt_list_item(db, row) for row in rows],
+        "total": len(rows),
+    }
+
+
+@faculty_router.get("/students/{student_user_id}/attempts")
+def faculty_student_attempts(
+    student_user_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    student = db.execute(
+        text("SELECT name FROM users WHERE id = :uid AND role = 'student'"),
+        {"uid": student_user_id},
+    ).fetchone()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    rows = db.execute(
+        text(
+            _ATTEMPT_LIST_SQL.format(
+                filter="csa.student_id = :uid AND cs.created_by = :fid",
+                order="COALESCE(csa.end_time, csa.start_time) DESC NULLS LAST",
+            )
+        ),
+        {"uid": student_user_id, "fid": current_user["id"]},
+    ).fetchall()
+    return {
+        "context": "student",
+        "context_id": student_user_id,
+        "title": student.name,
+        "items": [attempt_list_item(db, row) for row in rows],
+        "total": len(rows),
+    }
+
+
+@faculty_router.get("/attempts/{attempt_id}")
+def faculty_attempt_detail(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    from services.simulation.service import get_evaluation
+
+    row = db.execute(
+        text("""
+            SELECT csa.id, csa.status, csa.initial_analysis, csa.initial_summary,
+                   csa.defense_responses,
+                   u.name, u.email, cs.title, cs.created_by
+            FROM case_study_attempts csa
+            JOIN users u ON u.id = csa.student_id
+            JOIN case_studies cs ON cs.id = csa.case_study_id
+            WHERE csa.id = :aid
+        """),
+        {"aid": attempt_id},
+    ).fetchone()
+    if not row or row.created_by != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    evaluation = get_evaluation(db, attempt_id)
+    return {
+        "attempt_id": row.id,
+        "student_name": row.name,
+        "student_email": row.email,
+        "case_title": row.title,
+        "status": row.status,
+        "initial_summary": row.initial_summary,
+        "initial_analysis": row.initial_analysis,
+        "rapid_fire_answers": row.defense_responses,
+        "evaluation": evaluation,
+        "marks": attempt_marks_summary(evaluation),
+    }
 
 
 @faculty_router.get("/cases/{case_id}/rubric")
@@ -2036,12 +2219,12 @@ def faculty_sections(
 def student_roster_status(
     average_score: Optional[float], last_activity_at: Any, assigned_count: int
 ) -> str:
-    if assigned_count == 0 and last_activity_at is None:
+    # A student who has never started anything is "not started" — not "at risk".
+    if last_activity_at is None:
         return "not_started"
+    # Once they have a graded attempt, flag genuinely low performance.
     if average_score is not None and average_score < 60:
         return "at_risk"
-    if last_activity_at is None:
-        return "inactive"
     return "on_track"
 
 
@@ -2071,8 +2254,10 @@ def faculty_students_roster(
             JOIN students s ON s.id = ss.student_id
             JOIN users u ON u.id = s.user_id
             LEFT JOIN LATERAL (
-                SELECT AVG(current_score) AS average_score
-                FROM student_capabilities WHERE student_id = s.id
+                SELECT AVG(ev.total_score) AS average_score
+                FROM case_study_attempts csa
+                JOIN cs_evaluations ev ON ev.attempt_id = csa.id
+                WHERE csa.student_id = u.id
             ) avg_scores ON true
             LEFT JOIN LATERAL (
                 SELECT MAX(start_time) AS last_activity_at

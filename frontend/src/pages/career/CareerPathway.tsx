@@ -1,157 +1,152 @@
-import {
-  BarChart3,
-  Briefcase,
-  ClipboardList,
-  Home,
-  LayoutDashboard,
-  Megaphone,
-  MessageSquare,
-  Rocket,
-  Settings,
-  Target,
-  TrendingUp,
-  Users,
-} from "lucide-react"
+import { ClipboardList } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 
-import CareerTrackCard, { type CareerTrack } from "../../components/career/CareerTrackCard"
+import { getStudentCareerPathway, type StudentCareerPathway } from "../../api/student"
 import PathwayBanner from "../../components/career/PathwayBanner"
-import ProgressTimeline, { type CareerMilestone } from "../../components/career/ProgressTimeline"
 import DashboardLayout from "../../layouts/DashboardLayout"
 
-const focusAreas = [
-  "Strategic Thinking",
-  "Decision Making",
-  "Communication",
-  "Analytical Thinking",
-]
-
-const milestones: CareerMilestone[] = [
-  {
-    name: "Foundation",
-    status: "Done",
-    capabilities: ["Business Basics", "Case Reading", "Structured Notes"],
-    caseStudies: 2,
-    score: "60%+",
-  },
-  {
-    name: "Analysis",
-    status: "Done",
-    capabilities: ["Analytical Thinking", "Market Sizing", "Insight Synthesis"],
-    caseStudies: 3,
-    score: "70%+",
-  },
-  {
-    name: "Decision",
-    status: "In Progress",
-    capabilities: ["Decision Making", "Trade-off Analysis", "Risk Awareness"],
-    caseStudies: 5,
-    score: "75%+",
-  },
-  {
-    name: "Strategy",
-    status: "Locked",
-    capabilities: ["Strategic Thinking", "Competitive Positioning", "Implementation Clarity"],
-    caseStudies: 0,
-    score: "82%+",
-  },
-  {
-    name: "Executive",
-    status: "Locked",
-    capabilities: ["Executive Presence", "Board Communication", "Leadership Judgement"],
-    caseStudies: 0,
-    score: "88%+",
-  },
-]
-
-const recommendedActivities = [
-  {
-    icon: ClipboardList,
-    title: "Market Entry Case",
-    meta: "Level 3 · Business · 45 min",
-    develops: "Strategic Thinking",
-  },
-  {
-    icon: Target,
-    title: "Problem Structuring Drill",
-    meta: "Level 3 · Exercise · 20 min",
-    develops: "Analytical Thinking",
-  },
-  {
-    icon: MessageSquare,
-    title: "Executive Communication",
-    meta: "Level 2 · Exercise · 15 min",
-    develops: "Communication",
-  },
-]
-
-const careerTracks: CareerTrack[] = [
-  { name: "Management Consulting", icon: Briefcase, match: 85, current: true },
-  { name: "Finance", icon: TrendingUp, match: 71 },
-  { name: "Marketing", icon: Megaphone, match: 68 },
-  { name: "Human Resources", icon: Users, match: 62 },
-  { name: "Operations", icon: Settings, match: 74 },
-  { name: "Entrepreneurship", icon: Rocket, match: 79 },
-  { name: "Family Business", icon: Home, match: 66 },
-  { name: "Sales Leadership", icon: Target, match: 70 },
-  { name: "Business Analytics", icon: BarChart3, match: 77 },
-  { name: "General Management", icon: LayoutDashboard, match: 80 },
-]
-
 export default function CareerPathway() {
+  const [data, setData] = useState<StudentCareerPathway | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let active = true
+    getStudentCareerPathway()
+      .then((result) => {
+        if (active) setData(result)
+      })
+      .catch(() => {
+        if (active) setError("Unable to load your pathway right now.")
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const readiness = data && data.progress.total > 0
+    ? Math.round((data.progress.developed / data.progress.total) * 100)
+    : 0
+  const focusAreas = (data?.focus_areas ?? []).map((focus) => focus.capability)
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-[#111827]">Career Pathway</h1>
           <p className="mt-1 text-sm text-[#6b7280]">
-            Your personalised development roadmap toward Management Consulting.
+            Your personalised development roadmap{data?.pathway_name ? ` — ${data.pathway_name}` : ""}.
           </p>
         </div>
 
-        <PathwayBanner readiness={72} focusAreas={focusAreas} />
-        <ProgressTimeline milestones={milestones} />
-
-        <section>
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[#111827]">Next Recommended Activities</h2>
+        {error ? (
+          <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
+            {error}
           </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            {recommendedActivities.map((activity) => {
-              const Icon = activity.icon
+        ) : null}
 
-              return (
-                <article
-                  key={activity.title}
-                  className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm"
-                >
-                  <div className="grid size-11 place-items-center rounded-md bg-[#081d3a] text-white">
-                    <Icon size={20} aria-hidden="true" />
-                  </div>
-                  <h3 className="mt-4 font-semibold text-[#111827]">{activity.title}</h3>
-                  <p className="mt-1 text-sm text-[#6b7280]">{activity.meta}</p>
-                  <p className="mt-3 text-sm text-[#111827]">
-                    Develops: <span className="font-semibold">{activity.develops}</span>
-                  </p>
-                  <button
-                    type="button"
-                    className="mt-4 rounded-md bg-[#c9a227] px-4 py-2 text-sm font-semibold text-[#081d3a]"
-                  >
-                    Start
-                  </button>
-                </article>
-              )
-            })}
+        {isLoading || !data ? (
+          <div className="rounded-lg border border-[#e6e8eb] bg-white p-8 text-center text-sm font-medium text-[#6b7280] shadow-sm">
+            {isLoading ? "Loading your pathway..." : "No pathway data yet."}
           </div>
-        </section>
+        ) : (
+          <>
+            <PathwayBanner
+              name={data.pathway_name}
+              description={
+                data.has_track
+                  ? "Focused development toward your chosen career track."
+                  : "Build breadth across every capability. Assign a career track to tailor this path."
+              }
+              readiness={readiness}
+              readinessLabel={`${data.progress.developed} of ${data.progress.total} capabilities developed`}
+              focusAreas={focusAreas}
+            />
 
-        <section>
-          <h2 className="text-lg font-semibold text-[#111827]">Explore Other Pathways</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {careerTracks.map((track) => (
-              <CareerTrackCard key={track.name} track={track} />
-            ))}
-          </div>
-        </section>
+            <section>
+              <h2 className="text-lg font-semibold text-[#111827]">Focus Areas</h2>
+              <p className="mt-1 text-sm text-[#6b7280]">
+                The capabilities where you have the most room to grow.
+              </p>
+              {data.focus_areas.length > 0 ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {data.focus_areas.map((focus) => (
+                    <article
+                      key={focus.capability}
+                      className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-[#111827]">
+                          {focus.capability}
+                        </span>
+                        <span className="text-xs font-semibold text-[#6b7280]">
+                          {focus.score}/100
+                        </span>
+                      </div>
+                      <div className="mt-3 h-2 rounded-full bg-[#e6e8eb]">
+                        <div
+                          className="h-2 rounded-full bg-[#c9a227]"
+                          style={{ width: `${focus.score}%` }}
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 rounded-lg border border-[#e6e8eb] bg-white p-6 text-center text-sm text-[#6b7280]">
+                  Complete a case study to reveal your focus areas.
+                </p>
+              )}
+            </section>
+
+            <section>
+              <h2 className="text-lg font-semibold text-[#111827]">Next Recommended Activities</h2>
+              {data.recommended_cases.length > 0 ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                  {data.recommended_cases.map((activity) => (
+                    <article
+                      key={activity.case_id}
+                      className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm"
+                    >
+                      <div className="grid size-11 place-items-center rounded-md bg-[#081d3a] text-white">
+                        <ClipboardList size={20} aria-hidden="true" />
+                      </div>
+                      <h3 className="mt-4 font-semibold text-[#111827]">{activity.title}</h3>
+                      <p className="mt-1 text-sm text-[#6b7280]">
+                        {activity.level}
+                        {activity.domain ? ` · ${activity.domain}` : ""}
+                      </p>
+                      {activity.develops.length > 0 ? (
+                        <p className="mt-3 text-sm text-[#111827]">
+                          Develops:{" "}
+                          <span className="font-semibold">{activity.develops.join(", ")}</span>
+                        </p>
+                      ) : null}
+                      <Link
+                        to={`/student/case-studies/${activity.case_id}`}
+                        className="mt-4 inline-flex rounded-md bg-[#c9a227] px-4 py-2 text-sm font-semibold text-[#081d3a]"
+                      >
+                        Start
+                      </Link>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 rounded-lg border border-[#e6e8eb] bg-white p-6 text-center text-sm text-[#6b7280]">
+                  No pending cases right now. Check{" "}
+                  <Link to="/student/case-studies" className="font-semibold text-[#0b1d3a] underline">
+                    My Case Studies
+                  </Link>{" "}
+                  for what&apos;s available.
+                </p>
+              )}
+            </section>
+          </>
+        )}
       </div>
     </DashboardLayout>
   )

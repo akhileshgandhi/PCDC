@@ -16,6 +16,7 @@ export interface FacultyCase {
   estimated_minutes: number
   status: "draft" | "published" | "archived"
   attempts_count: number
+  rubric_exists: boolean
   created_at: string
   updated_at: string
 }
@@ -322,6 +323,13 @@ export async function saveFacultyCaseRubric(caseId: number, payload: FacultyRubr
   return response.data
 }
 
+export async function deleteFacultyCase(caseId: number) {
+  const response = await api.delete<{ status: string; id: number; title: string }>(
+    `/faculty/cases/${caseId}`,
+  )
+  return response.data
+}
+
 export async function publishFacultyCase(caseId: number) {
   const response = await api.post<FacultyCaseEditor>(`/faculty/cases/${caseId}/publish`)
   return response.data
@@ -413,5 +421,93 @@ export interface FacultyAnalyticsSummary {
 
 export async function getFacultyAnalyticsSummary() {
   const response = await api.get<FacultyAnalyticsSummary>("/faculty/analytics/summary")
+  return response.data
+}
+
+export interface FacultyAttemptMarks {
+  written_awarded: number
+  written_total: number
+  rapid_awarded: number
+  rapid_total: number
+  total_awarded: number
+  total_max: number
+}
+
+export interface FacultyAttemptListItem {
+  attempt_id: number
+  student_id: number
+  student_name: string
+  student_email: string
+  case_id: number
+  case_title: string
+  status: string
+  attempted_at: string | null
+  total_score: number | null
+  grade: string | null
+  marks: FacultyAttemptMarks | null
+}
+
+export interface FacultyAttemptsResponse {
+  context: "case" | "student"
+  context_id: number
+  title: string
+  items: FacultyAttemptListItem[]
+  total: number
+}
+
+export async function getFacultyCaseAttempts(caseId: number) {
+  const response = await api.get<FacultyAttemptsResponse>(`/faculty/cases/${caseId}/attempts`)
+  return response.data
+}
+
+export async function getFacultyStudentAttempts(studentUserId: number) {
+  const response = await api.get<FacultyAttemptsResponse>(
+    `/faculty/students/${studentUserId}/attempts`,
+  )
+  return response.data
+}
+
+export interface FacultyEvaluationQuestion {
+  question_number: number
+  marks_awarded: number
+  marks_total: number
+  feedback: string
+  improvement: string
+}
+
+export interface FacultyEvaluation {
+  total_score: number
+  thinking_depth: number
+  logic_score: number
+  creativity_score: number
+  practicality_score: number
+  risk_awareness_score: number
+  reflection_score: number
+  question_scores: FacultyEvaluationQuestion[]
+  rapid_fire_score: number
+  rapid_fire_feedback: string
+  strengths: string
+  weaknesses: string
+  blind_spots: string
+  improvement_areas: string
+  overall_grade: string
+  grade_comment: string
+}
+
+export interface FacultyAttemptDetail {
+  attempt_id: number
+  student_name: string
+  student_email: string
+  case_title: string
+  status: string
+  initial_summary: string | null
+  initial_analysis: string | null
+  rapid_fire_answers: string | null
+  evaluation: FacultyEvaluation | null
+  marks: FacultyAttemptMarks | null
+}
+
+export async function getFacultyAttemptDetail(attemptId: number) {
+  const response = await api.get<FacultyAttemptDetail>(`/faculty/attempts/${attemptId}`)
   return response.data
 }

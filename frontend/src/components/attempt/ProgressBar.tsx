@@ -1,20 +1,11 @@
-import { Clock3 } from "lucide-react"
-
 interface ProgressBarProps {
   currentScreen: number
-  elapsedTime: number
   title?: string
 }
 
-const stages = ["Briefing", "Analysis", "AI Chat", "Solution", "Defense", "Evaluation"]
+const stages = ["Briefing", "Analysis", "Rapid Fire", "Evaluation"]
 
-function formatElapsed(seconds: number) {
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-}
-
-export default function ProgressBar({ currentScreen, elapsedTime, title }: ProgressBarProps) {
+export default function ProgressBar({ currentScreen, title }: ProgressBarProps) {
   const currentStage = stages[currentScreen - 1]
   const progressPercent = ((currentScreen - 1) / (stages.length - 1)) * 100
 
@@ -38,11 +29,7 @@ export default function ProgressBar({ currentScreen, elapsedTime, title }: Progr
 
           <div className="flex flex-wrap items-center gap-3 text-sm font-semibold">
             <span className="rounded-full bg-[#F6F7F9] px-3 py-1 text-[#0B1D3A]">
-              Stage {currentScreen} of 6: {currentStage}
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#E6EBEB] px-3 py-1 text-[#6B7280]">
-              <Clock3 size={16} aria-hidden="true" />
-              Elapsed: {formatElapsed(elapsedTime)}
+            Stage {currentScreen} of 4: {currentStage}
             </span>
           </div>
         </div>
@@ -54,7 +41,7 @@ export default function ProgressBar({ currentScreen, elapsedTime, title }: Progr
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-          <div className="mt-3 grid grid-cols-6 gap-2">
+          <div className="mt-3 grid grid-cols-4 gap-2">
             {stages.map((stage, index) => {
               const stageNumber = index + 1
               const isComplete = stageNumber < currentScreen

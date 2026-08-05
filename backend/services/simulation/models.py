@@ -63,6 +63,8 @@ class StartAttemptResponse(BaseModel):
 class SubmitAnalysisRequest(BaseModel):
     attempt_id: int
     initial_analysis: str
+    # Ungraded free-text pre-analysis written before the structured questions.
+    initial_summary: Optional[str] = None
 
 
 class SubmitAnalysisResponse(BaseModel):
@@ -99,6 +101,10 @@ class SubmitReflectionRequest(BaseModel):
     reflection_text: str
 
 
+class PhaseStartRequest(BaseModel):
+    phase: str  # "reading" | "writing" | "rapid_fire"
+
+
 class EvaluationResult(BaseModel):
     attempt_id: int
     thinking_depth: int
@@ -127,6 +133,7 @@ class CaseAttemptResponse(BaseModel):
     student_id: int
     status: str
     initial_analysis: Optional[str] = None
+    initial_summary: Optional[str] = None
     initial_word_count: int
     final_solution: Optional[str] = None
     defense_responses: Optional[str] = None

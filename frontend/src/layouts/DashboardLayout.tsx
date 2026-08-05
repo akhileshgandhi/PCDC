@@ -4,10 +4,8 @@ import {
   Bell,
   BookOpen,
   CalendarDays,
-  ChevronRight,
   CircleHelp,
   Compass,
-  ClipboardList,
   LayoutDashboard,
   LogOut,
   MessageSquare,
@@ -15,7 +13,6 @@ import {
   Settings,
   TrendingUp,
   Trophy,
-  UserCheck,
   UserCircle,
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
@@ -25,10 +22,7 @@ import { clearToken, getCurrentUser } from "../utils/auth"
 const ROLE_LABELS: Record<string, string> = {
   student: "Student",
   faculty: "Faculty",
-  mentor: "Mentor",
   admin: "Admin",
-  director: "Director",
-  program_head: "Program Head",
 }
 
 function roleLabel(role: string | undefined): string {
@@ -48,22 +42,20 @@ interface DashboardLayoutProps {
   children: ReactNode
 }
 
-const navigationItems = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/student/dashboard", end: true },
-  { label: "My Case Studies", icon: BookOpen, to: "/student/case-studies" },
-  { label: "Active Attempt", icon: ClipboardList, to: "/student/case-studies/1/attempt" },
-  { label: "Capability Profile", icon: TrendingUp, to: "/student/capability-profile" },
-  { label: "AI Coaches", icon: MessageSquare, to: "/student/ai-coach" },
-  { label: "Achievements", icon: Trophy, to: "/student/achievements" },
-  { label: "Career Pathway", icon: Compass, to: "/student/career-pathway" },
-  { label: "Mentor Support", icon: UserCheck, to: "/student/mentor-support" },
-]
-
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate()
   const currentUser = getCurrentUser()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  const navigationItems = [
+    { label: "Dashboard", icon: LayoutDashboard, to: "/student/dashboard", end: true },
+    { label: "My Case Studies", icon: BookOpen, to: "/student/case-studies" },
+    { label: "Capability Profile", icon: TrendingUp, to: "/student/capability-profile" },
+    { label: "AI Coaches", icon: MessageSquare, to: "/student/ai-coach" },
+    { label: "Achievements", icon: Trophy, to: "/student/achievements" },
+    { label: "Career Pathway", icon: Compass, to: "/student/career-pathway" },
+  ]
 
   useEffect(() => {
     if (!isMenuOpen) return
@@ -118,14 +110,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         <div className="absolute bottom-5 left-5 right-5 space-y-5">
-          <NavLink
-            to="/student/mentor-support"
-            className="flex w-full items-center justify-between rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#081d3a] shadow-md"
-          >
-            <span>Schedule Mentor</span>
-            <ChevronRight size={17} aria-hidden="true" />
-          </NavLink>
-
           <div className="space-y-3 border-t border-white/10 pt-5">
             <button type="button" className="flex items-center gap-3 text-sm text-white/80">
               <Settings size={17} aria-hidden="true" />

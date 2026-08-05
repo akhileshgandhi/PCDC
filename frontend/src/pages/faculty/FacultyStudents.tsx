@@ -1,5 +1,6 @@
-import { AlertTriangle, RefreshCw, Search } from "lucide-react"
+import { AlertTriangle, FileText, RefreshCw, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 
 import {
   getFacultySections,
@@ -85,6 +86,15 @@ export default function FacultyStudents() {
     return Array.from(groups.entries())
   }, [filteredStudents])
 
+  const summary = useMemo(() => {
+    const onTrack = students.filter((s) => s.status === "on_track").length
+    const atRisk = students.filter((s) => s.status === "at_risk").length
+    const notStarted = students.filter(
+      (s) => s.status === "not_started" || s.status === "inactive",
+    ).length
+    return { total: students.length, onTrack, atRisk, notStarted }
+  }, [students])
+
   return (
     <FacultyLayout>
       <div className="space-y-5">
@@ -141,6 +151,15 @@ export default function FacultyStudents() {
           </div>
         </section>
 
+        {!isLoading && students.length > 0 ? (
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat label="Students" value={summary.total} tone="ink" />
+            <Stat label="On Track" value={summary.onTrack} tone="good" />
+            <Stat label="At Risk" value={summary.atRisk} tone="bad" />
+            <Stat label="Not Started" value={summary.notStarted} tone="muted" />
+          </section>
+        ) : null}
+
         {error ? (
           <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
             {error}
@@ -170,18 +189,19 @@ export default function FacultyStudents() {
                     {sectionName} ({sectionStudents.length} students)
                   </h2>
                 </div>
-                <div className="hidden grid-cols-[1.4fr_0.8fr_0.9fr_0.8fr_0.7fr] gap-4 border-b border-[#e6e8eb] px-5 py-3 text-xs font-semibold uppercase text-[#6b7280] lg:grid">
+                <div className="hidden grid-cols-[1.4fr_0.8fr_0.9fr_0.8fr_0.7fr_0.8fr] gap-4 border-b border-[#e6e8eb] px-5 py-3 text-xs font-semibold uppercase text-[#6b7280] lg:grid">
                   <span>Name</span>
-                  <span>Capability Score</span>
+                  <span>Avg Score</span>
                   <span>Cases Attempted</span>
                   <span>Last Active</span>
                   <span>Status</span>
+                  <span>Actions</span>
                 </div>
                 <div className="divide-y divide-[#e6e8eb]">
                   {sectionStudents.map((student) => (
                     <div
                       key={student.student_id}
-                      className="grid gap-2 px-5 py-4 lg:grid-cols-[1.4fr_0.8fr_0.9fr_0.7fr_0.7fr] lg:items-center"
+                      className="grid gap-2 px-5 py-4 lg:grid-cols-[1.4fr_0.8fr_0.9fr_0.8fr_0.7fr_0.8fr] lg:items-center"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-[#111827]">
@@ -189,8 +209,20 @@ export default function FacultyStudents() {
                         </p>
                         <p className="truncate text-sm text-[#6b7280]">{student.email}</p>
                       </div>
-                      <span className="text-sm font-medium text-[#111827]">
-                        {student.average_score}
+                      <span className="flex items-center gap-1.5 text-sm">
+                        {student.last_activity_at ? (
+                          <>
+                            <span
+                              className="font-semibold"
+                              style={{ color: scoreTone(student.average_score) }}
+                            >
+                              {student.average_score}
+                            </span>
+                            <span className="text-xs text-[#9ca3af]">/100</span>
+                          </>
+                        ) : (
+                          <span className="text-[#9ca3af]">—</span>
+                        )}
                       </span>
                       <span className="text-sm font-medium text-[#111827]">
                         {student.completed_count}/{student.assigned_count}
@@ -202,6 +234,15 @@ export default function FacultyStudents() {
                       </span>
                       <span>
                         <StatusBadge status={student.status} />
+                      </span>
+                      <span>
+                        <Link
+                          to={`/faculty/student-attempts/${student.user_id}`}
+                          className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+                        >
+                          <FileText size={14} aria-hidden="true" />
+                          View report
+                        </Link>
                       </span>
                     </div>
                   ))}
@@ -233,6 +274,35 @@ function StatusBadge({ status }: StatusBadgeProps) {
       {icon ? <AlertTriangle size={12} aria-hidden="true" /> : null}
       {label}
     </span>
+  )
+}
+
+function scoreTone(score: number): string {
+  if (score >= 75) return "#16a34a"
+  if (score >= 60) return "#b45309"
+  return "#b91c1c"
+}
+
+interface StatProps {
+  label: string
+  value: number
+  tone: "ink" | "good" | "bad" | "muted"
+}
+
+function Stat({ label, value, tone }: StatProps) {
+  const color = {
+    ink: "#0b1d3a",
+    good: "#027a48",
+    bad: "#b42318",
+    muted: "#6b7280",
+  }[tone]
+  return (
+    <article className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">{label}</p>
+      <p className="mt-1 text-2xl font-bold" style={{ color }}>
+        {value}
+      </p>
+    </article>
   )
 }
 

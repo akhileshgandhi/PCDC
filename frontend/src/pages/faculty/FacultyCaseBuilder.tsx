@@ -12,6 +12,7 @@ import {
   Send,
   Sparkles,
   X,
+  Zap,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
@@ -20,7 +21,6 @@ import {
   createFacultyCase,
   generateFacultyCase,
   generateFacultyCaseQuestions,
-  generateFacultyRapidFireQuestions,
   getFacultyCaseGenerationJob,
   getFacultyCase,
   getFacultyCourses,
@@ -77,7 +77,9 @@ const arraySections = new Set<CaseSectionKey>(["reflection_questions", "learning
 
 const bloomsLevels = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
 const WRITTEN_QUESTION_COUNT = 3
-const RAPID_FIRE_QUESTION_COUNT = 6
+const RAPID_FIRE_QUESTION_COUNT = 3
+// Rapid fire is always 3 AI-generated questions worth 1 mark each.
+const RAPID_FIRE_MARKS = 3
 
 const emptyQuestion = (questionNumber: number): FacultyCaseQuestion => ({
   question_number: questionNumber,
@@ -97,6 +99,16 @@ const emptyRapidFireQuestion = (sequence: number): FacultyRapidFireQuestion => (
   question_text: "",
   answer_text: "",
 })
+
+// Split the written portion of the total (total - rapid fire) as evenly as
+// possible across the written questions, remainder on the last question(s).
+function distributeWrittenMarks(total: number | null): number[] {
+  const written = Math.max(0, (total ?? 0) - RAPID_FIRE_MARKS)
+  const n = WRITTEN_QUESTION_COUNT
+  const base = Math.floor(written / n)
+  const remainder = written - base * n
+  return Array.from({ length: n }, (_, i) => base + (i >= n - remainder ? 1 : 0))
+}
 
 function padQuestions(questions: FacultyCaseQuestion[]): FacultyCaseQuestion[] {
   const padded = [...questions]
@@ -124,9 +136,18 @@ function linesToList(value: string): string[] {
 }
 
 function normalizeCaseData(data: FacultyCaseEditor): FacultyCaseEditor {
+  const questions = padQuestions(data.questions)
+  // If a case has a total set but no per-question marks yet (fresh case),
+  // seed the written marks from the total so the parts add up out of the box.
+  const marksUnset = questions.every((q) => !Number(q.marks))
+  const total = data.marks?.total_marks ?? null
+  const seeded =
+    marksUnset && (total ?? 0) > RAPID_FIRE_MARKS
+      ? questions.map((q, i) => ({ ...q, marks: distributeWrittenMarks(total)[i] ?? q.marks }))
+      : questions
   return {
     ...data,
-    questions: padQuestions(data.questions),
+    questions: seeded,
     rapid_fire_questions: padRapidFireQuestions(data.rapid_fire_questions),
   }
 }
@@ -159,8 +180,6 @@ export default function FacultyCaseBuilder() {
   const [caseSummary, setCaseSummary] = useState("")
   const [showQuestionsModal, setShowQuestionsModal] = useState(false)
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false)
-  const [isGeneratingRapidFire, setIsGeneratingRapidFire] = useState(false)
-  const [editableRapidFireIndices, setEditableRapidFireIndices] = useState<Set<number>>(new Set())
   const shouldOfferFullDraft = mode === "ai" && caseData && allSectionsEmpty(caseData)
 
   useEffect(() => {
@@ -340,7 +359,7 @@ export default function FacultyCaseBuilder() {
         marks: caseData.marks,
         instructions: caseData.instructions,
         questions: caseData.questions,
-        rapid_fire_questions: caseData.rapid_fire_questions,
+        rapid_fire_questions: caseData.rapid_fire_questions.slice(0, RAPID_FIRE_QUESTION_COUNT),
         recommendation: caseData.recommendation,
       })
       setCaseData(normalizeCaseData(data))
@@ -385,6 +404,20 @@ export default function FacultyCaseBuilder() {
     })
   }
 
+  // Setting Total Marks auto-distributes the written portion across the
+  // questions so the parts add up by default; faculty can still fine-tune each.
+  function handleTotalMarksChange(value: number | null) {
+    const distributed = distributeWrittenMarks(value)
+    setCaseData((current) => {
+      if (!current) return current
+      const questions = current.questions.map((q, i) => ({
+        ...q,
+        marks: distributed[i] ?? q.marks,
+      }))
+      return { ...current, marks: { ...current.marks, total_marks: value }, questions }
+    })
+  }
+
   function updateInstructions<K extends keyof FacultyCaseInstructions>(
     field: K,
     value: string,
@@ -405,19 +438,6 @@ export default function FacultyCaseBuilder() {
       const questions = [...current.questions]
       questions[index] = { ...questions[index], [field]: value }
       return { ...current, questions }
-    })
-  }
-
-  function updateRapidFireQuestion<K extends keyof FacultyRapidFireQuestion>(
-    index: number,
-    field: K,
-    value: FacultyRapidFireQuestion[K],
-  ) {
-    setCaseData((current) => {
-      if (!current) return current
-      const rapidFireQuestions = [...current.rapid_fire_questions]
-      rapidFireQuestions[index] = { ...rapidFireQuestions[index], [field]: value }
-      return { ...current, rapid_fire_questions: rapidFireQuestions }
     })
   }
 
@@ -477,41 +497,6 @@ export default function FacultyCaseBuilder() {
     } finally {
       setIsGeneratingQuestions(false)
     }
-  }
-
-  async function handleGenerateRapidFire() {
-    if (!caseData || !caseSummary.trim()) {
-      return
-    }
-    setIsGeneratingRapidFire(true)
-    setNotice("")
-    try {
-      const questions = await generateFacultyRapidFireQuestions(caseData.id, caseSummary.trim())
-      setCaseData((current) =>
-        current
-          ? { ...current, rapid_fire_questions: padRapidFireQuestions(questions) }
-          : current,
-      )
-      setEditableRapidFireIndices(new Set())
-      setErrors([])
-      setNotice("Rapid fire questions generated.")
-    } catch {
-      setErrors(["AI rapid fire generation failed. Existing content was preserved."])
-    } finally {
-      setIsGeneratingRapidFire(false)
-    }
-  }
-
-  function toggleRapidFireEditable(index: number) {
-    setEditableRapidFireIndices((current) => {
-      const next = new Set(current)
-      if (next.has(index)) {
-        next.delete(index)
-      } else {
-        next.add(index)
-      }
-      return next
-    })
   }
 
   async function handlePublish() {
@@ -602,6 +587,7 @@ export default function FacultyCaseBuilder() {
         ) : (
           <EditorStep
             caseData={caseData}
+            mode={mode}
             coreForm={coreForm}
             publishBlockers={publishBlockers}
             shouldOfferFullDraft={Boolean(shouldOfferFullDraft)}
@@ -614,7 +600,7 @@ export default function FacultyCaseBuilder() {
             onTimingChange={updateTiming}
             onInstructionsChange={updateInstructions}
             onQuestionChange={updateQuestion}
-            onRapidFireChange={updateRapidFireQuestion}
+            onTotalMarksChange={handleTotalMarksChange}
             courses={courses}
             onRecommendationChange={updateRecommendation}
             caseSummary={caseSummary}
@@ -624,10 +610,6 @@ export default function FacultyCaseBuilder() {
             onCloseQuestionsModal={() => setShowQuestionsModal(false)}
             isGeneratingQuestions={isGeneratingQuestions}
             onGenerateQuestions={handleGenerateQuestions}
-            isGeneratingRapidFire={isGeneratingRapidFire}
-            onGenerateRapidFire={handleGenerateRapidFire}
-            editableRapidFireIndices={editableRapidFireIndices}
-            onToggleRapidFireEditable={toggleRapidFireEditable}
           />
         )}
       </div>
@@ -731,6 +713,7 @@ function CoreFieldsStep({
 
 interface EditorStepProps {
   caseData: FacultyCaseEditor
+  mode: BuilderMode
   coreForm: CoreFormState
   publishBlockers: string[]
   shouldOfferFullDraft: boolean
@@ -750,11 +733,7 @@ interface EditorStepProps {
     field: K,
     value: FacultyCaseQuestion[K],
   ) => void
-  onRapidFireChange: <K extends keyof FacultyRapidFireQuestion>(
-    index: number,
-    field: K,
-    value: FacultyRapidFireQuestion[K],
-  ) => void
+  onTotalMarksChange: (value: number | null) => void
   courses: FacultyCourseOption[]
   onRecommendationChange: <K extends keyof FacultyCaseRecommendation>(
     field: K,
@@ -767,14 +746,11 @@ interface EditorStepProps {
   onCloseQuestionsModal: () => void
   isGeneratingQuestions: boolean
   onGenerateQuestions: () => void
-  isGeneratingRapidFire: boolean
-  onGenerateRapidFire: () => void
-  editableRapidFireIndices: Set<number>
-  onToggleRapidFireEditable: (index: number) => void
 }
 
 function EditorStep({
   caseData,
+  mode,
   coreForm,
   publishBlockers,
   shouldOfferFullDraft,
@@ -787,7 +763,7 @@ function EditorStep({
   onTimingChange,
   onInstructionsChange,
   onQuestionChange,
-  onRapidFireChange,
+  onTotalMarksChange,
   courses,
   onRecommendationChange,
   caseSummary,
@@ -797,10 +773,6 @@ function EditorStep({
   onCloseQuestionsModal,
   isGeneratingQuestions,
   onGenerateQuestions,
-  isGeneratingRapidFire,
-  onGenerateRapidFire,
-  editableRapidFireIndices,
-  onToggleRapidFireEditable,
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
@@ -819,19 +791,21 @@ function EditorStep({
               Status: <span className="font-semibold capitalize">{caseData.status}</span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => onGenerate()}
-            disabled={generatingSection !== null}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {generatingSection === "full" ? (
-              <Loader2 className="animate-spin" size={17} />
-            ) : (
-              <Bot size={17} />
-            )}
-            {shouldOfferFullDraft ? "Generate Full Case Draft" : "Generate Full Case"}
-          </button>
+          {mode === "ai" ? (
+            <button
+              type="button"
+              onClick={() => onGenerate()}
+              disabled={generatingSection !== null}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {generatingSection === "full" ? (
+                <Loader2 className="animate-spin" size={17} />
+              ) : (
+                <Bot size={17} />
+              )}
+              {shouldOfferFullDraft ? "Generate Full Case Draft" : "Generate Full Case"}
+            </button>
+          ) : null}
         </div>
         {generationJob && ["queued", "in_progress"].includes(generationJob.status) ? (
           <div className="mb-5 flex items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-medium text-[#1d4ed8]">
@@ -849,37 +823,67 @@ function EditorStep({
         onChange={onRecommendationChange}
       />
 
-      <TimingPanel timing={caseData.timing} onTimingChange={onTimingChange} />
+      <TimingPanel
+        timing={caseData.timing}
+        durationMinutes={coreForm.duration_minutes}
+        onTimingChange={onTimingChange}
+      />
 
       <InstructionsPanel instructions={caseData.instructions} onChange={onInstructionsChange} />
 
+      <section className="grid gap-5">
+        {sectionDefinitions.map((section) => (
+          <SectionEditor
+            key={section.key}
+            sectionKey={section.key}
+            label={section.label}
+            required={section.required}
+            value={sectionValueToText(caseData.sections[section.key])}
+            meta={caseData.section_meta[section.key]}
+            isGenerating={generatingSection === section.key}
+            generationDisabled={generatingSection !== null}
+            onChange={(value) => onSectionChange(section.key, value)}
+            onGenerate={() => onGenerate(section.key)}
+          />
+        ))}
+      </section>
+
       <QuestionsPanel
+        mode={mode}
         questions={caseData.questions}
+        totalMarks={caseData.marks.total_marks ?? null}
+        onTotalMarksChange={onTotalMarksChange}
         onChange={onQuestionChange}
         onOpenGenerateModal={onOpenQuestionsModal}
       />
 
-      <GenerateQuestionsModal
-        isOpen={showQuestionsModal}
-        summary={caseSummary}
-        onSummaryChange={onCaseSummaryChange}
-        difficultyLevel={Number(coreForm.difficulty)}
-        capabilities={coreForm.capabilities}
-        isGenerating={isGeneratingQuestions}
-        onCancel={onCloseQuestionsModal}
-        onGenerate={onGenerateQuestions}
-      />
+      {mode === "ai" ? (
+        <GenerateQuestionsModal
+          isOpen={showQuestionsModal}
+          summary={caseSummary}
+          onSummaryChange={onCaseSummaryChange}
+          difficultyLevel={Number(coreForm.difficulty)}
+          capabilities={coreForm.capabilities}
+          isGenerating={isGeneratingQuestions}
+          onCancel={onCloseQuestionsModal}
+          onGenerate={onGenerateQuestions}
+        />
+      ) : null}
 
-      <RapidFirePanel
-        questions={caseData.rapid_fire_questions}
-        summary={caseSummary}
-        onSummaryChange={onCaseSummaryChange}
-        isGenerating={isGeneratingRapidFire}
-        onGenerate={onGenerateRapidFire}
-        editableIndices={editableRapidFireIndices}
-        onToggleEditable={onToggleRapidFireEditable}
-        onChange={onRapidFireChange}
-      />
+      <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <Zap size={20} className="mt-0.5 shrink-0 text-[#C9A227]" aria-hidden="true" />
+          <div>
+            <h2 className="text-2xl font-semibold text-[#111827]">Rapid Fire Round</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
+              You only set the <span className="font-semibold">Rapid Fire Time</span> (in the
+              Timing section above). The 3 rapid-fire questions (1 mark each, 3 marks total) are
+              generated by AI for each student when they reach this round, based on the case and
+              their own written analysis — so faculty don't author them here.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {publishBlockers.length > 0 ? (
         <section className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] p-4 text-sm text-[#b42318]">
@@ -900,23 +904,6 @@ function EditorStep({
           </div>
         </section>
       ) : null}
-
-      <section className="grid gap-5">
-        {sectionDefinitions.map((section) => (
-          <SectionEditor
-            key={section.key}
-            sectionKey={section.key}
-            label={section.label}
-            required={section.required}
-            value={sectionValueToText(caseData.sections[section.key])}
-            meta={caseData.section_meta[section.key]}
-            isGenerating={generatingSection === section.key}
-            generationDisabled={generatingSection !== null}
-            onChange={(value) => onSectionChange(section.key, value)}
-            onGenerate={() => onGenerate(section.key)}
-          />
-        ))}
-      </section>
     </div>
   )
 }
@@ -1157,29 +1144,69 @@ function RecommendationPanel({ recommendation, courses, onChange }: Recommendati
 
 interface TimingPanelProps {
   timing: FacultyCaseTiming
+  durationMinutes: string
   onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
 }
 
-function TimingPanel({ timing, onTimingChange }: TimingPanelProps) {
+function TimingPanel({ timing, durationMinutes, onTimingChange }: TimingPanelProps) {
+  const total = Number(durationMinutes)
+  const reading = timing.reading_time_minutes ?? null
+  const rapidFire = timing.rapid_fire_time_minutes ?? null
+
+  // Answer writing time is derived: total duration - reading - rapid fire.
+  const computedWriting =
+    Number.isFinite(total) && total > 0 && reading !== null && rapidFire !== null
+      ? total - reading - rapidFire
+      : null
+
+  // Keep the stored answer_writing_time_minutes in sync with the computed value.
+  useEffect(() => {
+    if (computedWriting !== (timing.answer_writing_time_minutes ?? null)) {
+      onTimingChange("answer_writing_time_minutes", computedWriting)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedWriting])
+
+  const overBudget = computedWriting !== null && computedWriting < 0
+
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
       <h2 className="text-2xl font-semibold">Time Breakdown</h2>
       <p className="mt-1 text-sm text-[#6b7280]">
-        Reading and answer writing time in minutes. Rapid fire time (8 min) and marks (7 written +
-        3 rapid fire = 10 total) are fixed platform constants applied automatically.
+        Enter reading and rapid fire time in minutes. Answer writing time is calculated
+        automatically as total duration ({durationMinutes || "?"} min) minus reading and rapid
+        fire time. Set Total Marks and per-question marks in the Structured Written Questions
+        section below (rapid fire is a fixed 3 marks).
       </p>
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
         <NumberField
           label="Reading Time (min)"
           value={timing.reading_time_minutes}
           onChange={(value) => onTimingChange("reading_time_minutes", value)}
         />
         <NumberField
-          label="Answer Writing Time (min)"
-          value={timing.answer_writing_time_minutes}
-          onChange={(value) => onTimingChange("answer_writing_time_minutes", value)}
+          label="Rapid Fire Time (min)"
+          value={timing.rapid_fire_time_minutes}
+          onChange={(value) => onTimingChange("rapid_fire_time_minutes", value)}
         />
+        <label className="grid gap-2 text-sm font-semibold text-[#111827]">
+          Answer Writing Time (min)
+          <input
+            type="number"
+            readOnly
+            value={computedWriting ?? ""}
+            placeholder="Auto-calculated"
+            className="h-11 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] px-3 text-sm font-medium text-[#6b7280] outline-none"
+            title="Calculated automatically from duration, reading time, and rapid fire time"
+          />
+        </label>
       </div>
+      {overBudget ? (
+        <p className="mt-3 text-sm font-medium text-[#b42318]">
+          Reading + rapid fire time exceeds the total duration ({total} min). Increase the duration
+          or reduce these times.
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -1243,7 +1270,10 @@ function InstructionsPanel({ instructions, onChange }: InstructionsPanelProps) {
 }
 
 interface QuestionsPanelProps {
+  mode: BuilderMode
   questions: FacultyCaseQuestion[]
+  totalMarks: number | null
+  onTotalMarksChange: (value: number | null) => void
   onChange: <K extends keyof FacultyCaseQuestion>(
     index: number,
     field: K,
@@ -1252,7 +1282,19 @@ interface QuestionsPanelProps {
   onOpenGenerateModal: () => void
 }
 
-function QuestionsPanel({ questions, onChange, onOpenGenerateModal }: QuestionsPanelProps) {
+function QuestionsPanel({
+  mode,
+  questions,
+  totalMarks,
+  onTotalMarksChange,
+  onChange,
+  onOpenGenerateModal,
+}: QuestionsPanelProps) {
+  const writtenMarks = questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0)
+  const computedTotal = writtenMarks + RAPID_FIRE_MARKS
+  const declaredTotal = totalMarks ?? 0
+  const marksMismatch = declaredTotal > 0 && Math.abs(declaredTotal - computedTotal) > 0.001
+
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1262,15 +1304,46 @@ function QuestionsPanel({ questions, onChange, onOpenGenerateModal }: QuestionsP
             Three questions with marks, word limits, model answers, and a marking scheme.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onOpenGenerateModal}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
-        >
-          <Sparkles size={16} aria-hidden="true" />
-          Generate Questions with AI
-        </button>
+        {mode === "ai" ? (
+          <button
+            type="button"
+            onClick={onOpenGenerateModal}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+          >
+            <Sparkles size={16} aria-hidden="true" />
+            Generate Questions with AI
+          </button>
+        ) : null}
       </div>
+
+      {/* Total Marks — faculty-entered; parts must add up to it. */}
+      <div className="mt-5 rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4">
+        <div className="max-w-[180px]">
+          <NumberField
+            label="Total Marks"
+            value={totalMarks}
+            onChange={(value) => onTotalMarksChange(value)}
+          />
+        </div>
+        <div className="mt-3 text-sm text-[#6b7280]">
+          <p>
+            Written (sum of question marks):{" "}
+            <span className="font-semibold text-[#111827]">{writtenMarks}</span> + Rapid fire:{" "}
+            <span className="font-semibold text-[#111827]">{RAPID_FIRE_MARKS}</span> ={" "}
+            <span className="font-semibold text-[#111827]">{computedTotal}</span>
+          </p>
+          {marksMismatch ? (
+            <p className="mt-1 flex items-center gap-1.5 font-medium text-[#b45309]">
+              <AlertTriangle size={14} aria-hidden="true" />
+              Total Marks ({declaredTotal}) doesn't match the parts ({computedTotal}). Adjust the
+              total or the per-question marks.
+            </p>
+          ) : (
+            <p className="mt-1 font-medium text-[#16a34a]">Marks add up correctly.</p>
+          )}
+        </div>
+      </div>
+
       <div className="mt-5 grid gap-5">
         {questions.map((question, index) => (
           <article
@@ -1423,122 +1496,6 @@ function GenerateQuestionsModal({
   )
 }
 
-interface RapidFirePanelProps {
-  questions: FacultyRapidFireQuestion[]
-  summary: string
-  onSummaryChange: (value: string) => void
-  isGenerating: boolean
-  onGenerate: () => void
-  editableIndices: Set<number>
-  onToggleEditable: (index: number) => void
-  onChange: <K extends keyof FacultyRapidFireQuestion>(
-    index: number,
-    field: K,
-    value: FacultyRapidFireQuestion[K],
-  ) => void
-}
-
-function RapidFirePanel({
-  questions,
-  summary,
-  onSummaryChange,
-  isGenerating,
-  onGenerate,
-  editableIndices,
-  onToggleEditable,
-  onChange,
-}: RapidFirePanelProps) {
-  const hasGenerated = questions.some((question) => question.question_text.trim())
-
-  return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold">Rapid Fire Questions</h2>
-      <p className="mt-1 text-sm text-[#6b7280]">
-        Six quick question/answer pairs shown after the written submission, generated by AI from a
-        case summary.
-      </p>
-
-      <div className="mt-5 rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4">
-        <label className="grid gap-2 text-sm font-semibold text-[#111827]">
-          Case Summary for Rapid Fire Generation
-          <textarea
-            value={summary}
-            onChange={(event) => onSummaryChange(event.target.value)}
-            rows={3}
-            placeholder="Briefly describe the core business situation and key facts from this case..."
-            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={isGenerating || !summary.trim()}
-          className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isGenerating ? (
-            <Loader2 className="animate-spin" size={16} aria-hidden="true" />
-          ) : hasGenerated ? (
-            <RefreshCw size={16} aria-hidden="true" />
-          ) : (
-            <Sparkles size={16} aria-hidden="true" />
-          )}
-          {hasGenerated ? "Regenerate" : "Generate Rapid Fire Questions"}
-        </button>
-      </div>
-
-      {hasGenerated ? (
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          {questions.map((question, index) => {
-            const isEditable = editableIndices.has(index)
-            return (
-              <article
-                key={question.sequence}
-                className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-[#111827]">Q{question.sequence}</h3>
-                  <button
-                    type="button"
-                    onClick={() => onToggleEditable(index)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#6b7280] transition hover:text-[#111827]"
-                  >
-                    <Pencil size={13} aria-hidden="true" />
-                    {isEditable ? "Done" : "Edit"}
-                  </button>
-                </div>
-                {isEditable ? (
-                  <div className="mt-3 grid gap-3">
-                    <TextAreaField
-                      label="Question"
-                      value={question.question_text}
-                      rows={2}
-                      onChange={(value) => onChange(index, "question_text", value)}
-                    />
-                    <TextAreaField
-                      label="Answer"
-                      value={question.answer_text ?? ""}
-                      rows={2}
-                      onChange={(value) => onChange(index, "answer_text", value)}
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-2 text-sm leading-6 text-[#111827]">
-                    <p>{question.question_text}</p>
-                    <p className="mt-1 text-[#6b7280]">
-                      <span className="font-semibold text-[#111827]">Answer: </span>
-                      {question.answer_text}
-                    </p>
-                  </div>
-                )}
-              </article>
-            )
-          })}
-        </div>
-      ) : null}
-    </section>
-  )
-}
-
 interface SectionEditorProps {
   sectionKey: CaseSectionKey
   label: string
@@ -1573,15 +1530,6 @@ function SectionEditor({
           ) : null}
           <MetaBadge meta={meta} />
         </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={generationDisabled}
-          className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
-          {value.trim() ? "Regenerate with AI" : "Generate with AI"}
-        </button>
       </div>
       <textarea
         value={value}

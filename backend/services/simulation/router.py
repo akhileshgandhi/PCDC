@@ -15,6 +15,7 @@ from .models import (
     DefenseQuestionsResponse,
     EvaluationResult,
     FinalEvaluation,
+    PhaseStartRequest,
     StartAttemptRequest,
     StartAttemptResponse,
     SubmitAnalysisRequest,
@@ -32,9 +33,12 @@ from .service import (
     get_thinking_path_for_mentor,
     list_case_studies,
     send_ai_message,
+    start_attempt_phase,
     start_case_attempt,
+    start_rapid_fire_round,
     submit_defense,
     submit_initial_analysis,
+    submit_rapid_fire,
     submit_reflection,
     submit_solution,
     update_case_status,
@@ -121,7 +125,9 @@ def submit_analysis(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     try:
-        return submit_initial_analysis(db, data.attempt_id, data.initial_analysis, current_user)
+        return submit_initial_analysis(
+            db, data.attempt_id, data.initial_analysis, current_user, data.initial_summary
+        )
     except HTTPException:
         raise
     except Exception as error:
@@ -171,6 +177,52 @@ def submit_case_defense(
         raise
     except Exception as error:
         print(f"SUBMIT DEFENSE ERROR: {error}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@simulation_router.post("/attempt/{attempt_id}/phase-start")
+def attempt_phase_start(
+    attempt_id: int,
+    data: PhaseStartRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    try:
+        return start_attempt_phase(db, attempt_id, data.phase, current_user)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"PHASE START ERROR: {error}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@simulation_router.post("/attempt/{attempt_id}/rapid-fire/start")
+def rapid_fire_start(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    try:
+        return start_rapid_fire_round(db, attempt_id, current_user)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"RAPID FIRE START ERROR: {error}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@simulation_router.post("/attempt/submit-rapid-fire", response_model=EvaluationResult)
+def submit_case_rapid_fire(
+    data: SubmitDefenseRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    try:
+        return submit_rapid_fire(db, data.attempt_id, data.defense_responses, current_user)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"SUBMIT RAPID FIRE ERROR: {error}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

@@ -1,4 +1,4 @@
-import { Archive, CircleX, Edit3, Eye, Plus, Search, Send } from "lucide-react"
+import { Archive, CircleX, Edit3, Eye, Plus, Search, Send, Trash2 } from "lucide-react"
 import type { FormEvent } from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
@@ -6,6 +6,7 @@ import { Link } from "react-router-dom"
 import {
   assignCaseToSections,
   closeFacultyCaseAssignment,
+  deleteFacultyCase,
   getFacultyAssignedCases,
   getFacultyCases,
   getFacultySections,
@@ -63,6 +64,25 @@ export default function FacultyCaseLibrary() {
   useEffect(() => {
     loadAssignedCases()
   }, [loadAssignedCases])
+
+  async function handleDeleteCase(caseStudy: FacultyCase) {
+    if (
+      !window.confirm(
+        `Delete "${caseStudy.title}"? This permanently removes the case, its questions, and any student attempts. This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    try {
+      await deleteFacultyCase(caseStudy.id)
+      setCases((current) => current.filter((item) => item.id !== caseStudy.id))
+      setNotice(`Deleted "${caseStudy.title}".`)
+      setError("")
+      loadAssignedCases()
+    } catch {
+      setError("Unable to delete this case study.")
+    }
+  }
 
   async function handleCloseAssignment(assignmentId: number) {
     setClosingAssignmentId(assignmentId)
@@ -260,6 +280,7 @@ export default function FacultyCaseLibrary() {
                   key={caseStudy.id}
                   caseStudy={caseStudy}
                   onAssign={() => setAssigningCase(caseStudy)}
+                  onDelete={() => handleDeleteCase(caseStudy)}
                 />
               ))}
             </div>
@@ -374,9 +395,10 @@ export default function FacultyCaseLibrary() {
 interface CaseRowProps {
   caseStudy: FacultyCase
   onAssign: () => void
+  onDelete: () => void
 }
 
-function CaseRow({ caseStudy, onAssign }: CaseRowProps) {
+function CaseRow({ caseStudy, onAssign, onDelete }: CaseRowProps) {
   return (
     <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.5fr_0.8fr_0.7fr_0.7fr_0.8fr_1.2fr] lg:items-center">
       <div className="min-w-0">
@@ -424,7 +446,7 @@ function CaseRow({ caseStudy, onAssign }: CaseRowProps) {
             <Edit3 size={16} aria-hidden="true" />
           </Link>
           <Link
-            to={`/faculty/case-library?case=${caseStudy.id}`}
+            to={`/faculty/case-attempts/${caseStudy.id}`}
             className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
             aria-label={`View attempts for ${caseStudy.title}`}
             title="View attempts"
@@ -438,6 +460,15 @@ function CaseRow({ caseStudy, onAssign }: CaseRowProps) {
             title="Archive"
           >
             <Archive size={16} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#b42318] transition hover:border-[#b42318] hover:bg-[#fff5f5]"
+            aria-label={`Delete ${caseStudy.title}`}
+            title="Delete"
+          >
+            <Trash2 size={16} aria-hidden="true" />
           </button>
         </div>
       </div>

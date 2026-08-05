@@ -2,6 +2,7 @@ import { UserPlus } from "lucide-react"
 import { useState } from "react"
 import { Link } from "react-router-dom"
 
+import GoogleSignInButton from "../../components/auth/GoogleSignInButton"
 import AuthLayout from "../../layouts/AuthLayout"
 
 export default function Register() {
@@ -9,6 +10,7 @@ export default function Register() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -83,6 +85,22 @@ export default function Register() {
           <UserPlus size={18} aria-hidden="true" />
           {isLoading ? "Registering..." : "Register"}
         </button>
+
+        <div className="flex items-center gap-3 py-1">
+          <span className="h-px flex-1 bg-slate-200" />
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">or</span>
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        {error ? (
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        ) : null}
+
+        <GoogleSignInButton onError={setError} />
+
+        <p className="text-center text-xs text-slate-500">
+          Google sign-in works for accounts your administrator has already created.
+        </p>
 
         <p className="text-center text-sm text-slate-600">
           Already registered?{" "}

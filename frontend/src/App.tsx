@@ -13,10 +13,7 @@ import CaseDetail from "./pages/cases/CaseDetail"
 import CaseStudyDestination from "./pages/cases/CaseStudyDestination"
 import MyCaseStudies from "./pages/cases/MyCaseStudies"
 import AICoach from "./pages/coach/AICoach"
-import DirectorPortal from "./pages/director/DirectorPortal"
 import FacultyPortal from "./pages/faculty/FacultyPortal"
-import MentorPortal from "./pages/mentor/MentorPortal"
-import MentorSupport from "./pages/mentor/MentorSupport"
 import Dashboard from "./pages/student/Dashboard"
 import Profile from "./pages/student/Profile"
 import Unauthorized from "./pages/Unauthorized"
@@ -91,14 +88,6 @@ export default function App() {
             }
           />
           <Route
-            path="/student/mentor-support"
-            element={
-              <ProtectedRoute allowedRole="student">
-                <MentorSupport />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/student/case-studies"
             element={
               <ProtectedRoute allowedRole="student">
@@ -140,14 +129,6 @@ export default function App() {
             }
           />
           <Route
-            path="/mentor/*"
-            element={
-              <ProtectedRoute allowedRole="mentor">
-                <MentorPortal />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/admin/*"
             element={
               <ProtectedRoute allowedRole="admin">
@@ -155,15 +136,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/director/*"
-            element={
-              <ProtectedRoute allowedRole="director">
-                <DirectorPortal />
-              </ProtectedRoute>
-            }
-          />
-
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

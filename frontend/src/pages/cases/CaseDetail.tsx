@@ -210,24 +210,6 @@ export default function CaseDetail() {
               </ContentSection>
             ) : null}
 
-            {caseContent.reflection_questions.length > 0 ? (
-              <ContentSection title="You Will Be Asked To Reflect On">
-                <ol className="space-y-3">
-                  {caseContent.reflection_questions.map((question, index) => (
-                    <li
-                      key={question}
-                      className="flex gap-3 text-sm italic leading-6 text-[#6B7280]"
-                    >
-                      <span className="font-semibold text-[#0B1D3A]">{index + 1}.</span>
-                      <span>{question}</span>
-                    </li>
-                  ))}
-                </ol>
-                <p className="mt-5 rounded-lg bg-[#F6F7F9] px-4 py-3 text-sm font-medium text-[#6B7280]">
-                  These questions appear after your AI discussion.
-                </p>
-              </ContentSection>
-            ) : null}
           </main>
 
           <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">

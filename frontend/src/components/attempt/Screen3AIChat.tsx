@@ -1,160 +1,192 @@
-import { ArrowRight, ChevronDown, ChevronUp, Send } from "lucide-react"
-import type { ReactNode } from "react"
-import { useState } from "react"
+﻿import { ArrowRight, CheckCircle, Loader2, Zap } from "lucide-react"
+import { useEffect, useState } from "react"
+import type { RapidFireQuestion } from "../../api/cases"
+import CountdownTimer from "./CountdownTimer"
 
 export interface ChatMessage {
   role: "ai" | "student"
   text: string
 }
 
-interface Screen3AIChatProps {
-  analysisText: string
-  chatMessages: ChatMessage[]
-  onSendMessage: (message: string) => void
-  onNext: () => void
+function marksLabel(marks: number | null | undefined): string {
+  if (marks == null) return ""
+  return ` · ${marks} ${marks === 1 ? "mark" : "marks"}`
 }
 
-const keyDataPoints = [
-  "Revenue declined 25% over two quarters.",
-  "Distributor coverage dropped from 1,200 to 780 stores.",
-  "Premium-segment preference is rising across target cities.",
-  "Chinese OEMs are using price bundles and retail incentives.",
-]
+interface Screen3AIChatProps {
+  rapidFireQuestions: RapidFireQuestion[]
+  analysisText: string
+  chatMessages: ChatMessage[]
+  remainingSeconds?: number | null
+  isGenerating?: boolean
+  onSendMessage: (message: string) => void
+  onNext: () => void
+  onSubmit: (answers: string) => void
+  isSubmitting: boolean
+}
 
 export default function Screen3AIChat({
-  analysisText,
-  chatMessages,
-  onSendMessage,
-  onNext,
+  rapidFireQuestions,
+  remainingSeconds,
+  isGenerating = false,
+  onSubmit,
+  isSubmitting,
 }: Screen3AIChatProps) {
-  const [draft, setDraft] = useState("")
-  const [isReferenceOpen, setIsReferenceOpen] = useState(true)
+  const [currentQ, setCurrentQ] = useState(0)
+  const [answers, setAnswers] = useState<string[]>(() => rapidFireQuestions.map(() => ""))
+  const [submitted, setSubmitted] = useState(false)
 
-  function handleSend() {
-    const trimmed = draft.trim()
-    if (!trimmed) return
-    onSendMessage(trimmed)
-    setDraft("")
+  // Questions arrive asynchronously (AI-generated on entry); size the answers
+  // array to match once they load.
+  useEffect(() => {
+    setAnswers((prev) =>
+      prev.length === rapidFireQuestions.length
+        ? prev
+        : rapidFireQuestions.map((_, i) => prev[i] ?? ""),
+    )
+  }, [rapidFireQuestions])
+
+  const total = rapidFireQuestions.length
+  const currentAnswer = answers[currentQ] ?? ""
+  const isLast = currentQ === total - 1
+  const allDone = submitted || total === 0
+
+  function submitAll() {
+    const allAnswers = rapidFireQuestions
+      .map((q, i) => `Q${q.sequence}: ${q.question_text}\nA: ${answers[i] || ""}`)
+      .join("\n\n")
+    setSubmitted(true)
+    onSubmit(allAnswers)
+  }
+
+  function handleExpire() {
+    if (submitted || total === 0) return
+    submitAll()
+  }
+
+  function handleAnswerChange(value: string) {
+    setAnswers((prev) => {
+      const next = [...prev]
+      next[currentQ] = value
+      return next
+    })
+  }
+
+  function handleNext() {
+    if (isLast) {
+      submitAll()
+    } else {
+      setCurrentQ((q) => q + 1)
+    }
   }
 
   return (
-    <section className="space-y-5">
-      <div className="grid gap-5 lg:grid-cols-[45%_55%]">
-        <aside className="rounded-xl border border-[#E6EBEB] bg-white p-5 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setIsReferenceOpen((value) => !value)}
-            className="flex w-full items-center justify-between text-left"
-          >
-            <span>
-              <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
-                Case Reference
-              </span>
-              <span className="mt-1 block text-lg font-semibold text-[#111827]">
-                Summary and Your Analysis
-              </span>
-            </span>
-            {isReferenceOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
-
-          {isReferenceOpen ? (
-            <div className="mt-5 space-y-5">
-              <ReferenceSection title="Case Summary">
-                ABC Electronics is losing Southeast Asia share as distribution weakens, OEM
-                competitors undercut prices, and premium preferences shift.
-              </ReferenceSection>
-              <ReferenceSection title="Key Data Points">
-                <ul className="space-y-2">
-                  {keyDataPoints.map((point) => (
-                    <li key={point}>{point}</li>
-                  ))}
-                </ul>
-              </ReferenceSection>
-              <ReferenceSection title="Your Analysis">
-                <p className="max-h-56 overflow-auto rounded-lg bg-[#F6F7F9] p-3">
-                  {analysisText || "Your submitted analysis will appear here."}
-                </p>
-              </ReferenceSection>
-            </div>
+    <section className="mx-auto max-w-[680px] space-y-5">
+      <div className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+            Rapid Fire Round
+          </p>
+          {remainingSeconds != null && !allDone ? (
+            <CountdownTimer
+              seconds={remainingSeconds}
+              label="Rapid fire time"
+              onExpire={handleExpire}
+            />
           ) : null}
-        </aside>
+        </div>
 
-        <main className="flex min-h-[560px] flex-col rounded-xl border border-[#E6EBEB] bg-white p-5 shadow-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
-              AI Discussion
+        {isGenerating && total === 0 ? (
+          <div className="mt-6 flex flex-col items-center gap-3 py-12 text-center text-[#6B7280]">
+            <Loader2 size={32} className="animate-spin text-[#C9A227]" />
+            <p className="text-sm font-medium text-[#0B1D3A]">
+              Preparing your rapid fire questions…
             </p>
-            <h2 className="mt-1 text-xl font-semibold text-[#111827]">Challenge Your Thinking</h2>
+            <p className="text-xs text-[#9CA3AF]">
+              The AI is generating questions from your analysis. Your timer starts once
+              they appear.
+            </p>
           </div>
-
-          <div className="mt-5 flex-1 space-y-4 overflow-auto rounded-xl bg-[#F6F7F9] p-4">
-            {chatMessages.map((message, index) => (
-              <div
-                key={`${message.role}-${index}`}
-                className={`flex ${message.role === "student" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[82%] rounded-xl px-4 py-3 text-sm leading-6 ${
-                    message.role === "student"
-                      ? "bg-[#0B1D3A] text-white"
-                      : "border border-[#E6EBEB] bg-white text-[#374151]"
-                  }`}
-                >
-                  <p className="mb-1 text-xs font-semibold uppercase opacity-70">
-                    {message.role === "student" ? "Student" : "AI"}
+        ) : total === 0 ? (
+          <div className="mt-6 flex flex-col items-center gap-2 py-10 text-center text-[#9CA3AF]">
+            <Zap size={32} />
+            <p className="text-sm">Rapid fire questions aren't ready yet.</p>
+            <button
+              type="button"
+              onClick={() => onSubmit("No rapid fire questions")}
+              disabled={isSubmitting}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#B08D20]"
+            >
+              Continue to Evaluation
+              <ArrowRight size={15} />
+            </button>
+          </div>
+        ) : allDone ? (
+          <div className="mt-4 flex flex-col items-center gap-3 py-6 text-center">
+            <CheckCircle size={40} className="text-[#16A34A]" />
+            <h3 className="text-lg font-semibold text-[#0B1D3A]">All questions answered!</h3>
+            <p className="text-sm text-[#6B7280]">
+              {isSubmitting ? "AI is evaluating your performance…" : "Your answers have been submitted. Evaluation is ready."}
+            </p>
+            <div className="mt-4 w-full space-y-3 text-left">
+              {rapidFireQuestions.map((q, i) => (
+                <div key={q.sequence} className="rounded-lg border border-[#E6EBEB] p-4">
+                  <p className="text-xs font-semibold uppercase text-[#C9A227]">
+                    Q{q.sequence}
+                    {marksLabel(q.marks)}
                   </p>
-                  {message.text}
+                  <p className="mt-1 text-sm font-medium text-[#111827]">{q.question_text}</p>
+                  <p className="mt-1 text-sm text-[#6B7280]">{answers[i] || "No answer"}</p>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-
-          <div className="mt-4 flex gap-3">
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") handleSend()
-              }}
-              placeholder="Type your message..."
-              className="min-w-0 flex-1 rounded-lg border border-[#E6EBEB] px-4 py-3 text-sm outline-none transition focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+        ) : (
+          <div className="mt-5">
+            <div className="mb-5 flex items-center justify-between text-xs text-[#6B7280]">
+              <span>
+                Question {currentQ + 1} of {total}
+                {marksLabel(rapidFireQuestions[currentQ].marks)}
+              </span>
+              <div className="flex gap-1.5">
+                {rapidFireQuestions.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`size-2.5 rounded-full transition-colors ${
+                      i < currentQ ? "bg-[#16A34A]" : i === currentQ ? "bg-[#C9A227]" : "bg-[#E6EBEB]"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg bg-[#F6F7F9] p-5">
+              <p className="text-base font-semibold text-[#0B1D3A]">
+                {rapidFireQuestions[currentQ].question_text}
+              </p>
+            </div>
+            <textarea
+              value={currentAnswer}
+              onChange={(e) => handleAnswerChange(e.target.value)}
+              rows={6}
+              placeholder="Type your answer here..."
+              className="mt-4 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
             />
             <button
               type="button"
-              onClick={handleSend}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0B1D3A] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#122A54]"
+              onClick={handleNext}
+              disabled={!currentAnswer.trim()}
+              className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
+                currentAnswer.trim()
+                  ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
+                  : "cursor-not-allowed bg-[#D1D5DB] text-white"
+              }`}
             >
-              <Send size={16} aria-hidden="true" />
-              Send
+              {isLast ? "Submit All Answers" : "Next Question"}
+              <ArrowRight size={15} aria-hidden="true" />
             </button>
           </div>
-        </main>
+        )}
       </div>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={onNext}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C9A227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
-        >
-          I'm ready to submit my solution
-          <ArrowRight size={16} aria-hidden="true" />
-        </button>
-      </div>
-    </section>
-  )
-}
-
-interface ReferenceSectionProps {
-  title: string
-  children: ReactNode
-}
-
-function ReferenceSection({ title, children }: ReferenceSectionProps) {
-  return (
-    <section>
-      <h3 className="text-sm font-semibold text-[#111827]">{title}</h3>
-      <div className="mt-2 text-sm leading-6 text-[#6B7280]">{children}</div>
     </section>
   )
 }

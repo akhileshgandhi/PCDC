@@ -1,18 +1,24 @@
 import {
+  ChevronDown,
   ChevronRight,
   GraduationCap,
   Plus,
+  Trash2,
+  Upload,
   Users as UsersIcon,
+  X,
 } from "lucide-react"
-import type { FormEvent, ReactNode } from "react"
-import { useEffect, useState } from "react"
+import type { ChangeEvent, FormEvent, ReactNode } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import {
   advanceBatchSemester,
   assignAdminSectionFaculty,
+  bulkEnrollAdminSectionStudents,
   createAdminBatch,
   createAdminCourse,
   createAdminSection,
+  deleteAdminCourse,
   enrollAdminSectionStudents,
   getAdminCourseBatches,
   getAdminCourses,
@@ -20,6 +26,8 @@ import {
   getAdminCourseSemesters,
   getAdminSection,
   getAdminUsers,
+  removeAdminSectionFaculty,
+  removeAdminSectionStudent,
   type AdminBatch,
   type AdminCourse,
   type AdminSection,
@@ -105,31 +113,57 @@ export default function AdminCourses() {
         ) : (
           <div className="grid gap-4">
             {courses.map((course) => (
-              <button
+              <div
                 key={course.id}
-                type="button"
-                onClick={() => setSelectedCourseId(course.id)}
-                className={`rounded-lg border bg-white p-5 text-left shadow-sm transition hover:border-[#34c6a3] ${
+                className={`rounded-lg border bg-white p-5 shadow-sm transition hover:border-[#34c6a3] ${
                   selectedCourseId === course.id ? "border-[#34c6a3] ring-2 ring-[#34c6a3]/20" : "border-[#dde4ec]"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCourseId(course.id)}
+                    className="flex-1 text-left"
+                  >
                     <h3 className="text-xl font-semibold text-[#17202a]">{course.name}</h3>
                     <p className="mt-1 text-sm text-[#667085]">
                       {course.code} · {course.total_semesters} semesters · {course.duration_years}{" "}
                       years
                     </p>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete course "${course.name}"? This will remove all batches, sections, faculty assignments, and unlink enrolled students.`)) return
+                        try {
+                          await deleteAdminCourse(course.id)
+                          setNotice(`Course "${course.name}" deleted.`)
+                          if (selectedCourseId === course.id) setSelectedCourseId(null)
+                          await loadCourses()
+                        } catch (err: any) {
+                          setError(err?.response?.data?.detail || "Unable to delete course.")
+                        }
+                      }}
+                      className="rounded-md p-1.5 text-[#667085] transition hover:bg-[#fff5f5] hover:text-[#b42318]"
+                      title="Delete course"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <ChevronRight size={20} className="text-[#667085]" aria-hidden="true" />
                   </div>
-                  <ChevronRight size={20} className="text-[#667085]" aria-hidden="true" />
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCourseId(course.id)}
+                  className="mt-4 flex flex-wrap gap-2"
+                >
                   <StatPill label="Batches" value={course.batch_count} />
                   <StatPill label="Sections" value={course.section_count} />
                   <StatPill label="Students" value={course.student_count} />
                   <StatPill label="Faculty" value={course.faculty_count} />
-                </div>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -172,7 +206,9 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
   const [isLoading, setIsLoading] = useState(true)
   const [showAddBatch, setShowAddBatch] = useState(false)
   const [showAddSection, setShowAddSection] = useState(false)
-  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null)
+  const [expandedSemesters, setExpandedSemesters] = useState<Set<number>>(new Set())
+  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set())
+  const [sectionDetails, setSectionDetails] = useState<Record<number, AdminSectionDetail>>({})
 
   async function loadDetail() {
     setIsLoading(true)
@@ -185,6 +221,10 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
       setBatches(batchData.items)
       setSections(sectionData.items)
       setSemesters(semesterData.items)
+      // Auto-expand first semester
+      if (semesterData.items.length > 0) {
+        setExpandedSemesters(new Set([semesterData.items[0].id]))
+      }
     } finally {
       setIsLoading(false)
     }
@@ -194,6 +234,38 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
     loadDetail()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id])
+
+  async function loadSectionDetail(sectionId: number) {
+    const data = await getAdminSection(sectionId)
+    setSectionDetails((prev) => ({ ...prev, [sectionId]: data }))
+  }
+
+  function toggleSemester(semesterId: number) {
+    setExpandedSemesters((prev) => {
+      const next = new Set(prev)
+      if (next.has(semesterId)) {
+        next.delete(semesterId)
+      } else {
+        next.add(semesterId)
+      }
+      return next
+    })
+  }
+
+  function toggleSection(sectionId: number) {
+    setExpandedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+        if (!sectionDetails[sectionId]) {
+          loadSectionDetail(sectionId)
+        }
+      }
+      return next
+    })
+  }
 
   async function handleAdvanceSemester(batch: AdminBatch) {
     if (!window.confirm(`Advance all active students in "${batch.name}" to their next semester's section?`)) {
@@ -210,14 +282,24 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
     }
   }
 
+  async function handleSectionChanged(sectionId: number) {
+    await loadSectionDetail(sectionId)
+    await Promise.all([loadDetail(), onRefresh()])
+  }
+
+  const getSectionsForSemester = (semester: AdminSemester) =>
+    sections.filter((s) => s.semester_number === semester.semester_number)
+
   return (
     <section className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm sm:p-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold text-[#17202a]">{course.name}</h2>
-          <p className="mt-1 text-sm text-[#667085]">Batches, sections, faculty, and students.</p>
+          <p className="mt-1 text-sm text-[#667085]">
+            {course.code} · {course.total_semesters} semesters · {course.duration_years} years
+          </p>
         </div>
-        <button type="button" onClick={onClose} className="text-sm font-semibold text-[#667085]">
+        <button type="button" onClick={onClose} className="text-sm font-semibold text-[#667085] hover:text-[#17202a]">
           Close
         </button>
       </div>
@@ -225,92 +307,87 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
       {isLoading ? (
         <p className="mt-5 text-sm font-medium text-[#667085]">Loading...</p>
       ) : (
-        <div className="mt-5 grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-[#17202a]">Batches</h3>
-              <button
-                type="button"
-                onClick={() => setShowAddBatch(true)}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-[#176b5a]"
-              >
-                <Plus size={15} aria-hidden="true" />
-                Add Batch
-              </button>
-            </div>
-            <div className="mt-3 space-y-2">
-              {batches.length === 0 ? (
-                <p className="text-sm text-[#667085]">No batches yet.</p>
-              ) : (
-                batches.map((batch) => (
-                  <div
-                    key={batch.id}
-                    className="flex items-center justify-between rounded-md border border-[#dde4ec] px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-[#17202a]">{batch.name}</p>
-                      <p className="text-xs text-[#667085]">
-                        {batch.start_year}-{batch.end_year} · {batch.status}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAdvanceSemester(batch)}
-                      className="rounded-md border border-[#dde4ec] px-2 py-1 text-xs font-semibold text-[#102033] transition hover:border-[#34c6a3]"
-                    >
-                      Advance Semester
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
+        <div className="mt-5 space-y-4">
+          {/* Batches Row */}
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-[#dde4ec] bg-[#f5f7fa] p-3">
+            <span className="text-sm font-semibold text-[#17202a]">Batches:</span>
+            {batches.map((batch) => (
+              <div key={batch.id} className="inline-flex items-center gap-2 rounded-full border border-[#dde4ec] bg-white px-3 py-1.5 text-xs">
+                <span className="font-semibold text-[#17202a]">{batch.name}</span>
+                <span className="text-[#667085]">{batch.start_year}-{batch.end_year}</span>
+                <button
+                  type="button"
+                  onClick={() => handleAdvanceSemester(batch)}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#176b5a] hover:bg-[#e8f8f4]"
+                  title="Advance semester"
+                >
+                  ↑
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowAddBatch(true)}
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#34c6a3] px-3 py-1.5 text-xs font-semibold text-[#176b5a] hover:bg-[#e8f8f4]"
+            >
+              <Plus size={12} /> Add Batch
+            </button>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-[#17202a]">Class Sections</h3>
-              <button
-                type="button"
-                onClick={() => setShowAddSection(true)}
-                disabled={batches.length === 0}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-[#176b5a] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Plus size={15} aria-hidden="true" />
-                Add Section
-              </button>
-            </div>
-            <div className="mt-3 space-y-2">
-              {sections.length === 0 ? (
-                <p className="text-sm text-[#667085]">No sections yet.</p>
-              ) : (
-                sections.map((section) => (
+          {/* Semester Accordion */}
+          {semesters.map((semester) => {
+            const semSections = getSectionsForSemester(semester)
+            const isExpanded = expandedSemesters.has(semester.id)
+            return (
+              <div key={semester.id} className="rounded-lg border border-[#dde4ec]">
+                <button
+                  type="button"
+                  onClick={() => toggleSemester(semester.id)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f5f7fa]"
+                >
+                  <div className="flex items-center gap-2">
+                    {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <span className="text-sm font-semibold text-[#17202a]">{semester.name}</span>
+                    <span className="text-xs text-[#667085]">
+                      ({semSections.length} section{semSections.length !== 1 ? "s" : ""} ·{" "}
+                      {semSections.reduce((sum, s) => sum + s.student_count, 0)} students ·{" "}
+                      {semSections.reduce((sum, s) => sum + s.faculty_count, 0)} faculty)
+                    </span>
+                  </div>
                   <button
-                    key={section.id}
                     type="button"
-                    onClick={() => setSelectedSectionId(section.id)}
-                    className="flex w-full items-center justify-between rounded-md border border-[#dde4ec] px-3 py-2 text-left transition hover:border-[#34c6a3]"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowAddSection(true)
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#dde4ec] px-2 py-1 text-xs font-semibold text-[#176b5a] hover:border-[#34c6a3]"
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-[#17202a]">
-                        {section.name}{" "}
-                        <span className="font-normal text-[#667085]">
-                          · {section.semester_name} · {section.batch_name}
-                        </span>
-                      </p>
-                      <p className="mt-1 flex items-center gap-3 text-xs text-[#667085]">
-                        <span className="inline-flex items-center gap-1">
-                          <UsersIcon size={13} aria-hidden="true" />
-                          {section.student_count} students
-                        </span>
-                        <span>{section.faculty_count} faculty</span>
-                      </p>
-                    </div>
-                    <ChevronRight size={16} className="text-[#667085]" aria-hidden="true" />
+                    <Plus size={12} /> Section
                   </button>
-                ))
-              )}
-            </div>
-          </div>
+                </button>
+
+                {isExpanded ? (
+                  <div className="border-t border-[#dde4ec] p-4 space-y-3">
+                    {semSections.length === 0 ? (
+                      <p className="text-sm text-[#667085]">No sections in this semester yet.</p>
+                    ) : (
+                      semSections.map((section) => (
+                        <SectionCard
+                          key={section.id}
+                          section={section}
+                          detail={sectionDetails[section.id] ?? null}
+                          isExpanded={expandedSections.has(section.id)}
+                          onToggle={() => toggleSection(section.id)}
+                          onChanged={() => handleSectionChanged(section.id)}
+                          onNotice={onNotice}
+                        />
+                      ))
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -337,17 +414,312 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
           }}
         />
       ) : null}
-
-      {selectedSectionId ? (
-        <SectionDetailDialog
-          sectionId={selectedSectionId}
-          onClose={() => setSelectedSectionId(null)}
-          onChanged={async () => {
-            await Promise.all([loadDetail(), onRefresh()])
-          }}
-        />
-      ) : null}
     </section>
+  )
+}
+
+/* ─── Section Card with inline management ─── */
+
+interface SectionCardProps {
+  section: AdminSection
+  detail: AdminSectionDetail | null
+  isExpanded: boolean
+  onToggle: () => void
+  onChanged: () => Promise<void>
+  onNotice: (message: string) => void
+}
+
+function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotice }: SectionCardProps) {
+  const [facultyOptions, setFacultyOptions] = useState<AdminUser[]>([])
+  const [facultyId, setFacultyId] = useState("")
+  const [subject, setSubject] = useState("")
+  const [showFacultyForm, setShowFacultyForm] = useState(false)
+  const [showStudentForm, setShowStudentForm] = useState(false)
+  const [studentOptions, setStudentOptions] = useState<AdminUser[]>([])
+  const [studentId, setStudentId] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [importResult, setImportResult] = useState<string>("")
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (showFacultyForm && facultyOptions.length === 0) {
+      getAdminUsers({ role: "faculty", page_size: 100 }).then((data) => setFacultyOptions(data.items))
+    }
+  }, [showFacultyForm, facultyOptions.length])
+
+  useEffect(() => {
+    if (showStudentForm && studentOptions.length === 0) {
+      getAdminUsers({ role: "student", page_size: 100 }).then((data) => setStudentOptions(data.items))
+    }
+  }, [showStudentForm, studentOptions.length])
+
+  async function handleAssignFaculty(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!facultyId || !subject.trim()) return
+    setIsSaving(true)
+    try {
+      await assignAdminSectionFaculty(section.id, { faculty_id: Number(facultyId), subject: subject.trim() })
+      setFacultyId("")
+      setSubject("")
+      setShowFacultyForm(false)
+      await onChanged()
+    } catch {
+      onNotice("Unable to assign faculty.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleEnrollStudent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!studentId) return
+    setIsSaving(true)
+    try {
+      await enrollAdminSectionStudents(section.id, [Number(studentId)])
+      setStudentId("")
+      setShowStudentForm(false)
+      await onChanged()
+      onNotice("Student enrolled.")
+    } catch {
+      onNotice("Unable to enroll student.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleBulkImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    setIsImporting(true)
+    setImportResult("")
+    try {
+      const result = await bulkEnrollAdminSectionStudents(section.id, file)
+      setImportResult(`Enrolled ${result.enrolled_count} student(s)${result.error_count > 0 ? `, ${result.error_count} error(s)` : ""}`)
+      await onChanged()
+    } catch {
+      setImportResult("Import failed.")
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[#dde4ec] bg-white">
+      {/* Section Header */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f9fafb]"
+      >
+        <div className="flex items-center gap-2">
+          {isExpanded ? <ChevronDown size={14} className="text-[#667085]" /> : <ChevronRight size={14} className="text-[#667085]" />}
+          <span className="text-sm font-semibold text-[#17202a]">{section.name}</span>
+          <span className="text-xs text-[#667085]">· {section.batch_name}</span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-[#667085]">
+          <span className="flex items-center gap-1">
+            <UsersIcon size={12} /> {section.student_count} students
+          </span>
+          <span>{section.faculty_count} faculty</span>
+        </div>
+      </button>
+
+      {/* Expanded Section Content */}
+      {isExpanded ? (
+        <div className="border-t border-[#dde4ec] p-4 space-y-4">
+          {!detail ? (
+            <p className="text-sm text-[#667085]">Loading section details...</p>
+          ) : (
+            <>
+              {/* Faculty Section */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-[#17202a]">
+                    Faculty ({detail.faculty.length})
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowFacultyForm(!showFacultyForm)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033]"
+                  >
+                    <Plus size={12} /> Assign Faculty
+                  </button>
+                </div>
+                {detail.faculty.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {detail.faculty.map((f) => (
+                      <span key={f.id} className="inline-flex items-center gap-1 rounded-full border border-[#dde4ec] bg-[#f5f7fa] px-3 py-1 text-xs">
+                        <span className="font-semibold text-[#17202a]">{f.faculty_name}</span>
+                        <span className="text-[#667085]">— {f.subject}</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`Remove ${f.faculty_name} from this section?`)) return
+                            try {
+                              await removeAdminSectionFaculty(section.id, f.faculty_id)
+                              await onChanged()
+                            } catch {
+                              onNotice("Unable to remove faculty.")
+                            }
+                          }}
+                          className="ml-1 rounded-full p-0.5 text-[#667085] hover:bg-[#fff5f5] hover:text-[#b42318]"
+                          title="Remove faculty"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-[#b42318]">⚠ No faculty assigned</p>
+                )}
+                {showFacultyForm ? (
+                  <form onSubmit={handleAssignFaculty} className="mt-3 flex flex-wrap gap-2">
+                    <select
+                      value={facultyId}
+                      onChange={(e) => setFacultyId(e.target.value)}
+                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#34c6a3]"
+                    >
+                      <option value="">Select faculty</option>
+                      {facultyOptions.map((f) => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Subject"
+                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#34c6a3]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="h-9 rounded-md bg-[#34c6a3] px-3 text-xs font-semibold text-[#102033] disabled:opacity-60"
+                    >
+                      Assign
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowFacultyForm(false)}
+                      className="h-9 rounded-md border border-[#dde4ec] px-3 text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+
+              {/* Students Section */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-[#17202a]">
+                    Students ({detail.students.length})
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={handleBulkImport}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={isImporting}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033] disabled:opacity-60"
+                    >
+                      <Upload size={12} /> {isImporting ? "Importing..." : "Import CSV"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowStudentForm(!showStudentForm)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033]"
+                    >
+                      <Plus size={12} /> Add Student
+                    </button>
+                  </div>
+                </div>
+                {importResult ? (
+                  <p className="mt-1 text-xs font-medium text-[#176b5a]">{importResult}</p>
+                ) : null}
+                {detail.students.length > 0 ? (
+                  <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-[#dde4ec]">
+                    <table className="w-full text-xs">
+                      <thead className="bg-[#f5f7fa]">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-[#667085]">Name</th>
+                          <th className="px-3 py-2 text-left font-semibold text-[#667085]">Email</th>
+                          <th className="w-8 px-2 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#dde4ec]">
+                        {detail.students.map((s) => (
+                          <tr key={s.student_id}>
+                            <td className="px-3 py-2 font-medium text-[#17202a]">{s.name}</td>
+                            <td className="px-3 py-2 text-[#667085]">{s.email}</td>
+                            <td className="px-2 py-2">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!window.confirm(`Remove ${s.name} from this section?`)) return
+                                  try {
+                                    await removeAdminSectionStudent(section.id, s.student_id)
+                                    await onChanged()
+                                  } catch {
+                                    onNotice("Unable to remove student.")
+                                  }
+                                }}
+                                className="rounded p-0.5 text-[#667085] hover:bg-[#fff5f5] hover:text-[#b42318]"
+                                title="Remove student"
+                              >
+                                <X size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-[#667085]">No students enrolled yet.</p>
+                )}
+                {showStudentForm ? (
+                  <form onSubmit={handleEnrollStudent} className="mt-3 flex flex-wrap gap-2">
+                    <select
+                      value={studentId}
+                      onChange={(e) => setStudentId(e.target.value)}
+                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#34c6a3]"
+                    >
+                      <option value="">Select student</option>
+                      {studentOptions.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="h-9 rounded-md bg-[#34c6a3] px-3 text-xs font-semibold text-[#102033] disabled:opacity-60"
+                    >
+                      Enroll
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowStudentForm(false)}
+                      className="h-9 rounded-md border border-[#dde4ec] px-3 text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -595,171 +967,6 @@ function AddSectionDialog({
         {error ? <DialogError message={error} /> : null}
         <DialogActions onClose={onClose} isSaving={isSaving} submitLabel="Create Section" />
       </form>
-    </Modal>
-  )
-}
-
-interface SectionDetailDialogProps {
-  sectionId: number
-  onClose: () => void
-  onChanged: () => Promise<void>
-}
-
-function SectionDetailDialog({ sectionId, onClose, onChanged }: SectionDetailDialogProps) {
-  const [section, setSection] = useState<AdminSectionDetail | null>(null)
-  const [facultyOptions, setFacultyOptions] = useState<AdminUser[]>([])
-  const [studentOptions, setStudentOptions] = useState<AdminUser[]>([])
-  const [facultyId, setFacultyId] = useState("")
-  const [subject, setSubject] = useState("")
-  const [studentId, setStudentId] = useState("")
-  const [error, setError] = useState("")
-  const [isSaving, setIsSaving] = useState(false)
-
-  async function loadSection() {
-    const data = await getAdminSection(sectionId)
-    setSection(data)
-  }
-
-  useEffect(() => {
-    loadSection()
-    getAdminUsers({ role: "faculty", page_size: 100 }).then((data) => setFacultyOptions(data.items))
-    getAdminUsers({ role: "student", page_size: 100 }).then((data) => setStudentOptions(data.items))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sectionId])
-
-  async function handleAssignFaculty(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!facultyId || !subject.trim()) return
-    setIsSaving(true)
-    setError("")
-    try {
-      await assignAdminSectionFaculty(sectionId, { faculty_id: Number(facultyId), subject: subject.trim() })
-      setFacultyId("")
-      setSubject("")
-      await loadSection()
-      await onChanged()
-    } catch {
-      setError("Unable to assign faculty.")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  async function handleEnrollStudent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!studentId) return
-    setIsSaving(true)
-    setError("")
-    try {
-      await enrollAdminSectionStudents(sectionId, [Number(studentId)])
-      setStudentId("")
-      await loadSection()
-      await onChanged()
-    } catch {
-      setError("Unable to enroll student.")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  return (
-    <Modal title={section ? `${section.name} · ${section.semester_name}` : "Section"} onClose={onClose} wide>
-      {!section ? (
-        <p className="text-sm text-[#667085]">Loading...</p>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h3 className="text-lg font-semibold text-[#17202a]">Faculty</h3>
-            <div className="mt-3 space-y-2">
-              {section.faculty.length === 0 ? (
-                <p className="text-sm text-[#667085]">No faculty assigned yet.</p>
-              ) : (
-                section.faculty.map((faculty) => (
-                  <div
-                    key={faculty.id}
-                    className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm"
-                  >
-                    <span className="font-semibold text-[#17202a]">{faculty.faculty_name}</span>{" "}
-                    <span className="text-[#667085]">· {faculty.subject}</span>
-                  </div>
-                ))
-              )}
-            </div>
-            <form onSubmit={handleAssignFaculty} className="mt-4 grid gap-3">
-              <select
-                value={facultyId}
-                onChange={(event) => setFacultyId(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              >
-                <option value="">Select faculty</option>
-                {facultyOptions.map((faculty) => (
-                  <option key={faculty.id} value={faculty.id}>
-                    {faculty.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={subject}
-                onChange={(event) => setSubject(event.target.value)}
-                placeholder="Subject (e.g. Financial Management)"
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              />
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-2 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Plus size={15} aria-hidden="true" />
-                Assign Faculty
-              </button>
-            </form>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold text-[#17202a]">
-              Students ({section.students.length})
-            </h3>
-            <div className="mt-3 max-h-52 space-y-2 overflow-y-auto">
-              {section.students.length === 0 ? (
-                <p className="text-sm text-[#667085]">No students enrolled yet.</p>
-              ) : (
-                section.students.map((student) => (
-                  <div
-                    key={student.student_id}
-                    className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm"
-                  >
-                    <span className="font-semibold text-[#17202a]">{student.name}</span>{" "}
-                    <span className="text-[#667085]">· {student.email}</span>
-                  </div>
-                ))
-              )}
-            </div>
-            <form onSubmit={handleEnrollStudent} className="mt-4 grid gap-3">
-              <select
-                value={studentId}
-                onChange={(event) => setStudentId(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              >
-                <option value="">Select student</option>
-                {studentOptions.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-2 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Plus size={15} aria-hidden="true" />
-                Enroll Student
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-      {error ? <DialogError message={error} /> : null}
     </Modal>
   )
 }

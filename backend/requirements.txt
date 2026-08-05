@@ -8,3 +8,6 @@ openai
 python-jose
 bcrypt
 python-multipart
+pydantic[email]
+google-auth
+requests

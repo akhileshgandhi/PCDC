@@ -1,13 +1,14 @@
 import json
 import os
+import time
 from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from shared.llm import get_llm_client, get_llm_model, is_gemini
 from .models import CaseStudyCreate
 
 
@@ -32,14 +33,47 @@ Questions must test:
 2. Alternative thinking - what other approaches exist?
 3. Implementation reality - how would this actually work?
 
-Return exactly 3 questions as a JSON array:
-["question1", "question2", "question3"]
+Return exactly 3 questions as a JSON object:
+{"questions": ["question1", "question2", "question3"]}
+"""
+
+RAPID_FIRE_GEN_PROMPT = """
+You are running the Rapid Fire round of an MBA/PGDM business case simulation.
+You are given the case content, the student's initial analysis, and their
+answers to the structured written questions.
+
+Generate EXACTLY 3 short-answer rapid-fire questions that PROBE THE THINKING
+BEHIND the student's answers — surface their assumptions, pressure-test their
+reasoning, and ask why they concluded what they did. Ground each question in
+something specific the student actually wrote (their analysis or their answers),
+not generic case trivia. Each question must be answerable in 1-3 sentences.
+
+Return ONLY a JSON object with exactly 3 question strings:
+{"questions": ["question1", "question2", "question3"]}
 """
 
 EVALUATION_PROMPT = """
-You are an expert capability evaluator. Evaluate the student's
-complete case study attempt and return a JSON object with these
-exact keys:
+You are an expert academic evaluator assessing a student's case study attempt.
+You will be given THREE pieces of student work to judge together:
+1. "student_initial_analysis" — their ungraded, free-text initial analysis of
+   the case (their first-take thinking: what's happening, causes, assumptions,
+   missing info, tentative solution).
+2. "initial_analysis" — their answers to the structured written questions
+   (Q1, Q2, Q3), each with a model answer and marking scheme.
+3. The rapid fire answers — short responses probing the reasoning behind 1 and 2.
+
+You are also given the case study content, learning objectives, and the
+faculty-defined evaluation rubric (if provided).
+
+Judge the rubric dimensions (thinking_depth, logic, creativity, practicality,
+risk_awareness, reflection) holistically across ALL THREE — reward consistent,
+well-reasoned thinking and penalise contradictions that surface between their
+initial analysis, their written answers, and their rapid fire responses. The
+per-question marks (question_scores) come ONLY from the structured written
+answers; rapid_fire_score comes ONLY from the rapid fire answers. The initial
+analysis carries no marks of its own but informs the rubric dimensions.
+
+Return a JSON object with EXACTLY these keys:
 
 {
   "thinking_depth": 0-100,
@@ -50,15 +84,23 @@ exact keys:
   "reflection_score": 0-100,
   "ai_utilization_score": 0-100,
   "time_score": 0-100,
-  "strengths": "2-3 sentences",
-  "weaknesses": "2-3 sentences",
-  "blind_spots": "1-2 sentences",
-  "improvement_areas": "2-3 actionable suggestions"
+  "question_scores": [
+    {"question_number": 1, "marks_awarded": <number>, "marks_total": <number>, "feedback": "1-2 sentence specific feedback", "improvement": "1 actionable suggestion"},
+    {"question_number": 2, "marks_awarded": <number>, "marks_total": <number>, "feedback": "...", "improvement": "..."},
+    {"question_number": 3, "marks_awarded": <number>, "marks_total": <number>, "feedback": "...", "improvement": "..."}
+  ],
+  "rapid_fire_score": 0-100,
+  "rapid_fire_feedback": "1-2 sentences on rapid fire performance",
+  "strengths": "2-3 sentences on what the student did well",
+  "weaknesses": "2-3 sentences on key gaps",
+  "blind_spots": "1-2 sentences on what the student completely missed",
+  "improvement_areas": "3 specific actionable improvement points as a numbered list",
+  "overall_grade": "A / B / C / D / F",
+  "grade_comment": "1 sentence overall summary"
 }
 
-Weighted total = (thinking_depth * 0.30) + (logic * 0.20) +
-(creativity * 0.15) + (practicality * 0.15) +
-(risk_awareness * 0.10) + (reflection * 0.10)
+For marks_awarded: use the marking scheme and model answer to assess how many marks the student deserves out of marks_total.
+Base all scoring on the rubric criteria if provided. Be strict but fair.
 """
 
 VALID_DOMAINS = {
@@ -371,10 +413,20 @@ def parse_situation(content: Optional[str]) -> str:
     return str(situation or "")
 
 
+def parse_all_sections(content: Optional[str]) -> Dict[str, Any]:
+    try:
+        parsed = json.loads(content or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed.get("sections") or {}
+
+
 def split_lines(value: Optional[str]) -> List[str]:
     if not value:
         return []
-    return [line.strip() for line in value.splitlines() if line.strip()]
+    # Handle literal \n (two chars) that may have been saved from textarea input
+    normalized = value.replace("\\n", "\n")
+    return [line.strip() for line in normalized.splitlines() if line.strip()]
 
 
 def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> Dict[str, Any]:
@@ -413,6 +465,12 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         + (row.rapid_fire_time_minutes or 8)
     ) or row.estimated_minutes
 
+    sections = parse_all_sections(row.content)
+
+    def str_section(key: str) -> str:
+        val = sections.get(key, "")
+        return str(val) if not isinstance(val, list) else "\n".join(str(v) for v in val)
+
     case = {
         "id": row.id,
         "title": row.title,
@@ -420,16 +478,64 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         "domain": row.domain,
         "difficulty": row.difficulty,
         "difficulty_label": row.difficulty_label,
-        "situation": parse_situation(row.content),
+        "situation": str_section("situation"),
+        "background": str_section("background"),
+        "data": str_section("data"),
+        "characters": str_section("characters"),
+        "constraints": str_section("constraints"),
+        "objectives": str_section("objectives"),
+        "timeline": str_section("timeline"),
         "learning_outcomes": split_lines(row.learning_outcomes),
         "reflection_questions": split_lines(row.reflection_questions),
         "capabilities": [
             tag["tag_value"] for tag in get_case_tags(db, row.id) if tag["tag_type"] == "capability"
         ],
+        "reading_time_minutes": row.reading_time_minutes,
+        "answer_writing_time_minutes": row.answer_writing_time_minutes,
+        "rapid_fire_time_minutes": row.rapid_fire_time_minutes,
         "estimated_minutes": estimated_minutes,
         "created_by_name": row.created_by_name,
         "created_at": str(row.created_at),
     }
+
+    # Fetch written questions (with per-question word limits)
+    q_rows = db.execute(
+        text("""
+            SELECT question_number, question_text, marks, word_limit_min,
+                   word_limit_max, instructions
+            FROM case_questions
+            WHERE case_study_id = :case_id
+            ORDER BY question_number
+        """),
+        {"case_id": case_id},
+    ).fetchall()
+    case["written_questions"] = [
+        {
+            "question_number": qr.question_number,
+            "question_text": qr.question_text,
+            "marks": qr.marks,
+            "word_limit_min": qr.word_limit_min,
+            "word_limit_max": qr.word_limit_max,
+            "instructions": qr.instructions,
+        }
+        for qr in q_rows
+    ]
+
+    # Fetch rapid fire questions
+    rf_rows = db.execute(
+        text("""
+            SELECT sequence, question_text
+            FROM rapid_fire_questions
+            WHERE case_study_id = :case_id
+            ORDER BY sequence
+        """),
+        {"case_id": case_id},
+    ).fetchall()
+    # Each rapid fire question is worth 1 mark (fixed platform constant: 3 total).
+    case["rapid_fire_questions"] = [
+        {"sequence": rfr.sequence, "question_text": rfr.question_text, "marks": 1}
+        for rfr in rf_rows
+    ]
 
     attempt_row = db.execute(
         text("""
@@ -583,10 +689,19 @@ def generate_opening_discussion_message(
 
 
 def submit_initial_analysis(
-    db: Session, attempt_id: int, initial_analysis: str, current_user: Dict[str, Any]
+    db: Session,
+    attempt_id: int,
+    initial_analysis: str,
+    current_user: Dict[str, Any],
+    initial_summary: Optional[str] = None,
 ) -> Dict[str, Any]:
     require_role(current_user, ["student"], "Only students can submit analysis")
     attempt = get_student_attempt(db, attempt_id, current_user["id"])
+    if attempt.status == "expired":
+        raise HTTPException(
+            status_code=403, detail="This attempt has expired and cannot be resumed."
+        )
+    assert_phase_not_expired(db, attempt.id, "writing")
     if attempt.status != "analysis_submitted":
         raise HTTPException(status_code=400, detail="Initial analysis already submitted")
     word_count = count_words(initial_analysis)
@@ -595,6 +710,10 @@ def submit_initial_analysis(
             status_code=400,
             detail=f"Minimum 200 words required. Current: {word_count} words",
         )
+    # Ungraded pre-analysis. The frontend enforces the 200-word minimum for a
+    # normal submit; we store whatever is provided (e.g. on a timer auto-submit)
+    # rather than hard-rejecting, since it carries no marks.
+    summary_text = (initial_summary or "").strip() or None
     case_row = db.execute(
         text("""
             SELECT cs.title, cs.content
@@ -608,6 +727,7 @@ def submit_initial_analysis(
         text("""
             UPDATE case_study_attempts
             SET initial_analysis = :initial_analysis,
+                initial_summary = :initial_summary,
                 initial_word_count = :word_count,
                 ai_unlocked_at = NOW(),
                 status = 'ai_discussion'
@@ -616,6 +736,7 @@ def submit_initial_analysis(
         {
             "attempt_id": attempt.id,
             "initial_analysis": initial_analysis,
+            "initial_summary": summary_text,
             "word_count": word_count,
         },
     )
@@ -638,6 +759,134 @@ def get_student_attempt(db: Session, attempt_id: int, student_id: int) -> Any:
     if not row:
         raise HTTPException(status_code=404, detail="Attempt not found")
     return row
+
+
+# phase -> (started_at column on attempt, minutes column on case study)
+PHASE_CONFIG = {
+    "reading": ("reading_started_at", "reading_time_minutes"),
+    "writing": ("writing_started_at", "answer_writing_time_minutes"),
+    "rapid_fire": ("rapid_fire_started_at", "rapid_fire_time_minutes"),
+}
+
+# Small tolerance (seconds) so a legitimate on-time auto-submit is not rejected
+# for network/processing lag. It does NOT grant extra working time — the client
+# already stops the student at zero.
+PHASE_GRACE_SECONDS = 90
+
+
+def mark_attempt_expired(db: Session, attempt_id: int) -> None:
+    db.execute(
+        text(
+            "UPDATE case_study_attempts SET status = 'expired', end_time = NOW() "
+            "WHERE id = :attempt_id"
+        ),
+        {"attempt_id": attempt_id},
+    )
+
+
+def assert_phase_not_expired(db: Session, attempt_id: int, phase: str) -> None:
+    """Hard cutoff. If the phase's deadline (start + limit + grace) has passed,
+    mark the attempt expired and reject the submission — the student cannot
+    resume a timed-out attempt."""
+    started_col, minutes_field = PHASE_CONFIG[phase]
+    info = db.execute(
+        text(f"""
+            SELECT a.{started_col} AS started_at, cs.{minutes_field} AS minutes,
+                   NOW()::timestamp AS server_now
+            FROM case_study_attempts a
+            JOIN case_studies cs ON cs.id = a.case_study_id
+            WHERE a.id = :attempt_id
+        """),
+        {"attempt_id": attempt_id},
+    ).fetchone()
+    if info is None or info.minutes is None or info.minutes <= 0 or info.started_at is None:
+        return  # untimed phase, or the timer never started
+    elapsed = (info.server_now - info.started_at).total_seconds()
+    if elapsed > info.minutes * 60 + PHASE_GRACE_SECONDS:
+        mark_attempt_expired(db, attempt_id)
+        db.commit()
+        raise HTTPException(
+            status_code=403,
+            detail="Time is up. This attempt has expired and cannot be resumed.",
+        )
+
+
+def start_attempt_phase(
+    db: Session, attempt_id: int, phase: str, current_user: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Idempotently stamp the start time of a timed phase and return the
+    server-computed seconds remaining, so the client cannot gain time by
+    refreshing. The start time is set once on the first call for a phase."""
+    require_role(current_user, ["student"], "Only students can time an attempt")
+    if phase not in PHASE_CONFIG:
+        raise HTTPException(status_code=400, detail="Invalid phase")
+    started_col, minutes_field = PHASE_CONFIG[phase]
+
+    # Ensures the attempt exists and belongs to the current student.
+    attempt = get_student_attempt(db, attempt_id, current_user["id"])
+
+    row = db.execute(
+        text(f"""
+            SELECT a.{started_col} AS started_at,
+                   cs.{minutes_field} AS minutes,
+                   NOW()::timestamp AS server_now
+            FROM case_study_attempts a
+            JOIN case_studies cs ON cs.id = a.case_study_id
+            WHERE a.id = :attempt_id
+        """),
+        {"attempt_id": attempt.id},
+    ).fetchone()
+
+    minutes = row.minutes
+    # Phase is untimed if faculty left the minutes blank/zero.
+    if minutes is None or minutes <= 0:
+        return {
+            "phase": phase,
+            "minutes": None,
+            "started_at": None,
+            "remaining_seconds": None,
+            "expired": False,
+        }
+
+    started_at = row.started_at
+    server_now = row.server_now
+    if started_at is None:
+        updated = db.execute(
+            text(f"""
+                UPDATE case_study_attempts
+                SET {started_col} = NOW()
+                WHERE id = :attempt_id
+                RETURNING {started_col} AS started_at, NOW()::timestamp AS server_now
+            """),
+            {"attempt_id": attempt.id},
+        ).fetchone()
+        db.commit()
+        started_at = updated.started_at
+        server_now = updated.server_now
+
+    elapsed = (server_now - started_at).total_seconds()
+    remaining = max(0, int(round(minutes * 60 - elapsed)))
+
+    # If the student is (re-)entering a work phase whose time has fully run out
+    # and it was never completed, the attempt is over — no resuming from the
+    # middle. (Reading has no submission, so running out just moves them on.)
+    expired = False
+    if (
+        phase in ("writing", "rapid_fire")
+        and remaining <= 0
+        and attempt.status not in ("defense_complete", "evaluated", "completed")
+    ):
+        mark_attempt_expired(db, attempt.id)
+        db.commit()
+        expired = True
+
+    return {
+        "phase": phase,
+        "minutes": minutes,
+        "started_at": str(started_at),
+        "remaining_seconds": remaining,
+        "expired": expired,
+    }
 
 
 def send_ai_message(
@@ -707,8 +956,11 @@ def generate_defense_questions(db: Session, attempt_id: int, final_solution: str
         f"Initial analysis:\n{attempt_context['initial_analysis']}\n\n"
         f"Final solution:\n{final_solution}"
     )
-    response = call_llm(DEFENSE_PROMPT, [{"role": "user", "content": prompt}], 500)
-    questions = parse_json_response(response)
+    response = call_llm(
+        DEFENSE_PROMPT, [{"role": "user", "content": prompt}], 500, force_json=True
+    )
+    data = parse_json_response(response)
+    questions = data.get("questions") if isinstance(data, dict) else data
     if not isinstance(questions, list) or len(questions) != 3:
         raise HTTPException(status_code=500, detail="AI defense generation failed")
     return [str(question) for question in questions]
@@ -732,6 +984,121 @@ def submit_defense(
     log_conversation(db, attempt.id, "student", "defense", defense_responses)
     evaluation = generate_and_save_evaluation(db, attempt.id)
     db.commit()
+    return evaluation
+
+
+# Rapid fire questions are AI-generated live per student (faculty only sets the
+# time). They are worth 1 mark each, 3 total — a fixed platform constant.
+RAPID_FIRE_COUNT = 3
+RAPID_FIRE_STAGE = "rapid_fire_gen"
+
+
+def _generate_rapid_fire_questions(db: Session, attempt: Any) -> List[str]:
+    """Generate exactly 3 rapid-fire questions that probe the reasoning behind
+    the student's initial analysis AND their structured question answers."""
+    row = db.execute(
+        text("""
+            SELECT cs.content, a.initial_summary, a.initial_analysis
+            FROM case_study_attempts a
+            JOIN case_studies cs ON cs.id = a.case_study_id
+            WHERE a.id = :attempt_id
+        """),
+        {"attempt_id": attempt.id},
+    ).fetchone()
+    case_content = (row.content if row else "") or ""
+    summary = (row.initial_summary if row else "") or "(no initial analysis submitted)"
+    answers = (row.initial_analysis if row else "") or "(no structured answers submitted)"
+    prompt = (
+        f"Case content:\n{case_content}\n\n"
+        f"Student's initial analysis:\n{summary}\n\n"
+        f"Student's structured question answers:\n{answers}"
+    )
+    response = call_llm(
+        RAPID_FIRE_GEN_PROMPT, [{"role": "user", "content": prompt}], 400, force_json=True
+    )
+    data = parse_json_response(response)
+    questions = data.get("questions") if isinstance(data, dict) else data
+    if not isinstance(questions, list) or len(questions) < RAPID_FIRE_COUNT:
+        raise HTTPException(status_code=502, detail="AI rapid fire generation failed")
+    return [str(q).strip() for q in questions[:RAPID_FIRE_COUNT]]
+
+
+def start_rapid_fire_round(
+    db: Session, attempt_id: int, current_user: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Serve the student's rapid-fire questions and start the phase timer.
+
+    Questions are generated by AI on first entry (from case + the student's
+    analysis) and persisted, so a refresh returns the SAME questions and the
+    SAME server-side timer — no regeneration, no extra time."""
+    require_role(current_user, ["student"], "Only students can start the rapid fire round")
+    attempt = get_student_attempt(db, attempt_id, current_user["id"])
+    if attempt.status == "expired":
+        raise HTTPException(
+            status_code=403, detail="This attempt has expired and cannot be resumed."
+        )
+    # Hard cutoff guard (no-op if the timer hasn't started yet).
+    assert_phase_not_expired(db, attempt.id, "rapid_fire")
+
+    # Return persisted questions if this round was already generated.
+    existing = db.execute(
+        text("""
+            SELECT message FROM cs_ai_conversations
+            WHERE attempt_id = :attempt_id AND stage = :stage AND role = 'ai'
+            ORDER BY id
+            LIMIT 1
+        """),
+        {"attempt_id": attempt.id, "stage": RAPID_FIRE_STAGE},
+    ).fetchone()
+
+    if existing is not None:
+        questions = parse_json_response(existing.message)
+    else:
+        # Generate first, THEN start the timer — so AI latency doesn't eat into
+        # the student's answering time.
+        questions = _generate_rapid_fire_questions(db, attempt)
+        log_conversation(db, attempt.id, "ai", RAPID_FIRE_STAGE, json.dumps(questions))
+        db.commit()
+
+    timing = start_attempt_phase(db, attempt.id, "rapid_fire", current_user)
+    return {
+        "questions": [
+            {"sequence": i + 1, "question_text": q, "marks": 1}
+            for i, q in enumerate(questions)
+        ],
+        "timing": timing,
+    }
+
+
+def submit_rapid_fire(
+    db: Session, attempt_id: int, rapid_fire_answers: str, current_user: Dict[str, Any]
+) -> Dict[str, Any]:
+    require_role(current_user, ["student"], "Only students can submit rapid fire answers")
+    attempt = get_student_attempt(db, attempt_id, current_user["id"])
+    if attempt.status == "expired":
+        raise HTTPException(
+            status_code=403, detail="This attempt has expired and cannot be resumed."
+        )
+    assert_phase_not_expired(db, attempt.id, "rapid_fire")
+    if attempt.status not in ("ai_discussion", "analysis_submitted"):
+        raise HTTPException(status_code=403, detail="Invalid attempt state for rapid fire submission")
+    db.execute(
+        text("""
+            UPDATE case_study_attempts
+            SET final_solution = :rapid_fire_answers,
+                defense_responses = :rapid_fire_answers,
+                status = 'defense_complete'
+            WHERE id = :attempt_id
+        """),
+        {"attempt_id": attempt.id, "rapid_fire_answers": rapid_fire_answers},
+    )
+    log_conversation(db, attempt.id, "student", "defense", rapid_fire_answers)
+    evaluation = generate_and_save_evaluation(db, attempt.id)
+    update_capability_scores(db, current_user["id"], attempt.id, evaluation)
+    mark_assignment_completed(db, current_user["id"], attempt.id)
+    queue_completion_notifications(db, current_user["id"], attempt.id, evaluation)
+    db.commit()
+    evaluation["status"] = "evaluated"
     return evaluation
 
 
@@ -829,6 +1196,7 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
         EVALUATION_PROMPT,
         [{"role": "user", "content": json.dumps(attempt_context)}],
         1200,
+        force_json=True,
     )
     evaluation = normalize_evaluation(parse_json_response(response))
     save_evaluation(db, attempt_id, evaluation)
@@ -839,7 +1207,8 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
 def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
     row = db.execute(
         text("""
-            SELECT c.title, c.content, a.initial_analysis, a.final_solution,
+            SELECT c.title, c.content, c.evaluation_rubric, c.learning_outcomes,
+                   a.initial_summary, a.initial_analysis, a.final_solution,
                    a.defense_responses, a.reflection_text, a.initial_word_count,
                    a.time_taken_minutes
             FROM case_study_attempts a
@@ -850,9 +1219,53 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Attempt not found")
+
+    # Fetch written questions with model answers
+    q_rows = db.execute(
+        text("""
+            SELECT question_number, question_text, marks, word_limit_min, word_limit_max,
+                   instructions, model_answer, marking_scheme
+            FROM case_questions
+            WHERE case_study_id = (SELECT case_study_id FROM case_study_attempts WHERE id = :attempt_id)
+            ORDER BY question_number
+        """),
+        {"attempt_id": attempt_id},
+    ).fetchall()
+
+    # Fetch rapid fire questions with answers
+    rf_rows = db.execute(
+        text("""
+            SELECT sequence, question_text, answer_text
+            FROM rapid_fire_questions
+            WHERE case_study_id = (SELECT case_study_id FROM case_study_attempts WHERE id = :attempt_id)
+            ORDER BY sequence
+        """),
+        {"attempt_id": attempt_id},
+    ).fetchall()
+
     return {
         "case_title": row.title,
         "case_content": row.content,
+        "evaluation_rubric": row.evaluation_rubric or "No rubric provided — use general academic standards.",
+        "learning_outcomes": row.learning_outcomes or "",
+        "written_questions": [
+            {
+                "question_number": qr.question_number,
+                "question_text": qr.question_text,
+                "marks": float(qr.marks),
+                "model_answer": qr.model_answer or "",
+                "marking_scheme": qr.marking_scheme or "",
+            }
+            for qr in q_rows
+        ],
+        "rapid_fire_questions": [
+            {"sequence": rfr.sequence, "question_text": rfr.question_text, "expected_answer": rfr.answer_text or ""}
+            for rfr in rf_rows
+        ],
+        # Ungraded free-text the student wrote before the structured questions.
+        "student_initial_analysis": row.initial_summary or "",
+        # NOTE: the "initial_analysis" key below actually holds the student's
+        # answers to the structured written questions (Q1/Q2/Q3).
         "initial_analysis": row.initial_analysis,
         "final_solution": row.final_solution,
         "defense_responses": row.defense_responses,
@@ -861,6 +1274,15 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
         "time_taken_minutes": row.time_taken_minutes,
         "conversation": get_conversation_messages(db, attempt_id),
     }
+
+
+def flatten_ai_text(value: Any) -> str:
+    """AI fields may come back as a string or a list. Render lists as clean
+    bullet lines instead of a raw Python list repr like ['a', 'b']."""
+    if isinstance(value, list):
+        parts = [str(item).strip() for item in value if str(item).strip()]
+        return "\n".join(f"• {part}" for part in parts)
+    return str(value or "")
 
 
 def normalize_evaluation(data: Any) -> Dict[str, Any]:
@@ -877,11 +1299,21 @@ def normalize_evaluation(data: Any) -> Dict[str, Any]:
         "time_score": bounded_score(data.get("time_score")),
     }
     scores["total_score"] = calculate_total_score(scores)
-    scores["strengths"] = str(data.get("strengths", ""))
-    scores["weaknesses"] = str(data.get("weaknesses", ""))
-    scores["blind_spots"] = str(data.get("blind_spots", ""))
-    scores["improvement_areas"] = str(data.get("improvement_areas", ""))
+    scores["strengths"] = flatten_ai_text(data.get("strengths"))
+    scores["weaknesses"] = flatten_ai_text(data.get("weaknesses"))
+    scores["blind_spots"] = flatten_ai_text(data.get("blind_spots"))
+    scores["improvement_areas"] = flatten_ai_text(data.get("improvement_areas"))
+    scores["rapid_fire_score"] = bounded_score(data.get("rapid_fire_score"))
+    scores["rapid_fire_feedback"] = flatten_ai_text(data.get("rapid_fire_feedback"))
+    scores["overall_grade"] = str(data.get("overall_grade", ""))
+    scores["grade_comment"] = str(data.get("grade_comment", ""))
     scores["next_recommended_case_id"] = data.get("next_recommended_case_id")
+    # Per-question scores — store as JSON string
+    raw_qs = data.get("question_scores")
+    if isinstance(raw_qs, list):
+        scores["question_scores"] = json.dumps(raw_qs)
+    else:
+        scores["question_scores"] = json.dumps([])
     return scores
 
 
@@ -906,7 +1338,16 @@ def calculate_total_score(scores: Dict[str, int]) -> int:
 
 
 def save_evaluation(db: Session, attempt_id: int, evaluation: Dict[str, Any]) -> None:
-    values = {"attempt_id": attempt_id, **evaluation}
+    # Pack extended fields into improvement_areas as JSON
+    extra = {
+        "text": evaluation.get("improvement_areas", ""),
+        "question_scores": json.loads(evaluation.get("question_scores") or "[]"),
+        "rapid_fire_score": evaluation.get("rapid_fire_score", 0),
+        "rapid_fire_feedback": evaluation.get("rapid_fire_feedback", ""),
+        "overall_grade": evaluation.get("overall_grade", ""),
+        "grade_comment": evaluation.get("grade_comment", ""),
+    }
+    values = {"attempt_id": attempt_id, **evaluation, "improvement_areas": json.dumps(extra)}
     db.execute(
         text("""
             INSERT INTO cs_evaluations (
@@ -958,6 +1399,15 @@ def get_evaluation(db: Session, attempt_id: int) -> Optional[Dict[str, Any]]:
 
 
 def evaluation_row_to_dict(row: Any) -> Dict[str, Any]:
+    # Unpack extended fields from improvement_areas JSON
+    try:
+        extra = json.loads(row.improvement_areas or "{}")
+        if not isinstance(extra, dict) or "text" not in extra:
+            extra = {"text": row.improvement_areas or "", "question_scores": [], "rapid_fire_score": 0,
+                     "rapid_fire_feedback": "", "overall_grade": "", "grade_comment": ""}
+    except (json.JSONDecodeError, TypeError):
+        extra = {"text": str(row.improvement_areas or ""), "question_scores": [], "rapid_fire_score": 0,
+                 "rapid_fire_feedback": "", "overall_grade": "", "grade_comment": ""}
     return {
         "attempt_id": row.attempt_id,
         "thinking_depth": row.thinking_depth,
@@ -972,7 +1422,12 @@ def evaluation_row_to_dict(row: Any) -> Dict[str, Any]:
         "strengths": row.strengths,
         "weaknesses": row.weaknesses,
         "blind_spots": row.blind_spots,
-        "improvement_areas": row.improvement_areas,
+        "improvement_areas": extra.get("text", ""),
+        "question_scores": extra.get("question_scores", []),
+        "rapid_fire_score": extra.get("rapid_fire_score", 0),
+        "rapid_fire_feedback": extra.get("rapid_fire_feedback", ""),
+        "overall_grade": extra.get("overall_grade", ""),
+        "grade_comment": extra.get("grade_comment", ""),
         "next_recommended_case_id": row.next_recommended_case_id,
     }
 
@@ -1270,6 +1725,7 @@ def attempt_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
         "student_id": row.student_id,
         "status": row.status,
         "initial_analysis": row.initial_analysis,
+        "initial_summary": getattr(row, "initial_summary", None),
         "initial_word_count": row.initial_word_count,
         "final_solution": row.final_solution,
         "defense_responses": row.defense_responses,
@@ -1351,19 +1807,53 @@ def log_conversation(
 
 
 def call_llm(
-    system_prompt: str, messages: List[Dict[str, str]], max_tokens: int
+    system_prompt: str,
+    messages: List[Dict[str, str]],
+    max_tokens: int,
+    force_json: bool = False,
 ) -> str:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    try:
+        client = get_llm_client()
+    except RuntimeError:
         raise HTTPException(status_code=500, detail="AI service is not configured")
-    client = OpenAI(api_key=api_key)
-    result = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        max_tokens=max_tokens,
-        messages=[{"role": "system", "content": system_prompt}, *messages],
-        timeout=60,
-    )
+    # gemini-flash-latest spends part of its token budget on hidden "thinking",
+    # which can truncate the visible answer. Give generous headroom on Gemini so
+    # the real output (especially the large evaluation JSON) completes.
+    effective_max = max(max_tokens + 2048, 4096) if is_gemini() else max_tokens
+    kwargs: Dict[str, Any] = {
+        "model": get_llm_model(),
+        "max_tokens": effective_max,
+        "messages": [{"role": "system", "content": system_prompt}, *messages],
+        "timeout": 90,
+    }
+    # Force valid JSON for the calls that parse it (evaluation, rapid fire,
+    # defense). json_object mode works for both OpenAI and Gemini and stops
+    # models from wrapping the JSON in prose or markdown fences.
+    if force_json:
+        kwargs["response_format"] = {"type": "json_object"}
+    result = _create_with_retry(client, kwargs)
     return (result.choices[0].message.content or "").strip()
+
+
+# Free-tier models (Gemini especially) intermittently return 429 (rate/quota)
+# and 503 (high demand). Retry transient failures a few times with backoff so a
+# temporary spike doesn't fail a student's attempt.
+_TRANSIENT_STATUS = {429, 500, 503}
+
+
+def _create_with_retry(client: Any, kwargs: Dict[str, Any], attempts: int = 4) -> Any:
+    last_error: Optional[Exception] = None
+    for attempt in range(attempts):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as error:  # noqa: BLE001 - narrow via status_code below
+            status = getattr(error, "status_code", None)
+            if status not in _TRANSIENT_STATUS or attempt == attempts - 1:
+                raise
+            last_error = error
+            time.sleep(2 * (attempt + 1))
+    if last_error:
+        raise last_error
 
 
 def parse_json_response(response: str) -> Any:

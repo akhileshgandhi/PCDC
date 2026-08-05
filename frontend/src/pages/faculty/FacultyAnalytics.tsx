@@ -3,6 +3,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -49,18 +51,23 @@ export default function FacultyAnalytics() {
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
           <h1 className="text-3xl font-semibold tracking-normal text-[#111827]">Analytics</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
-            Cohort capability scores and case completion, broken down by class section.
+            Average case scores and completion across your class sections.
           </p>
-
-          {summary ? (
-            <div className="mt-5 flex flex-wrap gap-2">
-              <StatPill label="Sections" value={summary.totals.section_count} />
-              <StatPill label="Students" value={summary.totals.student_count} />
-              <StatPill label="Avg Score" value={`${summary.totals.average_score}`} />
-              <StatPill label="Completion" value={`${summary.totals.completion_rate}%`} />
-            </div>
-          ) : null}
         </section>
+
+        {summary && !isLoading && summary.sections.length > 0 ? (
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat label="Sections" value={summary.totals.section_count} />
+            <Stat label="Students" value={summary.totals.student_count} />
+            <Stat
+              label="Avg Score"
+              value={summary.totals.average_score}
+              suffix="/100"
+              tone={scoreTone(summary.totals.average_score)}
+            />
+            <Stat label="Completion" value={summary.totals.completion_rate} suffix="%" />
+          </section>
+        ) : null}
 
         {error ? (
           <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
@@ -83,7 +90,7 @@ export default function FacultyAnalytics() {
           <>
             <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-[#111827]">
-                Average Capability Score by Section
+                Average Case Score by Section
               </h2>
               <div className="mt-4 h-[320px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -104,7 +111,18 @@ export default function FacultyAnalytics() {
                         color: "#111827",
                       }}
                     />
-                    <Bar dataKey="average_score" name="Avg Score" fill="#C9A227" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="average_score" name="Avg Score" radius={[4, 4, 0, 0]}>
+                      {summary.sections.map((section) => (
+                        <Cell key={section.section_id} fill={scoreTone(section.average_score)} />
+                      ))}
+                      <LabelList
+                        dataKey="average_score"
+                        position="top"
+                        fill="#374151"
+                        fontSize={12}
+                        fontWeight={700}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -135,7 +153,10 @@ export default function FacultyAnalytics() {
                     <span className="text-sm font-medium text-[#111827]">
                       {section.student_count}
                     </span>
-                    <span className="text-sm font-medium text-[#111827]">
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: scoreTone(section.average_score) }}
+                    >
                       {section.average_score}
                     </span>
                     <span className="text-sm font-medium text-[#111827]">
@@ -163,16 +184,28 @@ export default function FacultyAnalytics() {
   )
 }
 
-interface StatPillProps {
-  label: string
-  value: number | string
+function scoreTone(score: number): string {
+  if (score >= 75) return "#16a34a"
+  if (score >= 60) return "#b45309"
+  if (score > 0) return "#b91c1c"
+  return "#9ca3af"
 }
 
-function StatPill({ label, value }: StatPillProps) {
+interface StatProps {
+  label: string
+  value: number | string
+  suffix?: string
+  tone?: string
+}
+
+function Stat({ label, value, suffix, tone }: StatProps) {
   return (
-    <div className="rounded-full border border-[#e6e8eb] bg-[#f6f7fb] px-4 py-2 text-sm">
-      <span className="font-semibold text-[#111827]">{label}:</span>{" "}
-      <span className="font-semibold text-[#0b1d3a]">{value}</span>
-    </div>
+    <article className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">{label}</p>
+      <p className="mt-1 text-2xl font-bold" style={{ color: tone ?? "#0b1d3a" }}>
+        {value}
+        {suffix ? <span className="text-sm font-semibold text-[#9ca3af]">{suffix}</span> : null}
+      </p>
+    </article>
   )
 }

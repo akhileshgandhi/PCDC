@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import {
   assignAdminSectionFaculty,
   bulkEnrollAdminSectionStudents,
+  createAdminBatch,
   createAdminSection,
   enrollAdminSectionStudents,
   getAdminCourseBatches,
@@ -280,6 +281,11 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
   const [academicYear, setAcademicYear] = useState("")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [showBatchForm, setShowBatchForm] = useState(false)
+  const [batchName, setBatchName] = useState("")
+  const [startYear, setStartYear] = useState("")
+  const [endYear, setEndYear] = useState("")
+  const [creatingBatch, setCreatingBatch] = useState(false)
 
   useEffect(() => {
     if (!courseId) {
@@ -297,9 +303,57 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
     )
   }, [courseId])
 
+  async function reloadBatches(selectId?: number) {
+    if (!courseId) return
+    const batchData = await getAdminCourseBatches(Number(courseId))
+    setBatches(batchData.items)
+    const pick = selectId ?? batchData.items[0]?.id
+    setBatchId(pick ? String(pick) : "")
+  }
+
+  async function handleCreateBatch() {
+    if (!courseId || !batchName.trim() || !startYear || !endYear) {
+      setError("Enter a batch name, start year, and end year.")
+      return
+    }
+    if (Number(endYear) < Number(startYear)) {
+      setError("End year must not be before start year.")
+      return
+    }
+    setCreatingBatch(true)
+    setError("")
+    try {
+      const created = await createAdminBatch(Number(courseId), {
+        name: batchName.trim(),
+        start_year: Number(startYear),
+        end_year: Number(endYear),
+      })
+      await reloadBatches(created.id)
+      setShowBatchForm(false)
+      setBatchName("")
+      setStartYear("")
+      setEndYear("")
+    } catch {
+      setError("Unable to create batch. Check the details and try again.")
+    } finally {
+      setCreatingBatch(false)
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!courseId || !batchId || !semesterId) return
+    if (!courseId) {
+      setError("Select a course first.")
+      return
+    }
+    if (!batchId) {
+      setError("This course has no batch yet. Create a batch below before adding a section.")
+      return
+    }
+    if (!semesterId) {
+      setError("This course has no semesters set up. Check the course configuration.")
+      return
+    }
     setIsSaving(true)
     setError("")
     try {
@@ -336,19 +390,70 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
         </DialogField>
         <div className="grid gap-4 sm:grid-cols-2">
           <DialogField label="Batch">
-            <select
-              required
-              value={batchId}
-              onChange={(event) => setBatchId(event.target.value)}
-              disabled={batches.length === 0}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {batches.map((batch) => (
-                <option key={batch.id} value={batch.id}>
-                  {batch.name}
-                </option>
-              ))}
-            </select>
+            {batches.length === 0 ? (
+              <div className="grid gap-2">
+                <p className="rounded-md border border-[#f5d9a8] bg-[#fff8ec] px-3 py-2 text-sm font-medium text-[#8a5a00]">
+                  This course has no batch yet. A section needs a batch — create one to continue.
+                </p>
+                {showBatchForm ? (
+                  <div className="grid gap-2 rounded-md border border-[#dde4ec] p-3">
+                    <input
+                      value={batchName}
+                      onChange={(event) => setBatchName(event.target.value)}
+                      placeholder="Batch name (e.g. 2025-2027)"
+                      className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        value={startYear}
+                        onChange={(event) => setStartYear(event.target.value)}
+                        placeholder="Start year"
+                        className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                      />
+                      <input
+                        type="number"
+                        value={endYear}
+                        onChange={(event) => setEndYear(event.target.value)}
+                        placeholder="End year"
+                        className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCreateBatch}
+                      disabled={creatingBatch}
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-3 py-2 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      {creatingBatch ? "Creating..." : "Create Batch"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchForm(true)}
+                    className="inline-flex w-fit items-center gap-1 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#102033] transition hover:border-[#34c6a3]"
+                  >
+                    <Plus size={14} aria-hidden="true" />
+                    Create Batch
+                  </button>
+                )}
+              </div>
+            ) : (
+              <select
+                required
+                value={batchId}
+                onChange={(event) => setBatchId(event.target.value)}
+                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              >
+                {batches.map((batch) => (
+                  <option key={batch.id} value={batch.id}>
+                    {batch.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </DialogField>
           <DialogField label="Semester">
             <select

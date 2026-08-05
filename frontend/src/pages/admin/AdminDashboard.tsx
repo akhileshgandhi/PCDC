@@ -129,7 +129,7 @@ export default function AdminDashboard() {
           <article className="rounded-lg border border-[#dde4ec] bg-white p-6 shadow-sm">
             <h3 className="text-lg font-semibold">Users by Role</h3>
             <div className="mt-5 space-y-3">
-              {(["student", "faculty", "mentor", "director", "admin"] as const).map(
+              {(["student", "faculty", "admin"] as const).map(
                 (role) => (
                   <RoleCount
                     key={role}

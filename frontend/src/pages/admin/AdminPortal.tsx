@@ -30,7 +30,7 @@ export default function AdminPortal() {
         element={
           <AdminModulePlaceholder
             title="Settings"
-            description="System thresholds, mentor assignment rules, career tracks, notification channels, and AI configuration will land here."
+            description="System thresholds, career tracks, notification channels, and AI configuration will land here."
           />
         }
       />

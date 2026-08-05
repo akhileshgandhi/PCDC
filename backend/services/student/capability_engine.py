@@ -27,6 +27,17 @@ CATEGORY_MAP: Dict[str, List[str]] = {
     "professional": ["Problem Solving", "Professionalism"],
 }
 
+# Case attempts score the capabilities that faculty tag on cases, which live in
+# the 'simulation' taxonomy grouped by capability_group (think/lead/execute/
+# grow). Map those real groups onto the 4 dashboard display categories so the
+# matrix reflects the scores students actually earn.
+GROUP_TO_CATEGORY: Dict[str, str] = {
+    "think": "cognitive",
+    "lead": "leadership",
+    "grow": "entrepreneurial",
+    "execute": "professional",
+}
+
 CATEGORY_LABELS: Dict[str, str] = {
     "cognitive": "Cognitive Capabilities",
     "leadership": "Leadership Capabilities",
@@ -65,27 +76,34 @@ LEVEL_LABELS: Dict[int, str] = {
 def get_capability_matrix(db: Session, student_id: int) -> Dict[str, Any]:
     rows = db.execute(
         text("""
-            SELECT c.name, sc.current_score, sc.attempt_count
+            SELECT c.name, c.capability_group,
+                   COALESCE(sc.current_score, 0) AS current_score,
+                   COALESCE(sc.attempt_count, 0) AS attempt_count
             FROM capabilities c
             LEFT JOIN student_capabilities sc
                 ON sc.capability_id = c.id AND sc.student_id = :student_id
-            WHERE c.engagement_type = 'case_study'
+            WHERE c.engagement_type = 'simulation'
+            ORDER BY c.name ASC
         """),
         {"student_id": student_id},
     ).fetchall()
-    by_name = {row.name: row for row in rows}
+
+    buckets: Dict[str, List[Any]] = {category_id: [] for category_id in CATEGORY_LABELS}
+    for row in rows:
+        category_id = GROUP_TO_CATEGORY.get(row.capability_group)
+        if category_id:
+            buckets[category_id].append(row)
 
     categories = []
     all_scores: List[float] = []
     total_attempts = 0
-    for category_id, capability_names in CATEGORY_MAP.items():
+    for category_id in CATEGORY_LABELS:
         items = []
         category_scores: List[float] = []
-        for name in capability_names:
-            row = by_name.get(name)
-            score = int(row.current_score) if row and row.current_score is not None else 0
-            attempts = int(row.attempt_count) if row and row.attempt_count is not None else 0
-            items.append({"name": name, "score": score, "attempts": attempts})
+        for row in buckets[category_id]:
+            score = int(row.current_score)
+            attempts = int(row.attempt_count)
+            items.append({"name": row.name, "score": score, "attempts": attempts})
             category_scores.append(score)
             all_scores.append(score)
             total_attempts += attempts

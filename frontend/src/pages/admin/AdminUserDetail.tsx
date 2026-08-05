@@ -25,7 +25,7 @@ export default function AdminUserDetail() {
               User Detail
             </h1>
             <p className="mt-3 text-sm leading-6 text-[#667085]">
-              Profile editing, account actions, login history, and mentor assignment
+              Profile editing, account actions, and login history
               for user #{id} will build on the users API slice.
             </p>
           </div>

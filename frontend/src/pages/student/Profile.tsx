@@ -95,34 +95,6 @@ export default function Profile() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#92702a]">
-            Mentor
-          </h3>
-          {profile?.mentor ? (
-            <div className="mt-3 flex items-center gap-3">
-              <div className="grid size-14 place-items-center rounded-lg bg-[#f4e4c1] text-lg font-semibold text-[#081d3a]">
-                {profile.mentor.initials}
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-[#111827]">{profile.mentor.name}</h4>
-                <p className="text-xs font-semibold uppercase text-[#92702a]">
-                  Assigned Executive Mentor
-                </p>
-              </div>
-              <Link
-                to="/student/mentor-support"
-                className="inline-flex items-center justify-center rounded-md border border-[#081d3a] px-4 py-2 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
-              >
-                Schedule Session
-              </Link>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm font-medium text-[#6b7280]">
-              {isLoading ? "Loading..." : "No mentor assigned yet."}
-            </p>
-          )}
-        </div>
 
         <div className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[#92702a]">

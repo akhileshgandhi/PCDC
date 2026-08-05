@@ -1,6 +1,6 @@
 import api from "./axios"
 
-export type AdminUserRole = "student" | "faculty" | "mentor" | "admin" | "director"
+export type AdminUserRole = "student" | "faculty" | "admin"
 export type AdminUserStatus = "active" | "inactive"
 
 export interface AdminUser {
@@ -11,6 +11,12 @@ export interface AdminUser {
   program: string | null
   specialization: string | null
   admission_year: number | null
+  department: string | null
+  designation: string | null
+  employee_id: string | null
+  experience_years: number | null
+  college_id: string | null
+  sections_teaching: number
   status: AdminUserStatus
   last_login_at: string | null
   created_at: string
@@ -44,9 +50,30 @@ export interface CreateAdminUserPayload {
   program?: string
   specialization?: string
   admission_year?: number
-  mentor_id?: number
   career_track_id?: number
   section_id?: number
+  department?: string
+  designation?: string
+  employee_id?: string
+  experience_years?: number
+  college_id?: string
+}
+
+export interface UpdateAdminUserPayload {
+  name?: string
+  program?: string
+  specialization?: string
+  admission_year?: number
+  department?: string
+  designation?: string
+  employee_id?: string
+  experience_years?: number
+  college_id?: string
+}
+
+export async function updateAdminUser(userId: number, payload: UpdateAdminUserPayload) {
+  const response = await api.patch<AdminUser>(`/admin/users/${userId}`, payload)
+  return response.data
 }
 
 export interface AdminCourse {
@@ -202,9 +229,22 @@ export async function resetAdminUserPassword(userId: number) {
   return response.data
 }
 
-export function userImportTemplateUrl() {
-  const baseURL = api.defaults.baseURL || ""
-  return `${baseURL}/admin/users/import/template`
+export async function downloadImportTemplate(role?: string) {
+  const params = role ? `?role=${encodeURIComponent(role)}` : ""
+  const response = await api.get(`/admin/users/import/template${params}`, {
+    responseType: "blob",
+  })
+  const disposition = response.headers["content-disposition"] || ""
+  const match = disposition.match(/filename=(.+)/)
+  const filename = match ? match[1] : "pcdc-user-import-template.csv"
+  const url = window.URL.createObjectURL(response.data as Blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 export async function getAdminCourses() {
@@ -227,6 +267,11 @@ export async function updateAdminCourse(
   payload: { name?: string; status?: "active" | "inactive" },
 ) {
   const response = await api.patch<AdminCourse>(`/admin/courses/${courseId}`, payload)
+  return response.data
+}
+
+export async function deleteAdminCourse(courseId: number) {
+  const response = await api.delete<{ status: string; name: string }>(`/admin/courses/${courseId}`)
   return response.data
 }
 
@@ -358,11 +403,19 @@ export interface AdminUserImportResult {
   error_count: number
 }
 
-export async function importAdminUsers(file: File) {
+export async function importAdminUsers(file: File, role?: string) {
   const formData = new FormData()
   formData.append("file", file)
-  const response = await api.post<AdminUserImportResult>("/admin/users/import", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  })
+  const params = role ? `?role=${encodeURIComponent(role)}` : ""
+  const response = await api.post<AdminUserImportResult>(
+    `/admin/users/import${params}`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  )
+  return response.data
+}
+
+export async function deleteAdminUser(userId: number) {
+  const response = await api.delete<{ status: string; name: string }>(`/admin/users/${userId}`)
   return response.data
 }

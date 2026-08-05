@@ -5,36 +5,30 @@ import { useNavigate, useParams } from "react-router-dom"
 import {
   getAttemptDetail,
   getCaseDetail,
-  sendAttemptAiMessage,
-  startCaseAttempt,
-  submitAttemptDefense,
-  submitAttemptReflection,
-  submitAttemptSolution,
   submitInitialAnalysis,
+  submitRapidFireAnswers,
+  submitAttemptReflection,
+  startAttemptPhase,
+  startRapidFireRound,
+  startCaseAttempt,
   type AttemptEvaluation,
+  type AttemptPhase,
+  type RapidFireQuestion,
+  type WrittenQuestion,
 } from "../../api/cases"
 import ProgressBar from "../../components/attempt/ProgressBar"
 import ReflectionStep from "../../components/attempt/ReflectionStep"
 import Screen1Briefing from "../../components/attempt/Screen1Briefing"
 import Screen2Analysis from "../../components/attempt/Screen2Analysis"
 import Screen3AIChat, { type ChatMessage } from "../../components/attempt/Screen3AIChat"
-import Screen4Solution, { type SolutionState } from "../../components/attempt/Screen4Solution"
-import Screen5Defense from "../../components/attempt/Screen5Defense"
 import Screen6Evaluation, { type EvaluationData } from "../../components/attempt/Screen6Evaluation"
 
 const STATUS_STAGE: Record<string, number> = {
   analysis_submitted: 1,
   ai_discussion: 3,
-  solution_submitted: 5,
-  defense_complete: 6,
-  evaluated: 6,
-}
-
-const emptySolution: SolutionState = {
-  recommendation: "",
-  reasoning: "",
-  implementation: "",
-  risks: "",
+  solution_submitted: 3,
+  defense_complete: 4,
+  evaluated: 4,
 }
 
 function countWords(value: string) {
@@ -42,19 +36,9 @@ function countWords(value: string) {
   return words ? words.length : 0
 }
 
-function formatSolution(solution: SolutionState) {
-  return [
-    `Recommendation:\n${solution.recommendation}`,
-    `Reasoning:\n${solution.reasoning}`,
-    `Implementation Plan:\n${solution.implementation}`,
-    `Risks & Mitigations:\n${solution.risks}`,
-  ].join("\n\n")
-}
-
-function formatDefense(questions: string[], answers: string[]) {
-  return questions
-    .map((question, index) => `Q${index + 1}: ${question}\nA${index + 1}: ${answers[index] || ""}`)
-    .join("\n\n")
+function isExpiredError(error: unknown): boolean {
+  const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+  return typeof detail === "string" && detail.toLowerCase().includes("expired")
 }
 
 function toEvaluationData(evaluation: AttemptEvaluation): EvaluationData {
@@ -69,6 +53,12 @@ function toEvaluationData(evaluation: AttemptEvaluation): EvaluationData {
     strengths: evaluation.strengths,
     weaknesses: evaluation.weaknesses,
     blind_spots: evaluation.blind_spots,
+    improvement_areas: evaluation.improvement_areas,
+    question_scores: evaluation.question_scores || [],
+    rapid_fire_score: evaluation.rapid_fire_score,
+    rapid_fire_feedback: evaluation.rapid_fire_feedback,
+    overall_grade: evaluation.overall_grade,
+    grade_comment: evaluation.grade_comment,
     next_case: null,
   }
 }
@@ -83,27 +73,35 @@ export default function CaseAttempt() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [caseTitle, setCaseTitle] = useState("")
+  const [caseSections, setCaseSections] = useState<{
+    situation: string
+    background: string
+    data: string
+    characters: string
+    constraints: string
+    objectives: string
+    timeline: string
+  }>({ situation: "", background: "", data: "", characters: "", constraints: "", objectives: "", timeline: "" })
   const [reflectionPrompts, setReflectionPrompts] = useState<string[]>([])
+  const [writtenQuestions, setWrittenQuestions] = useState<WrittenQuestion[]>([])
+  const [rapidFireQuestions, setRapidFireQuestions] = useState<RapidFireQuestion[]>([])
+  const [rapidFireLoading, setRapidFireLoading] = useState(false)
+  const [readingSeconds, setReadingSeconds] = useState<number | null>(null)
+  const [writingSeconds, setWritingSeconds] = useState<number | null>(null)
+  const [rapidFireSeconds, setRapidFireSeconds] = useState<number | null>(null)
   const [attemptId, setAttemptId] = useState<number | null>(null)
   const [currentScreen, setCurrentScreen] = useState(1)
   const [needsReflection, setNeedsReflection] = useState(false)
 
+  // Per-question answers for Stage 2
+  const [writtenAnswers, setWrittenAnswers] = useState<string[]>([])
+  // Ungraded free-text initial analysis written before the structured questions
+  const [initialSummary, setInitialSummary] = useState("")
+  // Combined analysisText kept for evaluation context
   const [analysisText, setAnalysisText] = useState("")
-  const [wordCount, setWordCount] = useState(0)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [solution, setSolution] = useState<SolutionState>(emptySolution)
-  const [defenseQuestions, setDefenseQuestions] = useState<string[]>([])
-  const [defenseAnswers, setDefenseAnswers] = useState<string[]>([])
-  const [currentDefenseQ, setCurrentDefenseQ] = useState(0)
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null)
-  const [elapsedTime, setElapsedTime] = useState(0)
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setElapsedTime((value) => value + 1)
-    }, 1000)
-    return () => window.clearInterval(intervalId)
-  }, [])
+  const [expired, setExpired] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -115,7 +113,20 @@ export default function CaseAttempt() {
         const detail = await getCaseDetail(id!)
         if (!isMounted) return
         setCaseTitle(detail.case.title)
+        setCaseSections({
+          situation: detail.case.situation || "",
+          background: detail.case.background || "",
+          data: detail.case.data || "",
+          characters: detail.case.characters || "",
+          constraints: detail.case.constraints || "",
+          objectives: detail.case.objectives || "",
+          timeline: detail.case.timeline || "",
+        })
         setReflectionPrompts(detail.case.reflection_questions)
+        const qs = detail.case.written_questions || []
+        setWrittenQuestions(qs)
+        // Rapid fire questions are AI-generated live when the student enters the
+        // rapid fire round (see the phase effect), not read from the case here.
 
         let resolvedAttemptId = detail.attempt.attempt_id
         let status = detail.attempt.status
@@ -134,8 +145,16 @@ export default function CaseAttempt() {
         const attemptDetail = await getAttemptDetail(resolvedAttemptId)
         if (!isMounted) return
 
-        setAnalysisText(attemptDetail.initial_analysis || "")
-        setWordCount(countWords(attemptDetail.initial_analysis || ""))
+        const storedAnalysis = attemptDetail.initial_analysis || ""
+        setAnalysisText(storedAnalysis)
+        setInitialSummary(attemptDetail.initial_summary || "")
+        // Pre-fill per-question answers if returning to an existing attempt
+        const qs2 = detail.case.written_questions || []
+        if (storedAnalysis && qs2.length > 0) {
+          setWrittenAnswers(qs2.map(() => ""))
+        } else {
+          setWrittenAnswers(qs2.map(() => ""))
+        }
         const discussionMessages = attemptDetail.conversations
           .filter((entry) => entry.stage === "discussion")
           .map((entry) => ({ role: entry.role, text: entry.message }))
@@ -150,22 +169,11 @@ export default function CaseAttempt() {
             : discussionMessages,
         )
 
-        const defenseAiEntry = attemptDetail.conversations.find(
-          (entry) => entry.stage === "defense" && entry.role === "ai",
-        )
-        if (defenseAiEntry) {
-          try {
-            const parsed = JSON.parse(defenseAiEntry.message)
-            if (Array.isArray(parsed)) {
-              setDefenseQuestions(parsed.map((question) => String(question)))
-            }
-          } catch {
-            // ignore malformed defense-question payloads
-          }
-        }
-
         if (attemptDetail.evaluation) {
           setEvaluation(toEvaluationData(attemptDetail.evaluation))
+        }
+        if (status === "expired") {
+          setExpired(true)
         }
         setNeedsReflection(status === "defense_complete")
         setCurrentScreen(STATUS_STAGE[status || "analysis_submitted"] || 1)
@@ -185,6 +193,62 @@ export default function CaseAttempt() {
     }
   }, [id])
 
+  // Server-side timing: on entering each phase, stamp/resume its start time and
+  // fetch the authoritative seconds remaining (refresh-proof).
+  useEffect(() => {
+    if (!attemptId) return
+    const phaseByScreen: Record<number, AttemptPhase | undefined> = {
+      1: "reading",
+      2: "writing",
+      3: "rapid_fire",
+    }
+    const phase = phaseByScreen[currentScreen]
+    if (!phase) return
+    let active = true
+
+    if (phase === "rapid_fire") {
+      // Rapid fire: AI generates the questions live and starts the timer in one
+      // server call (idempotent — a refresh returns the same questions/timer).
+      setRapidFireLoading(true)
+      startRapidFireRound(attemptId)
+        .then((res) => {
+          if (!active) return
+          if (res.timing.expired) {
+            setExpired(true)
+            return
+          }
+          setRapidFireQuestions(res.questions)
+          setRapidFireSeconds(res.timing.remaining_seconds)
+        })
+        .catch(() => {
+          if (active) setActionError("Unable to load the rapid fire round. Please retry.")
+        })
+        .finally(() => {
+          if (active) setRapidFireLoading(false)
+        })
+      return () => {
+        active = false
+      }
+    }
+
+    startAttemptPhase(attemptId, phase)
+      .then((res) => {
+        if (!active) return
+        if (res.expired) {
+          setExpired(true)
+          return
+        }
+        if (phase === "reading") setReadingSeconds(res.remaining_seconds)
+        else setWritingSeconds(res.remaining_seconds)
+      })
+      .catch(() => {
+        /* timing is best-effort; a failure just hides the timer */
+      })
+    return () => {
+      active = false
+    }
+  }, [currentScreen, attemptId])
+
   function goBack() {
     if (window.history.length > 1) {
       navigate(-1)
@@ -193,84 +257,58 @@ export default function CaseAttempt() {
     navigate(id ? `/student/case-studies/${id}` : "/student/case-studies")
   }
 
-  function handleAnalysisChange(value: string) {
-    setAnalysisText(value)
-    setWordCount(countWords(value))
+  function handleAnalysisChange(index: number, value: string) {
+    setWrittenAnswers((prev) => {
+      const next = [...prev]
+      next[index] = value
+      return next
+    })
   }
 
   async function handleAnalysisNext() {
     if (!attemptId) return
     setIsSubmitting(true)
     try {
-      const result = await submitInitialAnalysis(attemptId, analysisText)
+      // Concatenate per-question answers into a single string for storage
+      const combined = writtenQuestions
+        .map((q, i) => `Q${q.question_number}: ${q.question_text}\n\n${writtenAnswers[i] || ""}`)
+        .join("\n\n---\n\n")
+      const submissionText = combined || writtenAnswers.join("\n\n")
+      setAnalysisText(submissionText)
+      // Only send the ungraded initial analysis when structured questions exist
+      // (in the fallback path the single textarea already IS the analysis).
+      const summaryToSend = writtenQuestions.length > 0 ? initialSummary : undefined
+      const result = await submitInitialAnalysis(attemptId, submissionText, summaryToSend)
       if (result.opening_message) {
         setChatMessages([{ role: "ai", text: result.opening_message }])
       }
       setActionError("")
       setCurrentScreen(3)
-    } catch {
-      setActionError("Unable to submit your analysis right now. Please try again.")
+    } catch (error) {
+      if (isExpiredError(error)) {
+        setExpired(true)
+      } else {
+        setActionError("Unable to submit your analysis right now. Please try again.")
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  async function handleSendMessage(message: string) {
-    if (!attemptId) return
-    setChatMessages((messages) => [...messages, { role: "student", text: message }])
-    try {
-      const result = await sendAttemptAiMessage(attemptId, message)
-      setChatMessages((messages) => [...messages, { role: "ai", text: result.response }])
-      setActionError("")
-    } catch {
-      setActionError("The AI did not respond. Please try sending your message again.")
-    }
-  }
-
-  function handleSolutionChange(field: keyof SolutionState, value: string) {
-    setSolution((currentSolution) => ({ ...currentSolution, [field]: value }))
-  }
-
-  async function handleSolutionNext() {
+  async function handleRapidFireSubmit(rapidFireAnswers: string) {
     if (!attemptId) return
     setIsSubmitting(true)
     try {
-      const result = await submitAttemptSolution(attemptId, formatSolution(solution))
-      setDefenseQuestions(result.defense_questions)
-      setActionError("")
-      setCurrentScreen(5)
-    } catch {
-      setActionError("Unable to submit your solution right now. Please try again.")
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleDefenseAnswer(answer: string) {
-    if (!attemptId) return
-    const updatedAnswers = [...defenseAnswers, answer]
-    setDefenseAnswers(updatedAnswers)
-
-    const isLastQuestion = currentDefenseQ === defenseQuestions.length - 1
-    if (!isLastQuestion) {
-      setCurrentDefenseQ((questionIndex) =>
-        Math.min(questionIndex + 1, defenseQuestions.length - 1),
-      )
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const result = await submitAttemptDefense(
-        attemptId,
-        formatDefense(defenseQuestions, updatedAnswers),
-      )
+      const result = await submitRapidFireAnswers(attemptId, rapidFireAnswers)
       setEvaluation(toEvaluationData(result))
-      setNeedsReflection(true)
       setActionError("")
-      setCurrentScreen(6)
-    } catch {
-      setActionError("Unable to submit your defense right now. Please try again.")
+      setCurrentScreen(4)
+    } catch (error) {
+      if (isExpiredError(error)) {
+        setExpired(true)
+      } else {
+        setActionError("Unable to submit your answers right now. Please try again.")
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -319,9 +357,32 @@ export default function CaseAttempt() {
     )
   }
 
+  if (expired) {
+    return (
+      <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
+        <main className="mx-auto max-w-[720px] px-4 py-12 sm:px-6">
+          <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-6 py-12 text-center">
+            <h2 className="text-2xl font-semibold text-[#B91C1C]">Time&apos;s up</h2>
+            <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-6 text-[#7F1D1D]">
+              This attempt has expired because a timed phase ran out. You get one
+              attempt per case study, and it cannot be resumed from where you left off.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/student/case-studies")}
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#0B1D3A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#132a4f]"
+            >
+              Back to My Case Studies
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
-      <ProgressBar currentScreen={currentScreen} elapsedTime={elapsedTime} title={caseTitle} />
+      <ProgressBar currentScreen={currentScreen} title={caseTitle} />
       <main className="mx-auto max-w-[1180px] px-4 py-6 sm:px-6">
         <button
           type="button"
@@ -339,48 +400,53 @@ export default function CaseAttempt() {
           </div>
         ) : null}
 
-        {currentScreen === 1 ? <Screen1Briefing onNext={() => setCurrentScreen(2)} /> : null}
+        {currentScreen === 1 ? (
+          <Screen1Briefing
+            caseTitle={caseTitle}
+            situation={caseSections.situation}
+            background={caseSections.background}
+            data={caseSections.data}
+            characters={caseSections.characters}
+            constraints={caseSections.constraints}
+            objectives={caseSections.objectives}
+            timeline={caseSections.timeline}
+            remainingSeconds={readingSeconds}
+            onNext={() => setCurrentScreen(2)}
+          />
+        ) : null}
         {currentScreen === 2 ? (
           <Screen2Analysis
-            analysisText={analysisText}
-            wordCount={wordCount}
-            onAnalysisChange={handleAnalysisChange}
+            questions={writtenQuestions}
+            answers={writtenAnswers}
+            initialSummary={initialSummary}
+            onInitialSummaryChange={setInitialSummary}
+            reflectionQuestions={reflectionPrompts}
+            remainingSeconds={writingSeconds}
+            onAnswerChange={handleAnalysisChange}
             onNext={handleAnalysisNext}
           />
         ) : null}
         {currentScreen === 3 ? (
           <Screen3AIChat
+            rapidFireQuestions={rapidFireQuestions}
             analysisText={analysisText}
             chatMessages={chatMessages}
-            onSendMessage={handleSendMessage}
-            onNext={() => setCurrentScreen(4)}
-          />
-        ) : null}
-        {currentScreen === 4 ? (
-          <Screen4Solution
-            solution={solution}
-            onSolutionChange={handleSolutionChange}
-            onNext={handleSolutionNext}
-          />
-        ) : null}
-        {currentScreen === 5 ? (
-          <Screen5Defense
-            questions={defenseQuestions}
-            defenseAnswers={defenseAnswers}
-            currentDefenseQ={currentDefenseQ}
-            onSubmitAnswer={handleDefenseAnswer}
-            onComplete={() => undefined}
-          />
-        ) : null}
-        {currentScreen === 6 && needsReflection ? (
-          <ReflectionStep
-            questions={reflectionPrompts}
+            remainingSeconds={rapidFireSeconds}
+            isGenerating={rapidFireLoading}
+            onSendMessage={() => undefined}
+            onNext={() => undefined}
+            onSubmit={handleRapidFireSubmit}
             isSubmitting={isSubmitting}
-            onSubmit={handleReflectionSubmit}
           />
         ) : null}
-        {currentScreen === 6 && !needsReflection && evaluation ? (
+        {currentScreen === 4 && evaluation ? (
           <Screen6Evaluation evaluation={evaluation} />
+        ) : null}
+        {currentScreen === 4 && !evaluation ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-[#6B7280]">
+            <div className="size-8 animate-spin rounded-full border-4 border-[#E6EBEB] border-t-[#C9A227]" />
+            <p className="text-sm font-medium">AI is generating your evaluation…</p>
+          </div>
         ) : null}
       </main>
     </div>

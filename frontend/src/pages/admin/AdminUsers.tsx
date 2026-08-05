@@ -7,8 +7,10 @@ import {
   Search,
   ShieldOff,
   ShieldCheck,
+  Trash2,
   Upload,
   UserCog,
+  Eye,
 } from "lucide-react"
 import type { ChangeEvent, FormEvent, ReactNode } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -16,15 +18,17 @@ import { Link, useSearchParams } from "react-router-dom"
 
 import {
   createAdminUser,
+  deleteAdminUser,
+  downloadImportTemplate,
   getAdminCourseBatches,
   getAdminCourses,
   getAdminCourseSections,
   getAdminUsers,
   importAdminUsers,
   resetAdminUserPassword,
+  updateAdminUser,
   updateAdminUserRole,
   updateAdminUserStatus,
-  userImportTemplateUrl,
   type AdminBatch,
   type AdminCourse,
   type AdminSection,
@@ -39,8 +43,6 @@ const roles: Array<{ label: string; value: "" | AdminUserRole }> = [
   { label: "All Roles", value: "" },
   { label: "Student", value: "student" },
   { label: "Faculty", value: "faculty" },
-  { label: "Mentor", value: "mentor" },
-  { label: "Director", value: "director" },
   { label: "Admin", value: "admin" },
 ]
 
@@ -59,6 +61,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
   const [role, setRole] = useState("")
+  const [tab, setTab] = useState<"all" | "faculty" | "student">("all")
   const [status, setStatus] = useState("")
   const [program, setProgram] = useState("")
   const [batch, setBatch] = useState("")
@@ -66,6 +69,7 @@ export default function AdminUsers() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [showAddUser, setShowAddUser] = useState(searchParams.get("action") === "add")
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<AdminUserImportResult | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -77,9 +81,10 @@ export default function AdminUsers() {
   async function loadUsers(nextPage = page) {
     setIsLoading(true)
     try {
+      const effectiveRole = tab === "all" ? role : tab
       const data = await getAdminUsers({
         search,
-        role,
+        role: effectiveRole,
         status,
         program,
         batch,
@@ -100,7 +105,7 @@ export default function AdminUsers() {
   useEffect(() => {
     loadUsers(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, status, program, batch])
+  }, [tab, role, status, program, batch])
 
   useEffect(() => {
     setShowAddUser(searchParams.get("action") === "add")
@@ -130,6 +135,28 @@ export default function AdminUsers() {
     setNotice(message)
     closeAddUser()
     await loadUsers(1)
+  }
+
+  async function handleUserUpdated(updated: AdminUser) {
+    setUsers((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    )
+    setEditingUser(null)
+    setNotice(`${updated.name} updated successfully.`)
+  }
+
+  async function handleDeleteUser(user: AdminUser) {
+    if (!window.confirm(`Are you sure you want to delete ${user.name}? This cannot be undone.`)) {
+      return
+    }
+    try {
+      await deleteAdminUser(user.id)
+      setUsers((current) => current.filter((item) => item.id !== user.id))
+      setTotal((prev) => prev - 1)
+      setNotice(`${user.name} has been deleted.`)
+    } catch {
+      setError("Unable to delete user.")
+    }
   }
 
   async function handleStatusToggle(user: AdminUser) {
@@ -164,7 +191,7 @@ export default function AdminUsers() {
     setError("")
     setImportResult(null)
     try {
-      const result = await importAdminUsers(file)
+      const result = await importAdminUsers(file, tab !== "all" ? tab : undefined)
       setImportResult(result)
       setNotice(
         `Imported ${result.created_count} user(s)${
@@ -196,6 +223,182 @@ export default function AdminUsers() {
     }
   }
 
+  const gridClass =
+    tab === "faculty"
+      ? "lg:grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_0.8fr_0.7fr_1.3fr]"
+      : tab === "student"
+        ? "lg:grid-cols-[1.5fr_1fr_1fr_0.9fr_0.8fr_0.7fr_1.3fr]"
+        : "lg:grid-cols-[1.6fr_0.9fr_0.9fr_1fr_0.7fr_1.1fr_1.3fr]"
+
+  const nameColumn: UserColumn = {
+    label: "Name",
+    render: (user) => (
+      <div className="min-w-0">
+        <Link
+          to={`/admin/user/${user.id}`}
+          className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
+        >
+          {user.name}
+        </Link>
+        <p className="mt-1 truncate text-sm text-[#667085]">{user.email}</p>
+        <p className="mt-2 text-xs text-[#667085] lg:hidden">
+          {titleCase(user.role)}
+          {user.program ? ` · ${user.program}` : ""}
+        </p>
+      </div>
+    ),
+  }
+  const programColumn: UserColumn = {
+    label: "Program",
+    render: (user) => (
+      <span className="text-sm font-medium text-[#17202a]">{user.program || "-"}</span>
+    ),
+  }
+  const courseSectionColumn: UserColumn = {
+    label: "Course / Section",
+    render: (user) => (
+      <span className="text-sm text-[#667085]">
+        {user.course_name && user.section_name
+          ? `${user.course_name} · ${user.section_name}`
+          : user.course_name || "-"}
+      </span>
+    ),
+  }
+  const statusColumn: UserColumn = {
+    label: "Status",
+    render: (user) => <StatusBadge status={user.status} />,
+  }
+  const lastLoginColumn: UserColumn = {
+    label: "Last Login",
+    render: (user) => (
+      <span className="text-sm text-[#667085]">
+        {user.last_login_at ? formatDate(user.last_login_at) : "Never"}
+      </span>
+    ),
+  }
+
+  let columns: UserColumn[]
+  if (tab === "faculty") {
+    columns = [
+      {
+        label: "Faculty",
+        render: (user) => (
+          <div className="min-w-0">
+            <Link
+              to={`/admin/user/${user.id}`}
+              className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
+            >
+              {user.name}
+            </Link>
+            <p className="mt-1 truncate text-sm text-[#667085]">{user.email}</p>
+          </div>
+        ),
+      },
+      {
+        label: "Department",
+        render: (user) => (
+          <span className="text-sm text-[#17202a]">{user.department || "-"}</span>
+        ),
+      },
+      {
+        label: "Designation",
+        render: (user) => (
+          <span className="text-sm text-[#17202a]">{user.designation || "-"}</span>
+        ),
+      },
+      {
+        label: "Employee ID",
+        render: (user) => (
+          <span className="text-sm font-medium text-[#17202a]">{user.employee_id || "-"}</span>
+        ),
+      },
+      {
+        label: "Experience",
+        render: (user) => (
+          <span className="text-sm text-[#667085]">
+            {user.experience_years != null ? `${user.experience_years} yrs` : "-"}
+          </span>
+        ),
+      },
+      {
+        label: "Teaching",
+        render: (user) => (
+          <span className={`text-sm font-medium ${user.sections_teaching > 0 ? "text-[#176b5a]" : "text-[#667085]"}`}>
+            {user.sections_teaching > 0 ? `${user.sections_teaching} section${user.sections_teaching !== 1 ? "s" : ""}` : "—"}
+          </span>
+        ),
+      },
+      statusColumn,
+      lastLoginColumn,
+    ]
+  } else if (tab === "student") {
+    columns = [
+      {
+        label: "Student",
+        render: (user) => (
+          <div className="min-w-0">
+            <Link
+              to={`/admin/user/${user.id}`}
+              className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
+            >
+              {user.name}
+            </Link>
+            <p className="mt-1 truncate text-sm text-[#667085]">{user.email}</p>
+          </div>
+        ),
+      },
+      {
+        label: "Department",
+        render: (user) => (
+          <span className="text-sm text-[#17202a]">{user.department || "-"}</span>
+        ),
+      },
+      {
+        label: "College ID",
+        render: (user) => (
+          <span className="text-sm font-medium text-[#17202a]">{user.college_id || "-"}</span>
+        ),
+      },
+      programColumn,
+      {
+        label: "Batch",
+        render: (user) => (
+          <span className="text-sm text-[#667085]">
+            {user.batch_name || (user.admission_year ? `${user.admission_year}` : "-")}
+          </span>
+        ),
+      },
+      statusColumn,
+    ]
+  } else {
+    columns = [
+      nameColumn,
+      {
+        label: "Role",
+        render: (user) => (
+          <select
+            value={user.role}
+            onChange={(event) => handleRoleChange(user, event.target.value as AdminUserRole)}
+            className="h-10 rounded-md border border-[#dde4ec] bg-white px-2 text-sm font-medium outline-none"
+            aria-label={`Change role for ${user.name}`}
+          >
+            {roles
+              .filter((option) => option.value)
+              .map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+          </select>
+        ),
+      },
+      programColumn,
+      courseSectionColumn,
+      statusColumn,
+      lastLoginColumn,
+    ]
+  }
+
   return (
     <AdminLayout>
       <div className="space-y-5">
@@ -211,13 +414,14 @@ export default function AdminUsers() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <a
-                href={userImportTemplateUrl()}
+              <button
+                type="button"
+                onClick={() => downloadImportTemplate(tab !== "all" ? tab : undefined).catch(() => setError("Unable to download template."))}
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] bg-white px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3]"
               >
                 <Download size={17} aria-hidden="true" />
-                Template
-              </a>
+                {tab === "faculty" ? "Faculty Template" : tab === "student" ? "Student Template" : "Template"}
+              </button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -232,7 +436,13 @@ export default function AdminUsers() {
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] bg-white px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Upload size={17} aria-hidden="true" />
-                {isImporting ? "Importing..." : "Import CSV"}
+                {isImporting
+                  ? "Importing..."
+                  : tab === "faculty"
+                    ? "Import Faculty"
+                    : tab === "student"
+                      ? "Import Students"
+                      : "Import CSV"}
               </button>
               <button
                 type="button"
@@ -252,6 +462,29 @@ export default function AdminUsers() {
           </div>
         </section>
 
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { key: "all", label: "All Users" },
+              { key: "faculty", label: "Faculty" },
+              { key: "student", label: "Students" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
+                tab === item.key
+                  ? "bg-[#102033] text-white shadow-sm"
+                  : "border border-[#dde4ec] bg-white text-[#17202a] hover:border-[#34c6a3]"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <section className="rounded-lg border border-[#dde4ec] bg-white p-4 shadow-sm">
           <form
             onSubmit={handleSearchSubmit}
@@ -269,18 +502,22 @@ export default function AdminUsers() {
               />
             </label>
 
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              aria-label="Role"
-            >
-              {roles.map((option) => (
-                <option key={option.label} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            {tab === "all" ? (
+              <select
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+                className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                aria-label="Role"
+              >
+                {roles.map((option) => (
+                  <option key={option.label} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="hidden xl:block" aria-hidden="true" />
+            )}
 
             <select
               value={status}
@@ -348,13 +585,10 @@ export default function AdminUsers() {
         ) : null}
 
         <section className="overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-sm">
-          <div className="hidden grid-cols-[1.4fr_0.8fr_0.8fr_0.9fr_0.7fr_1.1fr_1.2fr] gap-4 border-b border-[#dde4ec] bg-[#f5f7fa] px-5 py-3 text-xs font-semibold uppercase text-[#667085] lg:grid">
-            <span>Name</span>
-            <span>Role</span>
-            <span>Program</span>
-            <span>Course / Section</span>
-            <span>Status</span>
-            <span>Last Login</span>
+          <div className={`hidden gap-4 border-b border-[#dde4ec] bg-[#f5f7fa] px-5 py-3 text-xs font-semibold uppercase text-[#667085] lg:grid ${gridClass}`}>
+            {columns.map((column) => (
+              <span key={column.label}>{column.label}</span>
+            ))}
             <span>Actions</span>
           </div>
 
@@ -368,9 +602,12 @@ export default function AdminUsers() {
                 <UserRow
                   key={user.id}
                   user={user}
+                  columns={columns}
+                  gridClass={gridClass}
                   onStatusToggle={handleStatusToggle}
                   onPasswordReset={handlePasswordReset}
-                  onRoleChange={handleRoleChange}
+                  onEdit={setEditingUser}
+                  onDelete={handleDeleteUser}
                 />
               ))}
             </div>
@@ -410,72 +647,69 @@ export default function AdminUsers() {
       </div>
 
       {showAddUser ? (
-        <AddUserDialog onClose={closeAddUser} onCreated={handleUserCreated} />
+        <AddUserDialog
+          initialRole={tab === "faculty" ? "faculty" : "student"}
+          onClose={closeAddUser}
+          onCreated={handleUserCreated}
+        />
+      ) : null}
+
+      {editingUser ? (
+        <EditUserDialog
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={handleUserUpdated}
+        />
       ) : null}
     </AdminLayout>
   )
 }
 
+interface UserColumn {
+  label: string
+  render: (user: AdminUser) => ReactNode
+}
+
 interface UserRowProps {
   user: AdminUser
+  columns: UserColumn[]
+  gridClass: string
   onStatusToggle: (user: AdminUser) => void
   onPasswordReset: (user: AdminUser) => void
-  onRoleChange: (user: AdminUser, role: AdminUserRole) => void
+  onEdit: (user: AdminUser) => void
+  onDelete: (user: AdminUser) => void
 }
 
 function UserRow({
   user,
+  columns,
+  gridClass,
   onStatusToggle,
   onPasswordReset,
-  onRoleChange,
+  onEdit,
+  onDelete,
 }: UserRowProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [menuOpen])
+
   return (
-    <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.4fr_0.8fr_0.8fr_0.9fr_0.7fr_1.1fr_1.2fr] lg:items-center">
-      <div className="min-w-0">
-        <Link
-          to={`/admin/user/${user.id}`}
-          className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
-        >
-          {user.name}
-        </Link>
-        <p className="mt-1 truncate text-sm text-[#667085]">{user.email}</p>
-        <p className="mt-2 text-xs text-[#667085] lg:hidden">
-          {titleCase(user.role)} - {user.program || "No program"}
-        </p>
-      </div>
-
-      <select
-        value={user.role}
-        onChange={(event) => onRoleChange(user, event.target.value as AdminUserRole)}
-        className="h-10 rounded-md border border-[#dde4ec] bg-white px-2 text-sm font-medium outline-none"
-        aria-label={`Change role for ${user.name}`}
-      >
-        {roles
-          .filter((option) => option.value)
-          .map((option) => (
-            <option key={option.label} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-      </select>
-
-      <span className="text-sm font-medium text-[#17202a]">
-        {user.program || user.specialization || "-"}
-      </span>
-
-      <span className="text-sm text-[#667085]">
-        {user.course_name && user.section_name
-          ? `${user.course_name} · ${user.section_name}`
-          : user.course_name || "-"}
-      </span>
-
-      <span>
-        <StatusBadge status={user.status} />
-      </span>
-
-      <span className="text-sm text-[#667085]">
-        {user.last_login_at ? formatDate(user.last_login_at) : "Never"}
-      </span>
+    <article className={`grid gap-4 px-5 py-4 lg:items-center ${gridClass}`}>
+      {columns.map((column) => (
+        <div key={column.label} className="min-w-0">
+          {column.render(user)}
+        </div>
+      ))}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -500,22 +734,49 @@ function UserRow({
         >
           <KeyRound size={16} aria-hidden="true" />
         </button>
-        <Link
-          to={`/admin/user/${user.id}`}
+        <button
+          type="button"
+          onClick={() => onEdit(user)}
           className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
           aria-label={`Edit ${user.name}`}
           title="Edit"
         >
           <UserCog size={16} aria-hidden="true" />
-        </Link>
-        <button
-          type="button"
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033]"
-          aria-label={`More actions for ${user.name}`}
-          title="More"
-        >
-          <MoreHorizontal size={16} aria-hidden="true" />
         </button>
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+            aria-label={`More actions for ${user.name}`}
+            title="More"
+          >
+            <MoreHorizontal size={16} aria-hidden="true" />
+          </button>
+          {menuOpen ? (
+            <div className="absolute right-0 top-10 z-20 min-w-[180px] rounded-md border border-[#dde4ec] bg-white py-1 shadow-lg">
+              <Link
+                to={`/admin/user/${user.id}`}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#17202a] hover:bg-[#f5f7fa]"
+                onClick={() => setMenuOpen(false)}
+              >
+                <Eye size={15} aria-hidden="true" />
+                View Profile
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onDelete(user)
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[#b42318] hover:bg-[#fff5f5]"
+              >
+                <Trash2 size={15} aria-hidden="true" />
+                Delete User
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </article>
   )
@@ -524,15 +785,21 @@ function UserRow({
 interface AddUserDialogProps {
   onClose: () => void
   onCreated: (message: string) => void
+  initialRole?: AdminUserRole
 }
 
-function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
+function AddUserDialog({ onClose, onCreated, initialRole }: AddUserDialogProps) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
-  const [role, setRole] = useState<AdminUserRole>("student")
+  const [role, setRole] = useState<AdminUserRole>(initialRole ?? "student")
   const [program, setProgram] = useState("")
   const [specialization, setSpecialization] = useState("")
   const [admissionYear, setAdmissionYear] = useState("")
+  const [department, setDepartment] = useState("")
+  const [designation, setDesignation] = useState("")
+  const [employeeId, setEmployeeId] = useState("")
+  const [experienceYears, setExperienceYears] = useState("")
+  const [collegeId, setCollegeId] = useState("")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
@@ -603,6 +870,11 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
         specialization: specialization || undefined,
         admission_year: admissionYear ? Number(admissionYear) : undefined,
         section_id: role === "student" && sectionId ? Number(sectionId) : undefined,
+        department: (role === "faculty" || role === "student") && department ? department : undefined,
+        designation: role === "faculty" && designation ? designation : undefined,
+        employee_id: role === "faculty" && employeeId ? employeeId : undefined,
+        experience_years: role === "faculty" && experienceYears ? Number(experienceYears) : undefined,
+        college_id: role === "student" && collegeId ? collegeId : undefined,
       })
       onCreated(`Created ${result.user.name}; welcome email queued.`)
     } catch {
@@ -692,51 +964,299 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
                 className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
               />
             </Field>
-            {role === "student" ? (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Course">
-                  <select
-                    value={courseId}
-                    onChange={(event) => setCourseId(event.target.value)}
+            {role === "faculty" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Department">
+                  <input
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
                     className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  >
-                    <option value="">No course</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
-                <Field label="Batch">
-                  <select
-                    value={batchId}
-                    onChange={(event) => setBatchId(event.target.value)}
-                    disabled={!courseId}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="">Select batch</option>
-                    {batches.map((batch) => (
-                      <option key={batch.id} value={batch.id}>
-                        {batch.name}
-                      </option>
-                    ))}
-                  </select>
+                <Field label="Designation">
+                  <input
+                    value={designation}
+                    onChange={(event) => setDesignation(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
                 </Field>
-                <Field label="Section">
-                  <select
-                    value={sectionId}
-                    onChange={(event) => setSectionId(event.target.value)}
-                    disabled={!batchId}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <option value="">Select section</option>
-                    {sectionsForBatch.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.name} ({section.semester_name})
-                      </option>
-                    ))}
-                  </select>
+                <Field label="Employee ID">
+                  <input
+                    value={employeeId}
+                    onChange={(event) => setEmployeeId(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+                <Field label="Experience (Years)">
+                  <input
+                    value={experienceYears}
+                    onChange={(event) => setExperienceYears(event.target.value)}
+                    inputMode="numeric"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+              </div>
+            ) : null}
+            {role === "student" ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Department">
+                    <input
+                      value={department}
+                      onChange={(event) => setDepartment(event.target.value)}
+                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    />
+                  </Field>
+                  <Field label="College ID">
+                    <input
+                      value={collegeId}
+                      onChange={(event) => setCollegeId(event.target.value)}
+                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    />
+                  </Field>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="Course">
+                    <select
+                      value={courseId}
+                      onChange={(event) => setCourseId(event.target.value)}
+                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    >
+                      <option value="">No course</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Batch">
+                    <select
+                      value={batchId}
+                      onChange={(event) => setBatchId(event.target.value)}
+                      disabled={!courseId}
+                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">Select batch</option>
+                      {batches.map((batch) => (
+                        <option key={batch.id} value={batch.id}>
+                          {batch.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Section">
+                    <select
+                      value={sectionId}
+                      onChange={(event) => setSectionId(event.target.value)}
+                      disabled={!batchId}
+                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">Select section</option>
+                      {sectionsForBatch.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.name} ({section.semester_name})
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {error ? (
+            <div className="mt-4 rounded-md border border-[#f3c4c4] bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#dde4ec] px-4 py-3 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSaving ? "Creating..." : "Create User"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+interface EditUserDialogProps {
+  user: AdminUser
+  onClose: () => void
+  onSaved: (updated: AdminUser) => void
+}
+
+function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) {
+  const [name, setName] = useState(user.name)
+  const [program, setProgram] = useState(user.program || "")
+  const [specialization, setSpecialization] = useState(user.specialization || "")
+  const [admissionYear, setAdmissionYear] = useState(
+    user.admission_year ? String(user.admission_year) : "",
+  )
+  const [department, setDepartment] = useState(user.department || "")
+  const [designation, setDesignation] = useState(user.designation || "")
+  const [employeeId, setEmployeeId] = useState(user.employee_id || "")
+  const [experienceYears, setExperienceYears] = useState(
+    user.experience_years != null ? String(user.experience_years) : "",
+  )
+  const [collegeId, setCollegeId] = useState(user.college_id || "")
+  const [error, setError] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsSaving(true)
+    setError("")
+    try {
+      const updated = await updateAdminUser(user.id, {
+        name: name !== user.name ? name : undefined,
+        program: program !== (user.program || "") ? program : undefined,
+        specialization:
+          specialization !== (user.specialization || "") ? specialization : undefined,
+        admission_year:
+          admissionYear !== (user.admission_year ? String(user.admission_year) : "")
+            ? admissionYear
+              ? Number(admissionYear)
+              : 0
+            : undefined,
+        department: department !== (user.department || "") ? department : undefined,
+        designation: designation !== (user.designation || "") ? designation : undefined,
+        employee_id: employeeId !== (user.employee_id || "") ? employeeId : undefined,
+        experience_years:
+          experienceYears !== (user.experience_years != null ? String(user.experience_years) : "")
+            ? experienceYears
+              ? Number(experienceYears)
+              : 0
+            : undefined,
+        college_id: collegeId !== (user.college_id || "") ? collegeId : undefined,
+      })
+      onSaved(updated)
+    } catch {
+      setError("Unable to update user.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4">
+      <div className="w-full max-w-xl">
+        <form
+          onSubmit={handleSubmit}
+          className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold text-[#17202a]">Edit User</h2>
+              <p className="mt-1 text-sm text-[#667085]">
+                {user.email} · {titleCase(user.role)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-4">
+            <Field label="Name">
+              <input
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Program">
+                <input
+                  value={program}
+                  onChange={(event) => setProgram(event.target.value)}
+                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                />
+              </Field>
+              <Field label="Specialization">
+                <input
+                  value={specialization}
+                  onChange={(event) => setSpecialization(event.target.value)}
+                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                />
+              </Field>
+            </div>
+
+            {user.role === "faculty" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Department">
+                  <input
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+                <Field label="Designation">
+                  <input
+                    value={designation}
+                    onChange={(event) => setDesignation(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+                <Field label="Employee ID">
+                  <input
+                    value={employeeId}
+                    onChange={(event) => setEmployeeId(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+                <Field label="Experience (Years)">
+                  <input
+                    value={experienceYears}
+                    onChange={(event) => setExperienceYears(event.target.value)}
+                    inputMode="numeric"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+              </div>
+            ) : null}
+
+            {user.role === "student" ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Department">
+                  <input
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+                <Field label="College ID">
+                  <input
+                    value={collegeId}
+                    onChange={(event) => setCollegeId(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
+                </Field>
+                <Field label="Admission Year">
+                  <input
+                    value={admissionYear}
+                    onChange={(event) => setAdmissionYear(event.target.value)}
+                    inputMode="numeric"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  />
                 </Field>
               </div>
             ) : null}
@@ -761,7 +1281,7 @@ function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
               disabled={isSaving}
               className="rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "Creating..." : "Create User"}
+              {isSaving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>

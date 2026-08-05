@@ -14,7 +14,7 @@ from shared.database import get_db
 
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
-VALID_ROLES = {"student", "faculty", "mentor", "admin", "director"}
+VALID_ROLES = {"student", "faculty", "admin"}
 VALID_STATUSES = {"active", "inactive"}
 
 
@@ -25,9 +25,13 @@ class AdminUserCreate(BaseModel):
     program: Optional[str] = None
     specialization: Optional[str] = None
     admission_year: Optional[int] = None
-    mentor_id: Optional[int] = None
     career_track_id: Optional[int] = None
     section_id: Optional[int] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    employee_id: Optional[str] = None
+    experience_years: Optional[int] = None
+    college_id: Optional[str] = None
 
 
 class AdminUserStatusUpdate(BaseModel):
@@ -36,15 +40,6 @@ class AdminUserStatusUpdate(BaseModel):
 
 class AdminUserRoleUpdate(BaseModel):
     role: str
-
-
-class AdminUserMentorUpdate(BaseModel):
-    mentor_id: int
-
-
-class AdminBulkMentorAssign(BaseModel):
-    student_user_ids: List[int]
-    mentor_id: int
 
 
 class AdminCareerTrackUpdate(BaseModel):
@@ -142,7 +137,6 @@ def ensure_role_profile(
     db: Session,
     user_id: int,
     role: str,
-    mentor_id: Optional[int] = None,
     career_track_id: Optional[int] = None,
 ) -> Optional[int]:
     if role == "student":
@@ -153,13 +147,12 @@ def ensure_role_profile(
         if not exists:
             row = db.execute(
                 text("""
-                    INSERT INTO students (user_id, mentor_id, career_track_id, current_level)
-                    VALUES (:user_id, :mentor_id, :career_track_id, 1)
+                    INSERT INTO students (user_id, career_track_id, current_level)
+                    VALUES (:user_id, :career_track_id, 1)
                     RETURNING id
                 """),
                 {
                     "user_id": user_id,
-                    "mentor_id": mentor_id,
                     "career_track_id": career_track_id,
                 },
             ).fetchone()
@@ -167,36 +160,7 @@ def ensure_role_profile(
             return row.id
         seed_student_capabilities(db, exists.id)
         return exists.id
-    if role == "mentor":
-        exists = db.execute(
-            text("SELECT id FROM mentors WHERE user_id = :user_id"),
-            {"user_id": user_id},
-        ).fetchone()
-        if not exists:
-            db.execute(
-                text("""
-                    INSERT INTO mentors (user_id, max_students)
-                    VALUES (:user_id, 25)
-                """),
-                {"user_id": user_id},
-            )
     return None
-
-
-def ensure_active_mentor(db: Session, mentor_id: int) -> Any:
-    row = db.execute(
-        text("""
-            SELECT u.id, u.name, COALESCE(COUNT(s.id), 0) AS student_count
-            FROM users u
-            LEFT JOIN students s ON s.mentor_id = u.id
-            WHERE u.id = :mentor_id AND u.role = 'mentor' AND u.status = 'active'
-            GROUP BY u.id, u.name
-        """),
-        {"mentor_id": mentor_id},
-    ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Active mentor not found")
-    return row
 
 
 def ensure_career_track(db: Session, career_track_id: Optional[int]) -> None:
@@ -296,53 +260,6 @@ def get_student_for_user(db: Session, user_id: int) -> Any:
     return row
 
 
-def assign_student_mentor(
-    db: Session, student_user_id: int, mentor_id: int, actor_user_id: int
-) -> Dict[str, Any]:
-    mentor = ensure_active_mentor(db, mentor_id)
-    student = get_student_for_user(db, student_user_id)
-    db.execute(
-        text("UPDATE students SET mentor_id = :mentor_id WHERE id = :student_id"),
-        {"mentor_id": mentor_id, "student_id": student.id},
-    )
-    db.execute(
-        text("UPDATE alerts SET mentor_id = :mentor_id WHERE student_id = :student_id"),
-        {"mentor_id": mentor_id, "student_id": student.id},
-    )
-    db.execute(
-        text("""
-            INSERT INTO notification_log (
-                recipient_user_id, event_type, channel, status, subject, body
-            )
-            VALUES
-                (:student_user_id, 'mentor_assigned', 'email', 'pending',
-                 'Your PCDC mentor has been assigned', :student_body),
-                (:mentor_id, 'student_assigned', 'email', 'pending',
-                 'New student assigned', :mentor_body)
-        """),
-        {
-            "student_user_id": student_user_id,
-            "mentor_id": mentor_id,
-            "student_body": f"{mentor.name} has been assigned as your mentor.",
-            "mentor_body": f"{student.name} has been assigned to you.",
-        },
-    )
-    record_system_event(
-        db,
-        actor_user_id,
-        "mentor_assigned",
-        f"Assigned {student.name} to mentor {mentor.name}",
-    )
-    return {
-        "student_user_id": student_user_id,
-        "student_id": student.id,
-        "mentor_id": mentor_id,
-        "mentor_name": mentor.name,
-        "mentor_student_count": int(mentor.student_count) + (0 if student.mentor_id == mentor_id else 1),
-        "overloaded": int(mentor.student_count) >= 25,
-    }
-
-
 def user_response(row: Any) -> Dict[str, Any]:
     row_keys = row._mapping.keys() if hasattr(row, "_mapping") else []
     return {
@@ -353,6 +270,12 @@ def user_response(row: Any) -> Dict[str, Any]:
         "program": row.program,
         "specialization": row.specialization,
         "admission_year": row.admission_year,
+        "department": row.department if "department" in row_keys else None,
+        "designation": row.designation if "designation" in row_keys else None,
+        "employee_id": row.employee_id if "employee_id" in row_keys else None,
+        "experience_years": row.experience_years if "experience_years" in row_keys else None,
+        "college_id": row.college_id if "college_id" in row_keys else None,
+        "sections_teaching": int(row.sections_teaching) if "sections_teaching" in row_keys and row.sections_teaching else 0,
         "status": row.status,
         "last_login_at": str(row.last_login_at) if row.last_login_at else None,
         "created_at": str(row.created_at),
@@ -461,26 +384,41 @@ def list_admin_users(
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-    total = db.execute(
-        text(f"SELECT COUNT(*) FROM users u {where_sql}"),
-        params,
-    ).scalar() or 0
+    total = 0
     rows = db.execute(
         text(f"""
             SELECT u.id, u.name, u.email, u.role, u.program, u.specialization,
                    u.admission_year, u.status, u.last_login_at, u.created_at, u.updated_at,
-                   c.name AS course_name, b.name AS batch_name, cs.name AS section_name
+                   u.department, u.designation, u.employee_id, u.experience_years,
+                   u.college_id,
+                   COALESCE(sub.course_name, NULL) AS course_name,
+                   COALESCE(sub.batch_name, NULL) AS batch_name,
+                   COALESCE(sub.section_name, NULL) AS section_name,
+                   COALESCE(fac_sub.sections_teaching, 0) AS sections_teaching,
+                   COUNT(*) OVER() AS _total
             FROM users u
-            LEFT JOIN students s ON s.user_id = u.id
-            LEFT JOIN courses c ON c.id = s.course_id
-            LEFT JOIN batches b ON b.id = s.batch_id
-            LEFT JOIN class_sections cs ON cs.id = s.current_section_id
+            LEFT JOIN LATERAL (
+                SELECT c.name AS course_name, b.name AS batch_name, cs.name AS section_name
+                FROM students s
+                LEFT JOIN courses c ON c.id = s.course_id
+                LEFT JOIN batches b ON b.id = s.batch_id
+                LEFT JOIN class_sections cs ON cs.id = s.current_section_id
+                WHERE s.user_id = u.id
+                LIMIT 1
+            ) sub ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*)::int AS sections_teaching
+                FROM faculty_sections fs
+                WHERE fs.faculty_id = u.id
+            ) fac_sub ON u.role = 'faculty'
             {where_sql}
             ORDER BY u.created_at DESC, u.id DESC
             LIMIT :limit OFFSET :offset
         """),
         params,
     ).fetchall()
+    if rows:
+        total = rows[0]._mapping["_total"]
 
     return {
         "items": [user_response(row) for row in rows],
@@ -498,8 +436,6 @@ def create_admin_user(
 ) -> Dict[str, Any]:
     require_admin(current_user)
     role = normalize_role(data.role)
-    if data.mentor_id is not None:
-        ensure_active_mentor(db, data.mentor_id)
     ensure_career_track(db, data.career_track_id)
     if data.section_id is not None:
         ensure_section(db, data.section_id)
@@ -518,14 +454,18 @@ def create_admin_user(
         text("""
             INSERT INTO users (
                 name, email, password_hash, role, program, specialization,
-                admission_year, status, updated_at
+                admission_year, department, designation, employee_id,
+                experience_years, college_id, status, updated_at
             )
             VALUES (
                 :name, :email, :password_hash, :role, :program, :specialization,
-                :admission_year, 'active', NOW()
+                :admission_year, :department, :designation, :employee_id,
+                :experience_years, :college_id, 'active', NOW()
             )
             RETURNING id, name, email, role, program, specialization,
-                      admission_year, status, last_login_at, created_at, updated_at
+                      admission_year, department, designation, employee_id,
+                      experience_years, college_id, status, last_login_at,
+                      created_at, updated_at
         """),
         {
             "name": data.name.strip(),
@@ -535,6 +475,11 @@ def create_admin_user(
             "program": data.program.strip() if data.program else None,
             "specialization": data.specialization.strip() if data.specialization else None,
             "admission_year": data.admission_year,
+            "department": data.department.strip() if data.department else None,
+            "designation": data.designation.strip() if data.designation else None,
+            "employee_id": data.employee_id.strip() if data.employee_id else None,
+            "experience_years": data.experience_years,
+            "college_id": data.college_id.strip() if data.college_id else None,
         },
     )
     row = result.fetchone()
@@ -542,7 +487,6 @@ def create_admin_user(
         db,
         row.id,
         role,
-        mentor_id=data.mentor_id if role == "student" else None,
         career_track_id=data.career_track_id if role == "student" else None,
     )
     if role == "student" and data.section_id is not None and student_id is not None:
@@ -565,19 +509,6 @@ def create_admin_user(
         "user_created",
         f"Created {role} account for {row.name}",
     )
-    if role == "student" and data.mentor_id:
-        db.execute(
-            text("""
-                INSERT INTO notification_log (
-                    recipient_user_id, event_type, channel, status, subject, body
-                )
-                VALUES (
-                    :mentor_id, 'student_assigned', 'email', 'pending',
-                    'New student assigned', :body
-                )
-            """),
-            {"mentor_id": data.mentor_id, "body": f"{row.name} has been assigned to you."},
-        )
     db.commit()
     return {
         "user": user_response(row),
@@ -595,32 +526,69 @@ USER_IMPORT_COLUMNS = [
     "CourseCode",
     "BatchName",
     "SectionName",
-    "MentorID",
+]
+
+STUDENT_IMPORT_COLUMNS = [
+    "Name",
+    "Email",
+    "Department",
+    "CollegeID",
+    "Program",
+    "AdmissionYear",
+    "CourseCode",
+    "BatchName",
+    "SectionName",
+]
+
+FACULTY_IMPORT_COLUMNS = [
+    "Name",
+    "Email",
+    "Department",
+    "Designation",
+    "EmployeeID",
+    "ExperienceYears",
+    "Program",
+    "Specialization",
 ]
 
 
 @admin_router.get("/users/import/template")
 def download_user_import_template(
     current_user: Dict[str, Any] = Depends(get_current_user),
+    role: str = Query(default="", description="Role-specific template: student or faculty"),
 ) -> Response:
     require_admin(current_user)
+    role = role.strip().lower()
+    if role == "student":
+        columns = STUDENT_IMPORT_COLUMNS
+        filename = "pcdc-student-import-template.csv"
+    elif role == "faculty":
+        columns = FACULTY_IMPORT_COLUMNS
+        filename = "pcdc-faculty-import-template.csv"
+    else:
+        columns = USER_IMPORT_COLUMNS
+        filename = "pcdc-user-import-template.csv"
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(USER_IMPORT_COLUMNS)
+    writer.writerow(columns)
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=pcdc-user-import-template.csv"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
 @admin_router.post("/users/import")
 async def import_admin_users(
     file: UploadFile = File(...),
+    role: str = Query(default="", description="Force role for all rows: student or faculty"),
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_admin(current_user)
+    forced_role = role.strip().lower() if role else ""
+    if forced_role and forced_role not in ("student", "faculty"):
+        raise HTTPException(status_code=400, detail="Role parameter must be 'student' or 'faculty'")
     raw = await file.read()
     try:
         decoded = raw.decode("utf-8-sig")
@@ -629,9 +597,13 @@ async def import_admin_users(
 
     reader = csv.DictReader(io.StringIO(decoded))
     fieldnames = {(name or "").strip() for name in (reader.fieldnames or [])}
-    if not {"Name", "Email", "Role"}.issubset(fieldnames):
+    if not {"Name", "Email"}.issubset(fieldnames):
         raise HTTPException(
-            status_code=400, detail="CSV must include Name, Email, and Role columns"
+            status_code=400, detail="CSV must include Name and Email columns"
+        )
+    if not forced_role and "Role" not in fieldnames:
+        raise HTTPException(
+            status_code=400, detail="CSV must include a Role column (or use role-specific import)"
         )
 
     created: List[Dict[str, Any]] = []
@@ -647,21 +619,13 @@ async def import_admin_users(
                     raise ValueError("Name is required")
                 if not email:
                     raise ValueError("Email is required")
-                role = normalize_role(row.get("Role") or "student")
+                role = normalize_role(forced_role or row.get("Role") or "student")
 
                 existing = db.execute(
                     text("SELECT id FROM users WHERE email = :email"), {"email": email}
                 ).fetchone()
                 if existing:
                     raise ValueError("Email already registered")
-
-                mentor_id = None
-                mentor_id_raw = row.get("MentorID")
-                if mentor_id_raw:
-                    if not mentor_id_raw.isdigit():
-                        raise ValueError("MentorID must be numeric")
-                    mentor_id = int(mentor_id_raw)
-                    ensure_active_mentor(db, mentor_id)
 
                 section_id = None
                 course_code = row.get("CourseCode")
@@ -712,16 +676,32 @@ async def import_admin_users(
                     else None
                 )
 
+                specialization = row.get("Specialization") or None
+                department = row.get("Department") or None
+                designation = row.get("Designation") or None
+                employee_id_val = row.get("EmployeeID") or None
+                college_id_val = row.get("CollegeID") or None
+                experience_years_raw = row.get("ExperienceYears")
+                experience_years = (
+                    int(experience_years_raw)
+                    if experience_years_raw and experience_years_raw.isdigit()
+                    else None
+                )
+
                 temporary_secret = secrets.token_urlsafe(32)
                 inserted = db.execute(
                     text("""
                         INSERT INTO users (
                             name, email, password_hash, role, program,
-                            admission_year, status, updated_at
+                            specialization, admission_year, department,
+                            designation, employee_id, experience_years,
+                            college_id, status, updated_at
                         )
                         VALUES (
                             :name, :email, :password_hash, :role, :program,
-                            :admission_year, 'active', NOW()
+                            :specialization, :admission_year, :department,
+                            :designation, :employee_id, :experience_years,
+                            :college_id, 'active', NOW()
                         )
                         RETURNING id
                     """),
@@ -731,7 +711,13 @@ async def import_admin_users(
                         "password_hash": hash_password(temporary_secret),
                         "role": role,
                         "program": row.get("Program") or None,
+                        "specialization": specialization,
                         "admission_year": admission_year,
+                        "department": department,
+                        "designation": designation,
+                        "employee_id": employee_id_val,
+                        "experience_years": experience_years,
+                        "college_id": college_id_val,
                     },
                 ).fetchone()
 
@@ -739,7 +725,6 @@ async def import_admin_users(
                     db,
                     inserted.id,
                     role,
-                    mentor_id=mentor_id if role == "student" else None,
                 )
                 if role == "student" and section_id is not None and student_id is not None:
                     enroll_student_in_section(db, student_id, section_id, current_user["id"])
@@ -775,6 +760,91 @@ async def import_admin_users(
         "errors": errors,
         "error_count": len(errors),
     }
+
+
+class AdminUserUpdate(BaseModel):
+    name: Optional[str] = None
+    program: Optional[str] = None
+    specialization: Optional[str] = None
+    admission_year: Optional[int] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    employee_id: Optional[str] = None
+    experience_years: Optional[int] = None
+    college_id: Optional[str] = None
+
+
+@admin_router.patch("/users/{user_id}")
+def update_admin_user(
+    user_id: int,
+    data: AdminUserUpdate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+
+    sets: List[str] = []
+    params: Dict[str, Any] = {"user_id": user_id}
+
+    if data.name is not None:
+        if not data.name.strip():
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+        sets.append("name = :name")
+        params["name"] = data.name.strip()
+    if data.program is not None:
+        sets.append("program = :program")
+        params["program"] = data.program.strip() or None
+    if data.specialization is not None:
+        sets.append("specialization = :specialization")
+        params["specialization"] = data.specialization.strip() or None
+    if data.admission_year is not None:
+        sets.append("admission_year = :admission_year")
+        params["admission_year"] = data.admission_year if data.admission_year > 0 else None
+    if data.department is not None:
+        sets.append("department = :department")
+        params["department"] = data.department.strip() or None
+    if data.designation is not None:
+        sets.append("designation = :designation")
+        params["designation"] = data.designation.strip() or None
+    if data.employee_id is not None:
+        sets.append("employee_id = :employee_id")
+        params["employee_id"] = data.employee_id.strip() or None
+    if data.experience_years is not None:
+        sets.append("experience_years = :experience_years")
+        params["experience_years"] = data.experience_years if data.experience_years > 0 else None
+    if data.college_id is not None:
+        sets.append("college_id = :college_id")
+        params["college_id"] = data.college_id.strip() or None
+
+    if not sets:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    sets.append("updated_at = NOW()")
+    set_sql = ", ".join(sets)
+
+    row = db.execute(
+        text(f"""
+            UPDATE users
+            SET {set_sql}
+            WHERE id = :user_id
+            RETURNING id, name, email, role, program, specialization,
+                      admission_year, department, designation, employee_id,
+                      experience_years, college_id, status, last_login_at,
+                      created_at, updated_at
+        """),
+        params,
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    record_system_event(
+        db,
+        current_user["id"],
+        "user_updated",
+        f"Updated profile for {row.name}",
+    )
+    db.commit()
+    return user_response(row)
 
 
 @admin_router.patch("/users/{user_id}/status")
@@ -878,35 +948,6 @@ def reset_admin_user_password(
     return {"status": "reset_email_queued"}
 
 
-@admin_router.get("/mentors")
-def list_admin_mentors(
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> List[Dict[str, Any]]:
-    require_admin(current_user)
-    rows = db.execute(
-        text("""
-            SELECT u.id, u.name, u.email, u.status, COALESCE(COUNT(s.id), 0) AS student_count
-            FROM users u
-            LEFT JOIN students s ON s.mentor_id = u.id
-            WHERE u.role = 'mentor'
-            GROUP BY u.id, u.name, u.email, u.status
-            ORDER BY u.name
-        """)
-    ).fetchall()
-    return [
-        {
-            "id": row.id,
-            "name": row.name,
-            "email": row.email,
-            "status": row.status,
-            "student_count": int(row.student_count),
-            "overloaded": int(row.student_count) >= 25,
-        }
-        for row in rows
-    ]
-
-
 @admin_router.get("/career-tracks")
 def list_admin_career_tracks(
     db: Session = Depends(get_db),
@@ -922,34 +963,45 @@ def list_admin_career_tracks(
     ]
 
 
-@admin_router.patch("/users/{user_id}/mentor")
-def update_student_mentor(
+@admin_router.delete("/users/{user_id}")
+def delete_admin_user(
     user_id: int,
-    data: AdminUserMentorUpdate,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> Dict[str, str]:
     require_admin(current_user)
-    result = assign_student_mentor(db, user_id, data.mentor_id, current_user["id"])
-    db.commit()
-    return result
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    row = db.execute(
+        text("SELECT id, name, email, role FROM users WHERE id = :user_id"),
+        {"user_id": user_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
 
+    # Remove related records first
+    db.execute(text("DELETE FROM notification_log WHERE recipient_user_id = :uid"), {"uid": user_id})
+    db.execute(text("DELETE FROM login_events WHERE user_id = :uid"), {"uid": user_id})
+    if row.role == "student":
+        student = db.execute(
+            text("SELECT id FROM students WHERE user_id = :uid"), {"uid": user_id}
+        ).fetchone()
+        if student:
+            db.execute(text("DELETE FROM student_sections WHERE student_id = :sid"), {"sid": student.id})
+            db.execute(text("DELETE FROM student_capabilities WHERE student_id = :sid"), {"sid": student.id})
+            db.execute(text("DELETE FROM assigned_cases WHERE student_id = :sid"), {"sid": student.id})
+            db.execute(text("DELETE FROM students WHERE id = :sid"), {"sid": student.id})
+    db.execute(text("DELETE FROM faculty_sections WHERE faculty_id = :uid"), {"uid": user_id})
+    db.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
 
-@admin_router.post("/users/bulk-assign-mentor")
-def bulk_assign_student_mentor(
-    data: AdminBulkMentorAssign,
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
-    require_admin(current_user)
-    if not data.student_user_ids:
-        raise HTTPException(status_code=400, detail="At least one student is required")
-    results = [
-        assign_student_mentor(db, student_user_id, data.mentor_id, current_user["id"])
-        for student_user_id in data.student_user_ids
-    ]
+    record_system_event(
+        db,
+        current_user["id"],
+        "user_deleted",
+        f"Deleted user {row.name} ({row.email}, {row.role})",
+    )
     db.commit()
-    return {"assigned": results, "count": len(results)}
+    return {"status": "deleted", "name": row.name}
 
 
 @admin_router.patch("/users/{user_id}/career-track")
@@ -1128,6 +1180,62 @@ def update_admin_course(
         {"course_id": course_id},
     ).fetchone()
     return course_response(row)
+
+
+@admin_router.delete("/courses/{course_id}")
+def delete_admin_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    course = ensure_course(db, course_id)
+    # Cascade delete: faculty_sections → student_sections → class_sections → semesters → batches → course
+    # Unlink students from this course (set course_id, batch_id, current_section_id to NULL)
+    db.execute(
+        text("""
+            UPDATE students
+            SET course_id = NULL, batch_id = NULL,
+                current_section_id = NULL, current_semester_number = NULL
+            WHERE course_id = :course_id
+        """),
+        {"course_id": course_id},
+    )
+    db.execute(
+        text("""
+            DELETE FROM faculty_sections
+            WHERE section_id IN (SELECT id FROM class_sections WHERE course_id = :course_id)
+        """),
+        {"course_id": course_id},
+    )
+    db.execute(
+        text("""
+            DELETE FROM student_sections
+            WHERE section_id IN (SELECT id FROM class_sections WHERE course_id = :course_id)
+        """),
+        {"course_id": course_id},
+    )
+    db.execute(
+        text("DELETE FROM class_sections WHERE course_id = :course_id"),
+        {"course_id": course_id},
+    )
+    db.execute(
+        text("DELETE FROM semesters WHERE course_id = :course_id"),
+        {"course_id": course_id},
+    )
+    db.execute(
+        text("DELETE FROM batches WHERE course_id = :course_id"),
+        {"course_id": course_id},
+    )
+    db.execute(
+        text("DELETE FROM courses WHERE id = :course_id"),
+        {"course_id": course_id},
+    )
+    record_system_event(
+        db, current_user["id"], "course_deleted", f"Deleted course {course.name}"
+    )
+    db.commit()
+    return {"status": "deleted", "name": course.name}
 
 
 @admin_router.get("/courses/{course_id}/semesters")

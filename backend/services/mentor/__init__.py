@@ -1,1 +1,0 @@
-# Mentor service initialization

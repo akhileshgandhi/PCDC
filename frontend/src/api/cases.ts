@@ -75,6 +75,21 @@ export function toCaseStatus(value: string): CaseStatus {
   return "available"
 }
 
+export interface WrittenQuestion {
+  question_number: number
+  question_text: string
+  marks: number | null
+  word_limit_min: number | null
+  word_limit_max: number | null
+  instructions: string | null
+}
+
+export interface RapidFireQuestion {
+  sequence: number
+  question_text: string
+  marks?: number | null
+}
+
 export interface CaseDetailContent {
   id: number
   title: string
@@ -83,9 +98,20 @@ export interface CaseDetailContent {
   difficulty: number
   difficulty_label: string | null
   situation: string
+  background: string
+  data: string
+  characters: string
+  constraints: string
+  objectives: string
+  timeline: string
   learning_outcomes: string[]
   reflection_questions: string[]
+  written_questions: WrittenQuestion[]
+  rapid_fire_questions: RapidFireQuestion[]
   capabilities: string[]
+  reading_time_minutes: number | null
+  answer_writing_time_minutes: number | null
+  rapid_fire_time_minutes: number | null
   estimated_minutes: number
   created_by_name: string | null
   created_at: string
@@ -134,6 +160,14 @@ export interface AttemptConversation {
   timestamp: string
 }
 
+export interface QuestionScore {
+  question_number: number
+  marks_awarded: number
+  marks_total: number
+  feedback: string
+  improvement: string
+}
+
 export interface AttemptEvaluation {
   attempt_id: number
   thinking_depth: number
@@ -149,6 +183,11 @@ export interface AttemptEvaluation {
   weaknesses: string
   blind_spots: string
   improvement_areas: string
+  question_scores: QuestionScore[]
+  rapid_fire_score: number
+  rapid_fire_feedback: string
+  overall_grade: string
+  grade_comment: string
   next_recommended_case_id: number | null
 }
 
@@ -158,6 +197,7 @@ export interface AttemptDetail {
   student_id: number
   status: string
   initial_analysis: string | null
+  initial_summary: string | null
   initial_word_count: number
   final_solution: string | null
   defense_responses: string | null
@@ -172,7 +212,44 @@ export async function getAttemptDetail(attemptId: number) {
   return response.data
 }
 
-export async function submitInitialAnalysis(attemptId: number, initialAnalysis: string) {
+export type AttemptPhase = "reading" | "writing" | "rapid_fire"
+
+export interface PhaseStartResponse {
+  phase: AttemptPhase
+  minutes: number | null
+  started_at: string | null
+  remaining_seconds: number | null
+  expired: boolean
+}
+
+export async function startAttemptPhase(attemptId: number, phase: AttemptPhase) {
+  const response = await api.post<PhaseStartResponse>(
+    `/cases/attempt/${attemptId}/phase-start`,
+    { phase },
+  )
+  return response.data
+}
+
+export interface RapidFireRoundResponse {
+  questions: RapidFireQuestion[]
+  timing: PhaseStartResponse
+}
+
+// Rapid fire questions are AI-generated live per student when the round starts.
+// This also stamps/returns the server-side timer, so it replaces the plain
+// phase-start call for the rapid_fire phase.
+export async function startRapidFireRound(attemptId: number) {
+  const response = await api.post<RapidFireRoundResponse>(
+    `/cases/attempt/${attemptId}/rapid-fire/start`,
+  )
+  return response.data
+}
+
+export async function submitInitialAnalysis(
+  attemptId: number,
+  initialAnalysis: string,
+  initialSummary?: string,
+) {
   const response = await api.post<{
     ai_unlocked: boolean
     attempt_id: number
@@ -180,6 +257,7 @@ export async function submitInitialAnalysis(attemptId: number, initialAnalysis: 
   }>("/cases/attempt/submit-analysis", {
     attempt_id: attemptId,
     initial_analysis: initialAnalysis,
+    initial_summary: initialSummary,
   })
   return response.data
 }
@@ -204,6 +282,14 @@ export async function submitAttemptDefense(attemptId: number, defenseResponses: 
   const response = await api.post<AttemptEvaluation>("/cases/attempt/submit-defense", {
     attempt_id: attemptId,
     defense_responses: defenseResponses,
+  })
+  return response.data
+}
+
+export async function submitRapidFireAnswers(attemptId: number, rapidFireAnswers: string) {
+  const response = await api.post<AttemptEvaluation>("/cases/attempt/submit-rapid-fire", {
+    attempt_id: attemptId,
+    defense_responses: rapidFireAnswers,
   })
   return response.data
 }

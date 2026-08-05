@@ -5,9 +5,7 @@ const TOKEN_KEY = "pcdc_token"
 const PORTAL_PATHS: Partial<Record<UserRole, string>> = {
   student: "/student/dashboard",
   faculty: "/faculty/dashboard",
-  mentor: "/mentor/dashboard",
   admin: "/admin/dashboard",
-  director: "/director/dashboard",
 }
 
 export interface JwtPayload {

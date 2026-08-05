@@ -110,6 +110,90 @@ export interface StudentActiveEngagements {
   concept_study: ConceptStudyPlaceholder
 }
 
+export interface StudentRecentEvaluation {
+  title: string
+  date: string | null
+  score: number
+  status: string
+}
+
+export async function getStudentRecentEvaluations() {
+  const response = await api.get<{ items: StudentRecentEvaluation[] }>(
+    "/student/recent-evaluations",
+  )
+  return response.data.items
+}
+
+export interface StudentBadge {
+  key: string
+  label: string
+  description: string
+  earned: boolean
+}
+
+export interface StudentAchievementStats {
+  badges_earned: number
+  streak_days: number
+  total_points: number
+  cohort_rank: number | null
+  cohort_size: number
+}
+
+export interface StudentLeaderboardRow {
+  rank: number
+  name: string
+  score: number
+  level: number
+  cases: number
+  self: boolean
+}
+
+export interface StudentMilestoneItem {
+  title: string
+  date: string
+  status: "done" | "pending"
+}
+
+export interface StudentAchievements {
+  badges: StudentBadge[]
+  earned_count: number
+  next_milestone: { label: string; current: number; target: number }
+  stats: StudentAchievementStats
+  leaderboard: StudentLeaderboardRow[]
+  milestones: StudentMilestoneItem[]
+}
+
+export async function getStudentAchievements() {
+  const response = await api.get<StudentAchievements>("/student/achievements")
+  return response.data
+}
+
+export interface StudentPathwayFocus {
+  capability: string
+  score: number
+}
+
+export interface StudentPathwayCase {
+  case_id: number
+  title: string
+  level: string
+  domain: string | null
+  develops: string[]
+}
+
+export interface StudentCareerPathway {
+  pathway_name: string
+  has_track: boolean
+  progress: { developed: number; total: number }
+  focus_areas: StudentPathwayFocus[]
+  recommended_cases: StudentPathwayCase[]
+}
+
+export async function getStudentCareerPathway() {
+  const response = await api.get<StudentCareerPathway>("/student/career-pathway")
+  return response.data
+}
+
 export async function getStudentActiveEngagements() {
   const response = await api.get<StudentActiveEngagements>("/student/active-engagements")
   return response.data
