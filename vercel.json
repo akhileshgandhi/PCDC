@@ -16,7 +16,7 @@
     { "src": "/capability/(.*)", "dest": "backend/main.py" },
     { "src": "/ai/(.*)", "dest": "backend/main.py" },
     { "src": "/notification/(.*)", "dest": "backend/main.py" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    { "src": "/(.*\\.[a-zA-Z0-9]+)", "dest": "/frontend/$1" },
+    { "src": "/(.*)", "dest": "/frontend/index.html" }
   ]
 }

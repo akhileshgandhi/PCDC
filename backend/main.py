@@ -1,3 +1,10 @@
+import os
+import sys
+
+# Ensure this backend directory is importable when the app is loaded from a
+# different working directory (e.g. Vercel serverless runs from /var/task).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.auth.router import auth_router
