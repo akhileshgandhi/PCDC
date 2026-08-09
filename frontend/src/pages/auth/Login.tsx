@@ -24,8 +24,13 @@ export default function Login() {
     try {
       const token = await login(email, password)
       const payload = decodeJwtPayload(token)
-      const portalPath = portalPathForRole(payload?.role)
 
+      if (payload?.must_change) {
+        navigate("/change-password", { replace: true })
+        return
+      }
+
+      const portalPath = portalPathForRole(payload?.role)
       navigate(portalPath ?? "/unauthorized", { replace: true })
     } catch (loginError) {
       setError(
@@ -46,15 +51,16 @@ export default function Login() {
             htmlFor="email"
             className="block text-sm font-medium text-slate-700"
           >
-            Email
+            Email or scholar number
           </label>
           <input
             id="email"
-            type="email"
+            type="text"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-            autoComplete="email"
+            autoComplete="username"
+            placeholder="you@example.com or PIMR2024001"
           />
         </div>
 

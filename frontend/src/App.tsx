@@ -4,8 +4,10 @@ import ProtectedRoute from "./components/auth/ProtectedRoute"
 import { AuthProvider } from "./context/AuthContext"
 import Achievements from "./pages/achievements/Achievements"
 import AdminPortal from "./pages/admin/AdminPortal"
+import ChangePassword from "./pages/auth/ChangePassword"
 import Login from "./pages/auth/Login"
 import Register from "./pages/auth/Register"
+import SetPassword from "./pages/auth/SetPassword"
 import CapabilityProfile from "./pages/capability/CapabilityProfile"
 import CareerPathway from "./pages/career/CareerPathway"
 import CaseAttempt from "./pages/cases/CaseAttempt"
@@ -37,6 +39,8 @@ export default function App() {
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           <Route

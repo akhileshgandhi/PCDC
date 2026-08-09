@@ -38,15 +38,9 @@ const quickLinks = [
   },
   {
     label: "Case Builder",
-    description: "Create or edit AI-assisted case studies.",
+    description: "Create or edit AI-assisted case studies, including the rubric.",
     to: "/faculty/case-builder",
     icon: PenTool,
-  },
-  {
-    label: "Rubric Builder",
-    description: "Tune weighted criteria for each case.",
-    to: "/faculty/rubric-builder",
-    icon: SlidersHorizontal,
   },
   {
     label: "Students",

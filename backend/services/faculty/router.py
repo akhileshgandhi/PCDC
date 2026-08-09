@@ -1,16 +1,19 @@
+import csv
+import io
 import json
 import os
+import secrets
 import threading
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from services.auth.service import get_current_user
+from services.auth.service import get_current_user, hash_password
 from shared.cache import cache_get, cache_set
 from shared.database import SessionLocal, get_db
 from shared.llm import (
@@ -183,6 +186,12 @@ class GenerateRapidFireRequest(BaseModel):
 
 class AssignCaseToSectionsRequest(BaseModel):
     section_ids: List[int]
+    due_date: Optional[str] = None
+    instructions: Optional[str] = None
+
+
+class AssignCaseToStudentsRequest(BaseModel):
+    student_ids: List[int]  # students.id (from the faculty roster)
     due_date: Optional[str] = None
     instructions: Optional[str] = None
 
@@ -2298,6 +2307,387 @@ def faculty_students_roster(
     }
 
 
+class FacultyTeachingSelect(BaseModel):
+    section_id: int
+    subject: str
+
+
+def _faculty_approval_required(db: Session) -> bool:
+    row = db.execute(
+        text("SELECT config FROM platform_settings WHERE section = 'teaching_approvals'")
+    ).fetchone()
+    if not row:
+        return True
+    try:
+        return bool(json.loads(row.config).get("require_approval", True))
+    except (json.JSONDecodeError, TypeError):
+        return True
+
+
+@faculty_router.get("/teaching")
+def get_faculty_teaching(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The faculty's own teaching selections plus the admin-configured structure
+    they can pick from (courses -> semesters -> sections + subjects)."""
+    require_faculty(current_user)
+    fid = current_user["id"]
+
+    sel_rows = db.execute(
+        text("""
+            SELECT fs.id, fs.section_id, fs.subject, fs.status,
+                   cs.name AS section_name, c.name AS course_name,
+                   sem.name AS semester_name, b.name AS batch_name
+            FROM faculty_sections fs
+            JOIN class_sections cs ON cs.id = fs.section_id
+            JOIN courses c ON c.id = cs.course_id
+            JOIN semesters sem ON sem.id = cs.semester_id
+            JOIN batches b ON b.id = cs.batch_id
+            WHERE fs.faculty_id = :fid
+            ORDER BY c.name, sem.semester_number, cs.name, fs.subject
+        """),
+        {"fid": fid},
+    ).fetchall()
+    selections = [
+        {
+            "id": r.id,
+            "section_id": r.section_id,
+            "subject": r.subject,
+            "status": r.status,
+            "section_name": r.section_name,
+            "course_name": r.course_name,
+            "semester_name": r.semester_name,
+            "batch_name": r.batch_name,
+        }
+        for r in sel_rows
+    ]
+
+    def semesters_for(course_id: int) -> List[Dict[str, Any]]:
+        result = []
+        for sem in db.execute(
+            text(
+                "SELECT id, semester_number, name FROM semesters "
+                "WHERE course_id = :cid ORDER BY semester_number"
+            ),
+            {"cid": course_id},
+        ).fetchall():
+            sections = db.execute(
+                text(
+                    "SELECT cs.id, cs.name, b.name AS batch_name "
+                    "FROM class_sections cs JOIN batches b ON b.id = cs.batch_id "
+                    "WHERE cs.semester_id = :sid ORDER BY cs.name"
+                ),
+                {"sid": sem.id},
+            ).fetchall()
+            subjects = db.execute(
+                text("SELECT DISTINCT name FROM subjects WHERE semester_id = :sid ORDER BY name"),
+                {"sid": sem.id},
+            ).fetchall()
+            result.append(
+                {
+                    "id": sem.id,
+                    "number": sem.semester_number,
+                    "name": sem.name,
+                    "sections": [
+                        {"id": s.id, "name": s.name, "batch_name": s.batch_name} for s in sections
+                    ],
+                    "subjects": [s.name for s in subjects],
+                }
+            )
+        return result
+
+    # Full admin-configured hierarchy: institution -> department -> course ->
+    # semester -> (sections + subjects). Empty branches are omitted.
+    options = []
+    for inst in db.execute(
+        text("SELECT id, name, code FROM institutions ORDER BY name")
+    ).fetchall():
+        departments = []
+        for dept in db.execute(
+            text("SELECT id, name, code FROM departments WHERE institution_id = :iid ORDER BY name"),
+            {"iid": inst.id},
+        ).fetchall():
+            courses = []
+            for course in db.execute(
+                text(
+                    "SELECT id, name, code FROM courses "
+                    "WHERE department_id = :did AND status = 'active' ORDER BY name"
+                ),
+                {"did": dept.id},
+            ).fetchall():
+                courses.append(
+                    {
+                        "id": course.id,
+                        "name": course.name,
+                        "code": course.code,
+                        "semesters": semesters_for(course.id),
+                    }
+                )
+            if courses:
+                departments.append(
+                    {"id": dept.id, "name": dept.name, "code": dept.code, "courses": courses}
+                )
+        if departments:
+            options.append(
+                {"id": inst.id, "name": inst.name, "code": inst.code, "departments": departments}
+            )
+
+    return {
+        "require_approval": _faculty_approval_required(db),
+        "selections": selections,
+        "options": options,
+    }
+
+
+@faculty_router.post("/teaching")
+def add_faculty_teaching(
+    data: FacultyTeachingSelect,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    fid = current_user["id"]
+    if not data.subject.strip():
+        raise HTTPException(status_code=400, detail="Subject is required")
+    section = db.execute(
+        text("SELECT id FROM class_sections WHERE id = :sid"), {"sid": data.section_id}
+    ).fetchone()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+    existing = db.execute(
+        text(
+            "SELECT id FROM faculty_sections "
+            "WHERE faculty_id = :f AND section_id = :s AND subject = :sub"
+        ),
+        {"f": fid, "s": data.section_id, "sub": data.subject.strip()},
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="You already selected this section and subject")
+    status = "pending" if _faculty_approval_required(db) else "active"
+    db.execute(
+        text("""
+            INSERT INTO faculty_sections (faculty_id, section_id, subject, assigned_by, status)
+            VALUES (:f, :s, :sub, :f, :status)
+        """),
+        {"f": fid, "s": data.section_id, "sub": data.subject.strip(), "status": status},
+    )
+    db.commit()
+    return {"status": status}
+
+
+class FacultyTeachingItem(BaseModel):
+    section_id: int
+    subject: str
+
+
+class FacultyTeachingBulk(BaseModel):
+    items: List[FacultyTeachingItem]
+
+
+@faculty_router.post("/teaching/bulk")
+def add_faculty_teaching_bulk(
+    data: FacultyTeachingBulk,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Claim many (section, subject) pairs at once, across sections."""
+    require_faculty(current_user)
+    fid = current_user["id"]
+    status = "pending" if _faculty_approval_required(db) else "active"
+    added = 0
+    skipped = 0
+    for item in data.items:
+        subject = (item.subject or "").strip()
+        if not subject:
+            continue
+        section = db.execute(
+            text("SELECT id FROM class_sections WHERE id = :sid"), {"sid": item.section_id}
+        ).fetchone()
+        if not section:
+            continue
+        existing = db.execute(
+            text(
+                "SELECT id FROM faculty_sections "
+                "WHERE faculty_id = :f AND section_id = :s AND subject = :sub"
+            ),
+            {"f": fid, "s": item.section_id, "sub": subject},
+        ).fetchone()
+        if existing:
+            skipped += 1
+            continue
+        db.execute(
+            text("""
+                INSERT INTO faculty_sections (faculty_id, section_id, subject, assigned_by, status)
+                VALUES (:f, :s, :sub, :f, :status)
+            """),
+            {"f": fid, "s": item.section_id, "sub": subject, "status": status},
+        )
+        added += 1
+    db.commit()
+    return {"status": status, "added": added, "skipped": skipped}
+
+
+class FacultyAddStudent(BaseModel):
+    section_id: int
+    name: str
+    scholar_number: str
+    email: Optional[str] = None
+
+
+@faculty_router.post("/students/add")
+def faculty_add_student(
+    data: FacultyAddStudent,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Create a student login and enroll them into one of the faculty's own
+    approved sections. Returns a one-time credential slip."""
+    require_faculty(current_user)
+    fid = current_user["id"]
+    name = data.name.strip()
+    scholar = data.scholar_number.strip()
+    if not name or not scholar:
+        raise HTTPException(status_code=400, detail="Name and scholar number are required")
+
+    section = db.execute(
+        text("""
+            SELECT cs.id FROM faculty_sections fs
+            JOIN class_sections cs ON cs.id = fs.section_id
+            WHERE fs.faculty_id = :f AND fs.section_id = :s AND fs.status = 'active'
+            LIMIT 1
+        """),
+        {"f": fid, "s": data.section_id},
+    ).fetchone()
+    if not section:
+        raise HTTPException(status_code=403, detail="That isn't one of your approved sections")
+
+    result = _create_and_enroll_student(db, fid, data.section_id, name, scholar, data.email)
+    db.commit()
+    return result
+
+
+def _faculty_active_section(db: Session, fid: int, section_id: int) -> bool:
+    return (
+        db.execute(
+            text("""
+                SELECT 1 FROM faculty_sections
+                WHERE faculty_id = :f AND section_id = :s AND status = 'active' LIMIT 1
+            """),
+            {"f": fid, "s": section_id},
+        ).fetchone()
+        is not None
+    )
+
+
+def _create_and_enroll_student(
+    db: Session, fid: int, section_id: int, name: str, scholar: str, email: Optional[str]
+) -> Dict[str, Any]:
+    """Create a student login + enroll into a section. Does NOT commit.
+    Raises ValueError with a human message on a recoverable problem."""
+    name = name.strip()
+    scholar = scholar.strip()
+    if not name or not scholar:
+        raise ValueError("Name and scholar number are required")
+    resolved_email = (email or f"{scholar}@pcdc.local").strip().lower()
+    if db.execute(
+        text("SELECT id FROM users WHERE LOWER(email) = :e"), {"e": resolved_email}
+    ).fetchone():
+        raise ValueError(f"Email {resolved_email} already exists")
+    # First-time password IS the scholar number; the student is forced to set a
+    # new one on first login (must_change_password = TRUE).
+    password = scholar
+    user = db.execute(
+        text("""
+            INSERT INTO users (name, email, password_hash, role, college_id, status,
+                               must_change_password)
+            VALUES (:n, :e, :ph, 'student', :cid, 'active', TRUE)
+            RETURNING id
+        """),
+        {"n": name, "e": resolved_email, "ph": hash_password(password), "cid": scholar},
+    ).fetchone()
+    student = db.execute(
+        text("INSERT INTO students (user_id, current_level) VALUES (:u, 1) RETURNING id"),
+        {"u": user.id},
+    ).fetchone()
+    for cap in db.execute(text("SELECT id FROM capabilities")).fetchall():
+        db.execute(
+            text("""
+                INSERT INTO student_capabilities (student_id, capability_id, current_score)
+                VALUES (:sid, :cid, 0) ON CONFLICT DO NOTHING
+            """),
+            {"sid": student.id, "cid": cap.id},
+        )
+    db.execute(
+        text("""
+            INSERT INTO student_sections (student_id, section_id, enrolled_by, status)
+            VALUES (:sid, :sec, :by, 'active')
+        """),
+        {"sid": student.id, "sec": section_id, "by": fid},
+    )
+    return {"name": name, "email": resolved_email, "password": password, "scholar_number": scholar}
+
+
+@faculty_router.post("/students/bulk-import")
+def faculty_bulk_import_students(
+    section_id: int = Query(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Import many students into an approved section from a CSV
+    (columns: name, scholar_number, email — email optional)."""
+    require_faculty(current_user)
+    fid = current_user["id"]
+    if not _faculty_active_section(db, fid, section_id):
+        raise HTTPException(status_code=403, detail="That isn't one of your approved sections")
+
+    raw = file.file.read().decode("utf-8-sig", errors="ignore")
+    reader = csv.DictReader(io.StringIO(raw))
+    normalized = {}
+    for field in reader.fieldnames or []:
+        normalized[field] = field.strip().lower().replace(" ", "_")
+
+    created: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+    for i, row in enumerate(reader, start=2):  # row 1 is the header
+        data = {normalized.get(k, k): (v or "").strip() for k, v in row.items()}
+        name = data.get("name", "")
+        scholar = data.get("scholar_number") or data.get("scholar") or data.get("roll_number", "")
+        email = data.get("email") or None
+        if not name and not scholar:
+            continue  # blank line
+        try:
+            created.append(_create_and_enroll_student(db, fid, section_id, name, scholar, email))
+            db.commit()
+        except (ValueError, Exception) as error:  # noqa: BLE001
+            db.rollback()
+            reason = str(error) if isinstance(error, ValueError) else "Could not create this row"
+            skipped.append({"row": i, "name": name or scholar, "reason": reason})
+
+    return {
+        "created": created,
+        "skipped": skipped,
+        "created_count": len(created),
+        "skipped_count": len(skipped),
+    }
+
+
+@faculty_router.delete("/teaching/{selection_id}")
+def remove_faculty_teaching(
+    selection_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    db.execute(
+        text("DELETE FROM faculty_sections WHERE id = :id AND faculty_id = :f"),
+        {"id": selection_id, "f": current_user["id"]},
+    )
+    db.commit()
+    return {"status": "deleted", "id": selection_id}
+
+
 @faculty_router.post("/cases/{case_id}/assign-section")
 def assign_case_to_sections(
     case_id: int,
@@ -2440,6 +2830,104 @@ def assign_case_to_sections(
 
     db.commit()
     return {"case_id": case_id, "assignments": results}
+
+
+@faculty_router.post("/cases/{case_id}/assign-students")
+def assign_case_to_students(
+    case_id: int,
+    data: AssignCaseToStudentsRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Assign a published case to specific students (one or many) from the
+    faculty's own roster — the individual/group counterpart to whole-section
+    assignment."""
+    require_faculty(current_user)
+    if not data.student_ids:
+        raise HTTPException(status_code=400, detail="At least one student is required")
+    case_row = db.execute(
+        text("SELECT id, title FROM case_studies WHERE id = :case_id AND status = 'published'"),
+        {"case_id": case_id},
+    ).fetchone()
+    if not case_row:
+        raise HTTPException(status_code=404, detail="Published case not found")
+
+    # Only students in sections this faculty teaches can be targeted.
+    valid = db.execute(
+        text("""
+            SELECT DISTINCT s.id AS student_id, s.user_id, u.name
+            FROM students s
+            JOIN users u ON u.id = s.user_id
+            JOIN student_sections ss ON ss.student_id = s.id AND ss.status = 'active'
+            JOIN faculty_sections fs ON fs.section_id = ss.section_id
+            WHERE fs.faculty_id = :faculty_id AND s.id = ANY(:student_ids)
+        """),
+        {"faculty_id": current_user["id"], "student_ids": data.student_ids},
+    ).fetchall()
+
+    newly_assigned = 0
+    skipped = 0
+    for student in valid:
+        attempted = db.execute(
+            text("""
+                SELECT id FROM case_study_attempts
+                WHERE case_study_id = :case_id AND student_id = :student_user_id
+            """),
+            {"case_id": case_id, "student_user_id": student.user_id},
+        ).fetchone()
+        existing_case = db.execute(
+            text("""
+                SELECT id FROM assigned_cases
+                WHERE student_id = :student_id AND case_study_id = :case_id
+            """),
+            {"student_id": student.student_id, "case_id": case_id},
+        ).fetchone()
+        if attempted or existing_case:
+            skipped += 1
+            continue
+        db.execute(
+            text("""
+                INSERT INTO assigned_cases (
+                    student_id, case_study_id, assigned_by, status,
+                    assignment_source, due_date
+                )
+                VALUES (
+                    :student_id, :case_id, :assigned_by, 'pending', 'faculty', :due_date
+                )
+            """),
+            {
+                "student_id": student.student_id,
+                "case_id": case_id,
+                "assigned_by": current_user["id"],
+                "due_date": data.due_date,
+            },
+        )
+        db.execute(
+            text("""
+                INSERT INTO notification_log (
+                    recipient_user_id, event_type, channel, status, subject, body
+                )
+                VALUES (
+                    :recipient_user_id, 'case_assigned', 'email', 'pending',
+                    'New case study assigned', :body
+                )
+            """),
+            {
+                "recipient_user_id": student.user_id,
+                "body": f'"{case_row.title}" has been assigned to you.',
+            },
+        )
+        newly_assigned += 1
+
+    db.commit()
+    requested = len(data.student_ids)
+    return {
+        "case_id": case_id,
+        "requested": requested,
+        "matched": len(valid),
+        "newly_assigned": newly_assigned,
+        "skipped": skipped,
+    }
 
 
 @faculty_router.patch("/case-assignments/{assignment_id}/close")

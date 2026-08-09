@@ -38,6 +38,7 @@ import {
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
 import CapabilitySelector from "../../components/faculty/CapabilitySelector"
+import RubricEditor from "../../components/faculty/RubricEditor"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 type BuilderMode = "scratch" | "ai"
@@ -817,6 +818,8 @@ function EditorStep({
         <CoreFieldsForm form={coreForm} onFieldChange={onFieldChange} onCapabilityToggle={onCapabilityToggle} />
       </section>
 
+      <RubricEditor caseId={caseData.id} />
+
       <RecommendationPanel
         recommendation={caseData.recommendation}
         courses={courses}
@@ -893,12 +896,9 @@ function EditorStep({
               <p className="font-semibold">Publish blockers</p>
               <p className="mt-1">Complete: {publishBlockers.join(", ")}.</p>
               {publishBlockers.includes("Rubric") ? (
-                <Link
-                  to={`/faculty/rubric-builder/${caseData.id}`}
-                  className="mt-2 inline-flex font-semibold underline"
-                >
-                  Open rubric builder
-                </Link>
+                <p className="mt-1 font-medium">
+                  Set the Evaluation Rubric above (weights must total 100%) and save it.
+                </p>
               ) : null}
             </div>
           </div>
@@ -953,14 +953,55 @@ function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsF
             ))}
           </select>
         </label>
-        <TextField
-          label="Duration"
-          type="number"
+        <DurationField
           value={form.duration_minutes}
           onChange={(value) => onFieldChange("duration_minutes", value)}
         />
       </div>
       <CapabilitySelector selected={form.capabilities} onToggle={onCapabilityToggle} />
+    </div>
+  )
+}
+
+// Duration is stored as total minutes, but faculty can enter it as hours + minutes.
+interface DurationFieldProps {
+  value: string
+  onChange: (value: string) => void
+}
+
+function DurationField({ value, onChange }: DurationFieldProps) {
+  const total = Math.max(0, Number(value) || 0)
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  const setParts = (h: number, m: number) => {
+    onChange(String(Math.max(0, Math.round(h * 60 + m))))
+  }
+  const inputClass =
+    "h-11 w-20 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+  return (
+    <div className="grid gap-2 text-sm font-semibold text-[#111827]">
+      Duration
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="number"
+          min={0}
+          value={hours}
+          onChange={(event) => setParts(Number(event.target.value) || 0, minutes)}
+          className={inputClass}
+          aria-label="Duration hours"
+        />
+        <span className="text-[#6b7280]">hours</span>
+        <input
+          type="number"
+          min={0}
+          value={minutes}
+          onChange={(event) => setParts(hours, Number(event.target.value) || 0)}
+          className={inputClass}
+          aria-label="Duration minutes"
+        />
+        <span className="text-[#6b7280]">min</span>
+        <span className="ml-auto text-xs font-normal text-[#9ca3af]">{total} min total</span>
+      </div>
     </div>
   )
 }

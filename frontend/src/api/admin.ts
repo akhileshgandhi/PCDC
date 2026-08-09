@@ -83,11 +83,81 @@ export interface AdminCourse {
   total_semesters: number
   duration_years: number
   status: "active" | "inactive"
+  department_id: number | null
+  department_name: string | null
   batch_count: number
   section_count: number
   student_count: number
   faculty_count: number
   created_at: string
+}
+
+export interface AdminInstitution {
+  id: number
+  name: string
+  code: string
+  status: "active" | "inactive"
+  department_count: number
+  created_at: string
+}
+
+export interface AdminDepartment {
+  id: number
+  name: string
+  code: string
+  status: "active" | "inactive"
+  course_count: number
+  institution_id: number | null
+  institution_name: string | null
+  created_at: string
+}
+
+export interface AdminSubject {
+  id: number
+  name: string
+  code: string | null
+  status: "active" | "inactive"
+  department_id: number | null
+  department_name: string | null
+  course_id: number | null
+  course_name: string | null
+  semester_id: number | null
+  semester_name: string | null
+  created_at: string
+}
+
+export interface AcademicSummary {
+  institutions: number
+  departments: number
+  courses: number
+  batches: number
+  semesters: number
+  sections: number
+  subjects: number
+}
+
+export interface AdminBatchRow {
+  id: number
+  name: string
+  start_year: number
+  end_year: number
+  status: string
+  course_id: number
+  course_name: string
+  course_code: string
+  section_count: number
+  created_at: string
+}
+
+export interface AdminSemesterRow {
+  id: number
+  semester_number: number
+  name: string
+  course_id: number
+  course_name: string
+  course_code: string
+  section_count: number
+  subject_count: number
 }
 
 export interface AdminSemester {
@@ -247,6 +317,198 @@ export async function downloadImportTemplate(role?: string) {
   window.URL.revokeObjectURL(url)
 }
 
+export async function getAdminAcademicSummary() {
+  const response = await api.get<AcademicSummary>("/admin/academic/summary")
+  return response.data
+}
+
+export type FacultyState = "awaiting" | "active" | "needs_attention"
+
+export interface AdminFacultyRow {
+  id: number
+  name: string
+  email: string
+  department: string | null
+  status: "active" | "inactive"
+  joined: boolean
+  subject_count: number
+  section_count: number
+  state: FacultyState
+}
+
+export async function getAdminFaculty() {
+  const response = await api.get<{ items: AdminFacultyRow[]; total: number }>("/admin/faculty")
+  return response.data
+}
+
+export interface TeachingApprovalItem {
+  id: number
+  subject: string
+  section_name: string
+  course_name: string
+  semester_name: string
+}
+
+export interface TeachingApprovalPending {
+  faculty_id: number
+  faculty_name: string
+  items: TeachingApprovalItem[]
+}
+
+export interface TeachingApprovalsResponse {
+  require_approval: boolean
+  pending: TeachingApprovalPending[]
+  approved: TeachingApprovalPending[]
+}
+
+export async function getTeachingApprovals() {
+  const response = await api.get<TeachingApprovalsResponse>("/admin/teaching-approvals")
+  return response.data
+}
+
+export async function setTeachingApprovalSetting(requireApproval: boolean) {
+  const response = await api.patch<{ require_approval: boolean }>(
+    "/admin/teaching-approvals/settings",
+    { require_approval: requireApproval },
+  )
+  return response.data
+}
+
+export async function approveTeachingSelection(selectionId: number) {
+  const response = await api.post<{ status: string; id: number }>(
+    `/admin/teaching-approvals/${selectionId}/approve`,
+  )
+  return response.data
+}
+
+export async function rejectTeachingSelection(selectionId: number) {
+  const response = await api.post<{ status: string; id: number }>(
+    `/admin/teaching-approvals/${selectionId}/reject`,
+  )
+  return response.data
+}
+
+export async function removeTeachingSelection(selectionId: number) {
+  const response = await api.post<{ status: string; id: number }>(
+    `/admin/teaching-approvals/${selectionId}/remove`,
+  )
+  return response.data
+}
+
+export async function getAdminInstitutions() {
+  const response = await api.get<{ items: AdminInstitution[]; total: number }>(
+    "/admin/institutions",
+  )
+  return response.data
+}
+
+export async function createAdminInstitution(payload: { name: string; code: string }) {
+  const response = await api.post<AdminInstitution>("/admin/institutions", payload)
+  return response.data
+}
+
+export async function updateAdminInstitution(
+  institutionId: number,
+  payload: { name?: string; status?: "active" | "inactive" },
+) {
+  const response = await api.patch<AdminInstitution>(
+    `/admin/institutions/${institutionId}`,
+    payload,
+  )
+  return response.data
+}
+
+export async function deleteAdminInstitution(institutionId: number) {
+  const response = await api.delete<{ status: string; id: number }>(
+    `/admin/institutions/${institutionId}`,
+  )
+  return response.data
+}
+
+export async function getAdminDepartments() {
+  const response = await api.get<{ items: AdminDepartment[]; total: number }>(
+    "/admin/departments",
+  )
+  return response.data
+}
+
+export async function createAdminDepartment(payload: {
+  name: string
+  code: string
+  institution_id?: number | null
+}) {
+  const response = await api.post<AdminDepartment>("/admin/departments", payload)
+  return response.data
+}
+
+export async function updateAdminDepartment(
+  departmentId: number,
+  payload: { name?: string; status?: "active" | "inactive"; institution_id?: number | null },
+) {
+  const response = await api.patch<AdminDepartment>(
+    `/admin/departments/${departmentId}`,
+    payload,
+  )
+  return response.data
+}
+
+export async function deleteAdminDepartment(departmentId: number) {
+  const response = await api.delete<{ status: string; id: number }>(
+    `/admin/departments/${departmentId}`,
+  )
+  return response.data
+}
+
+export async function getAdminAllBatches() {
+  const response = await api.get<{ items: AdminBatchRow[]; total: number }>("/admin/batches")
+  return response.data
+}
+
+export async function getAdminAllSemesters() {
+  const response = await api.get<{ items: AdminSemesterRow[]; total: number }>(
+    "/admin/semesters",
+  )
+  return response.data
+}
+
+export async function getAdminSubjects() {
+  const response = await api.get<{ items: AdminSubject[]; total: number }>("/admin/subjects")
+  return response.data
+}
+
+export async function createAdminSubject(payload: {
+  name: string
+  code?: string
+  department_id?: number | null
+  course_id?: number | null
+  semester_id?: number | null
+}) {
+  const response = await api.post<AdminSubject>("/admin/subjects", payload)
+  return response.data
+}
+
+export async function updateAdminSubject(
+  subjectId: number,
+  payload: {
+    name?: string
+    code?: string
+    department_id?: number | null
+    course_id?: number | null
+    semester_id?: number | null
+    status?: "active" | "inactive"
+  },
+) {
+  const response = await api.patch<AdminSubject>(`/admin/subjects/${subjectId}`, payload)
+  return response.data
+}
+
+export async function deleteAdminSubject(subjectId: number) {
+  const response = await api.delete<{ status: string; id: number }>(
+    `/admin/subjects/${subjectId}`,
+  )
+  return response.data
+}
+
 export async function getAdminCourses() {
   const response = await api.get<{ items: AdminCourse[]; total: number }>("/admin/courses")
   return response.data
@@ -257,6 +519,7 @@ export async function createAdminCourse(payload: {
   code: string
   total_semesters: number
   duration_years: number
+  department_id?: number | null
 }) {
   const response = await api.post<AdminCourse>("/admin/courses", payload)
   return response.data

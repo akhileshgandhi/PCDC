@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from typing import Optional
+import hashlib
 import os
+import secrets
 import bcrypt
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -75,13 +77,19 @@ def register_user(db: Session, name: str, email: str, password: str, role: str =
     return {"id": row[0], "name": row[1], "email": row[2], "role": row[3], "created_at": str(row[4])}
 
 def login_user(db: Session, email: str, password: str):
+    # Accept either an email address or a scholar number (stored on
+    # users.college_id for students). Email match is preferred when both hit.
+    identifier = (email or "").strip()
     user = db.execute(
         text("""
-            SELECT id, name, email, password_hash, role, COALESCE(status, 'active') AS status
+            SELECT id, name, email, password_hash, role, COALESCE(status, 'active') AS status,
+                   COALESCE(must_change_password, FALSE) AS must_change_password
             FROM users
-            WHERE email = :email
+            WHERE LOWER(email) = LOWER(:ident) OR college_id = :ident
+            ORDER BY (LOWER(email) = LOWER(:ident)) DESC
+            LIMIT 1
         """),
-        {"email": email},
+        {"ident": identifier},
     ).fetchone()
     if not user or not verify_password(password, user[3]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -104,7 +112,13 @@ def login_user(db: Session, email: str, password: str):
     )
     db.commit()
     token = create_access_token(
-        {"sub": str(user[0]), "name": user[1], "email": user[2], "role": user[4]}
+        {
+            "sub": str(user[0]),
+            "name": user[1],
+            "email": user[2],
+            "role": user[4],
+            "must_change": bool(user[6]),
+        }
     )
     return {"access_token": token, "token_type": "bearer"}
 
@@ -168,6 +182,142 @@ def login_with_google(db: Session, credential: str):
 
     token = create_access_token(
         {"sub": str(user[0]), "name": user[1], "email": user[2], "role": user[3]}
+    )
+    return {"access_token": token, "token_type": "bearer"}
+
+
+SETUP_TOKEN_TTL_HOURS = int(os.getenv("SETUP_TOKEN_TTL_HOURS", "72"))
+
+
+def _hash_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def create_setup_token(db: Session, user_id: int, purpose: str = "invite") -> str:
+    """Create a single-use set-password token for a user. Invalidates any
+    prior unused tokens for the same user + purpose. Returns the RAW token
+    (only the hash is stored). Caller is responsible for committing."""
+    db.execute(
+        text(
+            """
+            UPDATE password_setup_tokens
+            SET used_at = NOW()
+            WHERE user_id = :user_id AND purpose = :purpose AND used_at IS NULL
+            """
+        ),
+        {"user_id": user_id, "purpose": purpose},
+    )
+    raw = secrets.token_urlsafe(32)
+    db.execute(
+        text(
+            """
+            INSERT INTO password_setup_tokens (user_id, token_hash, purpose, expires_at)
+            VALUES (:user_id, :token_hash, :purpose,
+                    NOW() + (:ttl || ' hours')::interval)
+            """
+        ),
+        {
+            "user_id": user_id,
+            "token_hash": _hash_token(raw),
+            "purpose": purpose,
+            "ttl": str(SETUP_TOKEN_TTL_HOURS),
+        },
+    )
+    return raw
+
+
+def _lookup_valid_token(db: Session, raw_token: str):
+    row = db.execute(
+        text(
+            """
+            SELECT t.id, t.user_id, t.expires_at, t.used_at,
+                   u.name, u.email, u.role
+            FROM password_setup_tokens t
+            JOIN users u ON u.id = t.user_id
+            WHERE t.token_hash = :hash
+            """
+        ),
+        {"hash": _hash_token(raw_token)},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=400, detail="This link is invalid.")
+    if row.used_at is not None:
+        raise HTTPException(status_code=400, detail="This link has already been used.")
+    expires_at = row.expires_at
+    now = datetime.now(expires_at.tzinfo) if expires_at.tzinfo else datetime.utcnow()
+    if expires_at < now:
+        raise HTTPException(status_code=400, detail="This link has expired. Ask your admin to resend it.")
+    return row
+
+
+def validate_setup_token(db: Session, raw_token: str) -> dict:
+    """Return {name, email} for a valid token, else raise 400."""
+    row = _lookup_valid_token(db, raw_token)
+    return {"name": row.name, "email": row.email}
+
+
+def set_password_with_token(db: Session, raw_token: str, password: str) -> dict:
+    """Consume a valid token, set the user's password, and return a login token."""
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    row = _lookup_valid_token(db, raw_token)
+    hashed = hash_password(password)
+    db.execute(
+        text(
+            """
+            UPDATE users
+            SET password_hash = :hash, status = 'active', updated_at = NOW()
+            WHERE id = :id
+            """
+        ),
+        {"hash": hashed, "id": row.user_id},
+    )
+    db.execute(
+        text("UPDATE password_setup_tokens SET used_at = NOW() WHERE id = :id"),
+        {"id": row.id},
+    )
+    db.execute(
+        text("UPDATE users SET last_login_at = NOW() WHERE id = :id"),
+        {"id": row.user_id},
+    )
+    db.execute(text("INSERT INTO login_events (user_id) VALUES (:id)"), {"id": row.user_id})
+    db.commit()
+    token = create_access_token(
+        {"sub": str(row.user_id), "name": row.name, "email": row.email, "role": row.role}
+    )
+    return {"access_token": token, "token_type": "bearer"}
+
+
+def change_password(db: Session, user_id: int, new_password: str) -> dict:
+    """Set a new password for an authenticated user, clear the
+    must_change_password flag, and return a fresh (flag-free) login token."""
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    user = db.execute(
+        text("SELECT id, name, email, role FROM users WHERE id = :id"),
+        {"id": user_id},
+    ).fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    db.execute(
+        text(
+            """
+            UPDATE users
+            SET password_hash = :hash, must_change_password = FALSE, updated_at = NOW()
+            WHERE id = :id
+            """
+        ),
+        {"hash": hash_password(new_password), "id": user_id},
+    )
+    db.commit()
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "name": user.name,
+            "email": user.email,
+            "role": user.role,
+            "must_change": False,
+        }
     )
     return {"access_token": token, "token_type": "bearer"}
 

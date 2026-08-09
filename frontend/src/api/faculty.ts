@@ -351,6 +351,114 @@ export async function generateFacultyRapidFireQuestions(caseId: number, summary:
   return response.data.questions
 }
 
+export interface FacultyTeachingSelection {
+  id: number
+  section_id: number
+  subject: string
+  status: "active" | "pending"
+  section_name: string
+  course_name: string
+  semester_name: string
+  batch_name: string
+}
+
+export interface FacultyTeachingOptionSemester {
+  id: number
+  number: number
+  name: string
+  sections: Array<{ id: number; name: string; batch_name: string }>
+  subjects: string[]
+}
+
+export interface FacultyTeachingOptionCourse {
+  id: number
+  name: string
+  code: string
+  semesters: FacultyTeachingOptionSemester[]
+}
+
+export interface FacultyTeachingOptionDepartment {
+  id: number
+  name: string
+  code: string
+  courses: FacultyTeachingOptionCourse[]
+}
+
+export interface FacultyTeachingOptionInstitution {
+  id: number
+  name: string
+  code: string
+  departments: FacultyTeachingOptionDepartment[]
+}
+
+export interface FacultyTeachingResponse {
+  require_approval: boolean
+  selections: FacultyTeachingSelection[]
+  options: FacultyTeachingOptionInstitution[]
+}
+
+export async function getFacultyTeaching() {
+  const response = await api.get<FacultyTeachingResponse>("/faculty/teaching")
+  return response.data
+}
+
+export async function addFacultyTeaching(payload: { section_id: number; subject: string }) {
+  const response = await api.post<{ status: "active" | "pending" }>("/faculty/teaching", payload)
+  return response.data
+}
+
+export async function addFacultyTeachingBulk(
+  items: Array<{ section_id: number; subject: string }>,
+) {
+  const response = await api.post<{ status: "active" | "pending"; added: number; skipped: number }>(
+    "/faculty/teaching/bulk",
+    { items },
+  )
+  return response.data
+}
+
+export async function removeFacultyTeaching(selectionId: number) {
+  const response = await api.delete<{ status: string; id: number }>(
+    `/faculty/teaching/${selectionId}`,
+  )
+  return response.data
+}
+
+export interface FacultyAddStudentResult {
+  name: string
+  email: string
+  password: string
+  scholar_number: string
+}
+
+export async function facultyAddStudent(payload: {
+  section_id: number
+  name: string
+  scholar_number: string
+  email?: string
+}) {
+  const response = await api.post<FacultyAddStudentResult>("/faculty/students/add", payload)
+  return response.data
+}
+
+export interface FacultyBulkImportResult {
+  created: FacultyAddStudentResult[]
+  skipped: Array<{ row: number; name: string; reason: string }>
+  created_count: number
+  skipped_count: number
+}
+
+export async function facultyBulkImportStudents(sectionId: number, file: File) {
+  const form = new FormData()
+  form.append("file", file)
+  const response = await api.post<FacultyBulkImportResult>(
+    `/faculty/students/bulk-import?section_id=${sectionId}`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  )
+  return response.data
+}
+
 export async function getFacultySections() {
   const response = await api.get<{ items: FacultySection[]; total: number }>(
     "/faculty/sections",
@@ -379,6 +487,20 @@ export async function assignCaseToSections(
       newly_assigned: number
     }>
   }>(`/faculty/cases/${caseId}/assign-section`, payload)
+  return response.data
+}
+
+export async function assignCaseToStudents(
+  caseId: number,
+  payload: { student_ids: number[]; due_date?: string; instructions?: string },
+) {
+  const response = await api.post<{
+    case_id: number
+    requested: number
+    matched: number
+    newly_assigned: number
+    skipped: number
+  }>(`/faculty/cases/${caseId}/assign-students`, payload)
   return response.data
 }
 

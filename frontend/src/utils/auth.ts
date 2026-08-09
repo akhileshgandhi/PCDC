@@ -14,6 +14,7 @@ export interface JwtPayload {
   email?: string
   exp?: number
   role?: UserRole
+  must_change?: boolean
   [key: string]: unknown
 }
 
@@ -80,4 +81,8 @@ export function isAuthenticated() {
 
 export function portalPathForRole(role?: UserRole) {
   return role ? PORTAL_PATHS[role] : undefined
+}
+
+export function mustChangePassword() {
+  return Boolean(getCurrentUser()?.must_change)
 }

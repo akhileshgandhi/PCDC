@@ -1,21 +1,21 @@
 import type { ReactNode } from "react"
+import { useState } from "react"
 import {
   BarChart3,
   Bell,
   BookOpen,
+  ChevronDown,
   ClipboardList,
-  FileBarChart,
   FolderKanban,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
-  PenTool,
   Search,
   Settings,
-  SlidersHorizontal,
   UserCircle,
   Users,
 } from "lucide-react"
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { clearToken, getCurrentUser } from "../utils/auth"
 
@@ -23,18 +23,55 @@ interface FacultyLayoutProps {
   children: ReactNode
 }
 
-const navigationItems = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/faculty/dashboard", end: true },
-  { label: "Case Library", icon: BookOpen, to: "/faculty/case-library" },
-  { label: "Case Builder", icon: PenTool, to: "/faculty/case-builder" },
-  { label: "Rubric Builder", icon: SlidersHorizontal, to: "/faculty/rubric-builder" },
-  { label: "Students", icon: Users, to: "/faculty/students" },
-  { label: "Analytics", icon: BarChart3, to: "/faculty/analytics" },
-  { label: "Reports", icon: FileBarChart, to: "/faculty/reports" },
+const dashboardItem = {
+  label: "Dashboard",
+  icon: LayoutDashboard,
+  to: "/faculty/dashboard",
+  end: true,
+}
+
+interface NavGroup {
+  label: string
+  icon: typeof Users
+  items: Array<{ label: string; to: string }>
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: "Onboarding",
+    icon: GraduationCap,
+    items: [
+      { label: "My Teaching", to: "/faculty/onboarding/my-teaching" },
+      { label: "Students", to: "/faculty/students" },
+      { label: "Add Students", to: "/faculty/onboarding/add-students" },
+    ],
+  },
+  {
+    label: "Cases",
+    icon: BookOpen,
+    items: [
+      { label: "Case Library", to: "/faculty/case-library" },
+      { label: "Case Builder", to: "/faculty/case-builder" },
+    ],
+  },
+  {
+    label: "Insights",
+    icon: BarChart3,
+    items: [
+      { label: "Analytics", to: "/faculty/analytics" },
+      { label: "Reports", to: "/faculty/reports" },
+    ],
+  },
+]
+
+const mobileItems = [
+  dashboardItem,
+  ...navGroups.flatMap((group) => group.items),
 ]
 
 export default function FacultyLayout({ children }: FacultyLayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const currentUser = getCurrentUser()
   const displayName = currentUser?.name ?? "Faculty"
   const initials = displayName
@@ -44,14 +81,42 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
     .slice(0, 2)
     .toUpperCase()
 
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const open = new Set<string>()
+    for (const group of navGroups) {
+      if (group.items.some((item) => location.pathname.startsWith(item.to))) {
+        open.add(group.label)
+      }
+    }
+    if (open.size === 0) open.add("Onboarding")
+    return open
+  })
+
+  function toggleGroup(label: string) {
+    setOpenGroups((current) => {
+      const next = new Set(current)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }
+
   function handleLogout() {
     clearToken()
     navigate("/login", { replace: true })
   }
 
+  const navLinkClass = (compact = false) =>
+    ({ isActive }: { isActive: boolean }) =>
+      `flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-medium transition ${
+        compact ? "pl-11" : ""
+      } ${
+        isActive ? "bg-[#c9a227] text-[#0b1d3a] shadow-md" : "text-white/85 hover:bg-[#17315c]"
+      }`
+
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-[#111827]">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#0b1d3a] p-5 text-white lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#0b1d3a] p-5 text-white lg:flex">
         <div className="border-b border-white/10 pb-6">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-md bg-[#c9a227] text-[#0b1d3a]">
@@ -64,31 +129,45 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
           </div>
         </div>
 
-        <nav className="mt-7 space-y-2">
-          {navigationItems.map((item) => {
-            const Icon = item.icon
+        <nav className="mt-6 flex-1 space-y-1 overflow-y-auto">
+          <NavLink to={dashboardItem.to} end={dashboardItem.end} className={navLinkClass()}>
+            <LayoutDashboard size={18} aria-hidden="true" />
+            <span>{dashboardItem.label}</span>
+          </NavLink>
 
+          {navGroups.map((group) => {
+            const GroupIcon = group.icon
+            const isOpen = openGroups.has(group.label)
             return (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-medium transition ${
-                    isActive
-                      ? "bg-[#c9a227] text-[#0b1d3a] shadow-md"
-                      : "text-white/85 hover:bg-[#17315c]"
-                  }`
-                }
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{item.label}</span>
-              </NavLink>
+              <div key={group.label} className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-semibold text-white/90 transition hover:bg-[#17315c]"
+                >
+                  <GroupIcon size={18} aria-hidden="true" />
+                  <span className="flex-1">{group.label}</span>
+                  <ChevronDown
+                    size={16}
+                    aria-hidden="true"
+                    className={`transition-transform ${isOpen ? "" : "-rotate-90"}`}
+                  />
+                </button>
+                {isOpen ? (
+                  <div className="mt-1 space-y-1">
+                    {group.items.map((item) => (
+                      <NavLink key={item.to} to={item.to} className={navLinkClass(true)}>
+                        <span>{item.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             )
           })}
         </nav>
 
-        <div className="absolute bottom-5 left-5 right-5 space-y-3 border-t border-white/10 pt-5">
+        <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
           <button type="button" className="flex items-center gap-3 text-sm text-white/80">
             <Settings size={17} aria-hidden="true" />
             <span>Settings</span>
@@ -108,9 +187,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
         <header className="sticky top-0 z-10 border-b border-[#e6e8eb] bg-white">
           <div className="mx-auto flex min-h-20 max-w-[1280px] items-center gap-4 px-4 py-3 sm:px-6">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold text-[#111827] sm:text-2xl">
-                Faculty Portal
-              </h1>
+              <h1 className="text-xl font-semibold text-[#111827] sm:text-2xl">Faculty Portal</h1>
               <p className="mt-1 hidden text-sm text-[#6b7280] sm:block">
                 Create cases, review progress, and monitor cohort capability signals.
               </p>
@@ -153,11 +230,11 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
               <ClipboardList size={18} aria-hidden="true" />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {navigationItems.map((item) => (
+              {mobileItems.map((item) => (
                 <NavLink
-                  key={item.label}
+                  key={item.to}
                   to={item.to}
-                  end={item.end}
+                  end={"end" in item ? (item as { end?: boolean }).end : undefined}
                   className={({ isActive }) =>
                     `shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${
                       isActive

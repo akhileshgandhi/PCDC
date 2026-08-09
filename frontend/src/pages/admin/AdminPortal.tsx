@@ -1,7 +1,10 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import AdminAcademicSetup from "./AdminAcademicSetup"
 import AdminCourses from "./AdminCourses"
 import AdminDashboard from "./AdminDashboard"
+import AdminFaculty from "./AdminFaculty"
+import AdminTeachingApprovals from "./AdminTeachingApprovals"
 import AdminModulePlaceholder from "./AdminModulePlaceholder"
 import AdminSections from "./AdminSections"
 import AdminUserDetail from "./AdminUserDetail"
@@ -12,6 +15,10 @@ export default function AdminPortal() {
     <Routes>
       <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
       <Route path="/dashboard" element={<AdminDashboard />} />
+      <Route path="/academic" element={<Navigate to="/admin/academic/institutions" replace />} />
+      <Route path="/academic/:tab" element={<AdminAcademicSetup />} />
+      <Route path="/people/faculty" element={<AdminFaculty />} />
+      <Route path="/people/teaching-approvals" element={<AdminTeachingApprovals />} />
       <Route path="/users" element={<AdminUsers />} />
       <Route path="/user/:id" element={<AdminUserDetail />} />
       <Route path="/courses" element={<AdminCourses />} />

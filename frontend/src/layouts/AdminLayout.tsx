@@ -1,10 +1,16 @@
 import type { ReactNode } from "react"
+import { useState } from "react"
 import {
   Bell,
+  BookMarked,
+  CalendarRange,
+  ChevronDown,
   Database,
   FileUp,
   GraduationCap,
+  Layers,
   LayoutDashboard,
+  Library,
   LogOut,
   Rows3,
   Search,
@@ -13,7 +19,7 @@ import {
   UserCircle,
   Users,
 } from "lucide-react"
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { clearToken, getCurrentUser } from "../utils/auth"
 
@@ -21,18 +27,61 @@ interface AdminLayoutProps {
   children: ReactNode
 }
 
-const navigationItems = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/admin/dashboard", end: true },
-  { label: "Users", icon: Users, to: "/admin/users" },
-  { label: "Courses", icon: GraduationCap, to: "/admin/courses" },
-  { label: "Sections", icon: Rows3, to: "/admin/sections" },
-  { label: "Case Import", icon: FileUp, to: "/admin/case-import" },
-  { label: "Settings", icon: Settings, to: "/admin/settings" },
-  { label: "Notifications", icon: Bell, to: "/admin/notifications" },
+const dashboardItem = {
+  label: "Dashboard",
+  icon: LayoutDashboard,
+  to: "/admin/dashboard",
+  end: true,
+}
+
+interface NavGroup {
+  label: string
+  icon: typeof Users
+  items: Array<{ label: string; to: string; icon: typeof Users }>
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: "Academic Setup",
+    icon: Library,
+    items: [
+      { label: "Institutions", to: "/admin/academic/institutions", icon: Library },
+      { label: "Departments", to: "/admin/academic/departments", icon: Library },
+      { label: "Courses", to: "/admin/academic/courses", icon: GraduationCap },
+      { label: "Batches", to: "/admin/academic/batches", icon: Layers },
+      { label: "Semesters", to: "/admin/academic/semesters", icon: CalendarRange },
+      { label: "Sections", to: "/admin/academic/sections", icon: Rows3 },
+      { label: "Subjects", to: "/admin/academic/subjects", icon: BookMarked },
+    ],
+  },
+  {
+    label: "People",
+    icon: Users,
+    items: [
+      { label: "Faculty", to: "/admin/people/faculty", icon: Users },
+      { label: "Teaching Approvals", to: "/admin/people/teaching-approvals", icon: Users },
+      { label: "All Users", to: "/admin/users", icon: Users },
+    ],
+  },
+  {
+    label: "System",
+    icon: Settings,
+    items: [
+      { label: "Case Import", to: "/admin/case-import", icon: FileUp },
+      { label: "Settings", to: "/admin/settings", icon: Settings },
+      { label: "Notifications", to: "/admin/notifications", icon: Bell },
+    ],
+  },
+]
+
+const mobileItems = [
+  dashboardItem,
+  ...navGroups.flatMap((group) => group.items),
 ]
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const currentUser = getCurrentUser()
   const displayName = currentUser?.name ?? "Admin"
   const initials = displayName
@@ -42,14 +91,45 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     .slice(0, 2)
     .toUpperCase()
 
+  // Groups start expanded when the current route lives inside them.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const open = new Set<string>()
+    for (const group of navGroups) {
+      if (group.items.some((item) => location.pathname.startsWith(item.to))) {
+        open.add(group.label)
+      }
+    }
+    if (open.size === 0) open.add("Academic Setup")
+    return open
+  })
+
+  function toggleGroup(label: string) {
+    setOpenGroups((current) => {
+      const next = new Set(current)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }
+
   function handleLogout() {
     clearToken()
     navigate("/login", { replace: true })
   }
 
+  const navLinkClass = (compact = false) =>
+    ({ isActive }: { isActive: boolean }) =>
+      `flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-medium transition ${
+        compact ? "pl-11" : ""
+      } ${
+        isActive
+          ? "bg-[#34c6a3] text-[#102033] shadow-md"
+          : "text-white/85 hover:bg-[#1b3452]"
+      }`
+
   return (
     <div className="min-h-screen bg-[#f5f7fa] text-[#17202a]">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#102033] p-5 text-white lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#102033] p-5 text-white lg:flex">
         <div className="border-b border-white/10 pb-6">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-md bg-[#34c6a3] text-[#102033]">
@@ -62,31 +142,45 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
         </div>
 
-        <nav className="mt-7 space-y-2">
-          {navigationItems.map((item) => {
-            const Icon = item.icon
+        <nav className="mt-6 flex-1 space-y-1 overflow-y-auto">
+          <NavLink to={dashboardItem.to} end={dashboardItem.end} className={navLinkClass()}>
+            <LayoutDashboard size={18} aria-hidden="true" />
+            <span>{dashboardItem.label}</span>
+          </NavLink>
 
+          {navGroups.map((group) => {
+            const GroupIcon = group.icon
+            const isOpen = openGroups.has(group.label)
             return (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-medium transition ${
-                    isActive
-                      ? "bg-[#34c6a3] text-[#102033] shadow-md"
-                      : "text-white/85 hover:bg-[#1b3452]"
-                  }`
-                }
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{item.label}</span>
-              </NavLink>
+              <div key={group.label} className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  className="flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-semibold text-white/90 transition hover:bg-[#1b3452]"
+                >
+                  <GroupIcon size={18} aria-hidden="true" />
+                  <span className="flex-1">{group.label}</span>
+                  <ChevronDown
+                    size={16}
+                    aria-hidden="true"
+                    className={`transition-transform ${isOpen ? "" : "-rotate-90"}`}
+                  />
+                </button>
+                {isOpen ? (
+                  <div className="mt-1 space-y-1">
+                    {group.items.map((item) => (
+                      <NavLink key={item.to} to={item.to} className={navLinkClass(true)}>
+                        <span>{item.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             )
           })}
         </nav>
 
-        <div className="absolute bottom-5 left-5 right-5 space-y-3 border-t border-white/10 pt-5">
+        <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
           <NavLink
             to="/admin/settings"
             className="flex items-center gap-3 text-sm text-white/80 transition hover:text-white"
@@ -109,11 +203,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <header className="sticky top-0 z-10 border-b border-[#dde4ec] bg-white">
           <div className="mx-auto flex min-h-20 max-w-[1280px] items-center gap-4 px-4 py-3 sm:px-6">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold text-[#17202a] sm:text-2xl">
-                Admin Portal
-              </h1>
+              <h1 className="text-xl font-semibold text-[#17202a] sm:text-2xl">Admin Portal</h1>
               <p className="mt-1 hidden text-sm text-[#667085] sm:block">
-                User management, imports, settings, and notification operations.
+                Academic structure, people, imports, and system operations.
               </p>
             </div>
 
@@ -154,11 +246,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <Database size={18} aria-hidden="true" />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {navigationItems.map((item) => (
+              {mobileItems.map((item) => (
                 <NavLink
-                  key={item.label}
+                  key={item.to}
                   to={item.to}
-                  end={item.end}
+                  end={(item as { end?: boolean }).end}
                   className={({ isActive }) =>
                     `shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${
                       isActive

@@ -1,16 +1,18 @@
 import csv
 import io
+import json
 import secrets
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from services.auth.service import get_current_user, hash_password
+from services.auth.service import create_setup_token, get_current_user, hash_password
 from shared.cache import cache_get, cache_set
 from shared.database import get_db
+from shared.email import app_base_url, faculty_invite_email, send_email
 
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -46,16 +48,57 @@ class AdminCareerTrackUpdate(BaseModel):
     career_track_id: Optional[int] = None
 
 
+class AdminInstitutionCreate(BaseModel):
+    name: str
+    code: str
+
+
+class AdminInstitutionUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AdminDepartmentCreate(BaseModel):
+    name: str
+    code: str
+    institution_id: Optional[int] = None
+
+
+class AdminDepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+    institution_id: Optional[int] = None
+
+
+class AdminSubjectCreate(BaseModel):
+    name: str
+    code: Optional[str] = None
+    department_id: Optional[int] = None
+    course_id: Optional[int] = None
+    semester_id: Optional[int] = None
+
+
+class AdminSubjectUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    department_id: Optional[int] = None
+    course_id: Optional[int] = None
+    semester_id: Optional[int] = None
+    status: Optional[str] = None
+
+
 class AdminCourseCreate(BaseModel):
     name: str
     code: str
     total_semesters: int
     duration_years: int
+    department_id: Optional[int] = None
 
 
 class AdminCourseUpdate(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
+    department_id: Optional[int] = None
 
 
 class AdminBatchCreate(BaseModel):
@@ -431,6 +474,7 @@ def list_admin_users(
 @admin_router.post("/users", status_code=201)
 def create_admin_user(
     data: AdminUserCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -449,7 +493,9 @@ def create_admin_user(
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    temporary_secret = secrets.token_urlsafe(32)
+    # The invitee sets their own password via the emailed link; start with an
+    # unusable random hash so the account cannot be signed into until then.
+    temporary_secret = secrets.token_urlsafe(48)
     result = db.execute(
         text("""
             INSERT INTO users (
@@ -491,17 +537,40 @@ def create_admin_user(
     )
     if role == "student" and data.section_id is not None and student_id is not None:
         enroll_student_in_section(db, student_id, data.section_id, current_user["id"])
+
+    # Send an invite email with a one-time "set your password" link (faculty).
+    email_sent = False
+    subject = "Welcome to PCDC Case Studio"
+    body = "Account created. Send set-password link."
+    if role == "faculty":
+        raw_token = create_setup_token(db, row.id, purpose="invite")
+        # Point the link at the frontend the admin is actually using (the request
+        # Origin), so localhost stays localhost and Vercel stays Vercel. Fall back
+        # to APP_BASE_URL only when no Origin is present (e.g. server-to-server).
+        base = (request.headers.get("origin") or "").rstrip("/") or app_base_url()
+        setup_url = f"{base}/set-password?token={raw_token}"
+        subject, text_body, html_body = faculty_invite_email(
+            row.name, row.email, setup_url
+        )
+        email_sent = send_email(row.email, subject, text_body, html_body)
+        body = text_body
+
     db.execute(
         text("""
             INSERT INTO notification_log (
                 recipient_user_id, event_type, channel, status, subject, body
             )
             VALUES (
-                :recipient_user_id, 'welcome_email', 'email', 'pending',
-                'Welcome to PCDC', 'Account created. Send set-password link.'
+                :recipient_user_id, :event_type, 'email', :status, :subject, :body
             )
         """),
-        {"recipient_user_id": row.id},
+        {
+            "recipient_user_id": row.id,
+            "event_type": "faculty_invite" if role == "faculty" else "welcome_email",
+            "status": "sent" if email_sent else "pending",
+            "subject": subject,
+            "body": body,
+        },
     )
     record_system_event(
         db,
@@ -512,7 +581,8 @@ def create_admin_user(
     db.commit()
     return {
         "user": user_response(row),
-        "onboarding_status": "welcome_email_queued",
+        "onboarding_status": "invite_sent" if email_sent else "welcome_email_queued",
+        "email_sent": email_sent,
         "student_id": student_id,
     }
 
@@ -1044,11 +1114,694 @@ def course_response(row: Any) -> Dict[str, Any]:
         "total_semesters": row.total_semesters,
         "duration_years": row.duration_years,
         "status": row.status,
+        "department_id": getattr(row, "department_id", None),
+        "department_name": getattr(row, "department_name", None),
         "batch_count": int(row.batch_count),
         "section_count": int(row.section_count),
         "student_count": int(row.student_count),
         "faculty_count": int(row.faculty_count),
         "created_at": str(row.created_at),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Academic Setup: Departments, Subjects, and a counts summary for the tabs
+# ---------------------------------------------------------------------------
+
+def department_response(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "code": row.code,
+        "status": row.status,
+        "course_count": int(row.course_count),
+        "institution_id": getattr(row, "institution_id", None),
+        "institution_name": getattr(row, "institution_name", None),
+        "created_at": str(row.created_at),
+    }
+
+
+def subject_response(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "code": row.code,
+        "status": row.status,
+        "department_id": row.department_id,
+        "department_name": row.department_name,
+        "course_id": row.course_id,
+        "course_name": row.course_name,
+        "semester_id": getattr(row, "semester_id", None),
+        "semester_name": getattr(row, "semester_name", None),
+        "created_at": str(row.created_at),
+    }
+
+
+@admin_router.get("/academic/summary")
+def academic_summary(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, int]:
+    require_admin(current_user)
+    row = db.execute(
+        text("""
+            SELECT
+                (SELECT COUNT(*) FROM institutions) AS institutions,
+                (SELECT COUNT(*) FROM departments) AS departments,
+                (SELECT COUNT(*) FROM courses) AS courses,
+                (SELECT COUNT(*) FROM batches) AS batches,
+                (SELECT COUNT(*) FROM semesters) AS semesters,
+                (SELECT COUNT(*) FROM class_sections) AS sections,
+                (SELECT COUNT(*) FROM subjects) AS subjects
+        """)
+    ).fetchone()
+    return {
+        "institutions": int(row.institutions),
+        "departments": int(row.departments),
+        "courses": int(row.courses),
+        "batches": int(row.batches),
+        "semesters": int(row.semesters),
+        "sections": int(row.sections),
+        "subjects": int(row.subjects),
+    }
+
+
+def institution_response(row: Any) -> Dict[str, Any]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "code": row.code,
+        "status": row.status,
+        "department_count": int(row.department_count),
+        "created_at": str(row.created_at),
+    }
+
+
+class TeachingApprovalSetting(BaseModel):
+    require_approval: bool
+
+
+def _teaching_approval_required(db: Session) -> bool:
+    row = db.execute(
+        text("SELECT config FROM platform_settings WHERE section = 'teaching_approvals'")
+    ).fetchone()
+    if not row:
+        return True  # default: require approval
+    try:
+        return bool(json.loads(row.config).get("require_approval", True))
+    except (json.JSONDecodeError, TypeError):
+        return True
+
+
+@admin_router.get("/teaching-approvals")
+def get_teaching_approvals(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Faculty self-selections awaiting approval, plus the approval setting.
+
+    Self-selection during onboarding isn't wired yet, so `pending` is empty for
+    now; the setting persists so the workflow is ready when it lands."""
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT fs.id, fs.faculty_id, u.name AS faculty_name, fs.subject, fs.status,
+                   cs.name AS section_name, c.name AS course_name, sem.name AS semester_name
+            FROM faculty_sections fs
+            JOIN users u ON u.id = fs.faculty_id
+            JOIN class_sections cs ON cs.id = fs.section_id
+            JOIN courses c ON c.id = cs.course_id
+            JOIN semesters sem ON sem.id = cs.semester_id
+            WHERE fs.status IN ('pending', 'active')
+            ORDER BY u.name, c.name, sem.name
+        """)
+    ).fetchall()
+    pending: Dict[int, Dict[str, Any]] = {}
+    approved: Dict[int, Dict[str, Any]] = {}
+    for r in rows:
+        bucket = pending if r.status == "pending" else approved
+        person = bucket.setdefault(
+            r.faculty_id,
+            {"faculty_id": r.faculty_id, "faculty_name": r.faculty_name, "items": []},
+        )
+        person["items"].append(
+            {
+                "id": r.id,
+                "subject": r.subject,
+                "section_name": r.section_name,
+                "course_name": r.course_name,
+                "semester_name": r.semester_name,
+            }
+        )
+    return {
+        "require_approval": _teaching_approval_required(db),
+        "pending": list(pending.values()),
+        "approved": list(approved.values()),
+    }
+
+
+@admin_router.post("/teaching-approvals/{selection_id}/approve")
+def approve_teaching_selection(
+    selection_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    db.execute(
+        text("UPDATE faculty_sections SET status = 'active' WHERE id = :id AND status = 'pending'"),
+        {"id": selection_id},
+    )
+    db.commit()
+    return {"status": "approved", "id": selection_id}
+
+
+@admin_router.post("/teaching-approvals/{selection_id}/reject")
+def reject_teaching_selection(
+    selection_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    db.execute(
+        text("DELETE FROM faculty_sections WHERE id = :id AND status = 'pending'"),
+        {"id": selection_id},
+    )
+    db.commit()
+    return {"status": "rejected", "id": selection_id}
+
+
+@admin_router.post("/teaching-approvals/{selection_id}/remove")
+def remove_teaching_selection(
+    selection_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Revoke an approved (active) teaching assignment."""
+    require_admin(current_user)
+    db.execute(text("DELETE FROM faculty_sections WHERE id = :id"), {"id": selection_id})
+    db.commit()
+    return {"status": "removed", "id": selection_id}
+
+
+@admin_router.patch("/teaching-approvals/settings")
+def set_teaching_approval_setting(
+    data: TeachingApprovalSetting,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    config = json.dumps({"require_approval": data.require_approval})
+    db.execute(
+        text("""
+            INSERT INTO platform_settings (section, config, updated_by, updated_at)
+            VALUES ('teaching_approvals', :config, :uid, NOW())
+            ON CONFLICT (section) DO UPDATE
+            SET config = :config, updated_by = :uid, updated_at = NOW()
+        """),
+        {"config": config, "uid": current_user["id"]},
+    )
+    db.commit()
+    return {"require_approval": data.require_approval}
+
+
+@admin_router.get("/faculty")
+def list_admin_faculty(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Faculty with their teaching load and a derived state:
+    awaiting (invited, never logged in) / active / needs_attention (no subjects)."""
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT u.id, u.name, u.email, u.department,
+                   COALESCE(u.status, 'active') AS status, u.last_login_at,
+                   COUNT(DISTINCT fs.subject) AS subject_count,
+                   COUNT(DISTINCT fs.section_id) AS section_count
+            FROM users u
+            LEFT JOIN faculty_sections fs ON fs.faculty_id = u.id
+            WHERE u.role = 'faculty'
+            GROUP BY u.id
+            ORDER BY u.name
+        """)
+    ).fetchall()
+    items = []
+    for row in rows:
+        joined = row.last_login_at is not None
+        subject_count = int(row.subject_count)
+        if not joined:
+            state = "awaiting"
+        elif subject_count == 0:
+            state = "needs_attention"
+        else:
+            state = "active"
+        items.append(
+            {
+                "id": row.id,
+                "name": row.name,
+                "email": row.email,
+                "department": row.department,
+                "status": row.status,
+                "joined": joined,
+                "subject_count": subject_count,
+                "section_count": int(row.section_count),
+                "state": state,
+            }
+        )
+    return {"items": items, "total": len(items)}
+
+
+@admin_router.get("/institutions")
+def list_admin_institutions(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT i.id, i.name, i.code, i.status, i.created_at,
+                   COUNT(d.id) AS department_count
+            FROM institutions i
+            LEFT JOIN departments d ON d.institution_id = i.id
+            GROUP BY i.id
+            ORDER BY i.name
+        """)
+    ).fetchall()
+    return {"items": [institution_response(row) for row in rows], "total": len(rows)}
+
+
+@admin_router.post("/institutions", status_code=201)
+def create_admin_institution(
+    data: AdminInstitutionCreate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    if not data.name.strip() or not data.code.strip():
+        raise HTTPException(status_code=400, detail="Institution name and code are required")
+    code = data.code.strip().upper()
+    existing = db.execute(
+        text("SELECT id FROM institutions WHERE code = :code"), {"code": code}
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="Institution code already exists")
+    row = db.execute(
+        text("""
+            INSERT INTO institutions (name, code, status)
+            VALUES (:name, :code, 'active')
+            RETURNING id, name, code, status, created_at, 0 AS department_count
+        """),
+        {"name": data.name.strip(), "code": code},
+    ).fetchone()
+    record_system_event(
+        db, current_user["id"], "institution_created", f"Created institution {data.name.strip()}"
+    )
+    db.commit()
+    return institution_response(row)
+
+
+@admin_router.patch("/institutions/{institution_id}")
+def update_admin_institution(
+    institution_id: int,
+    data: AdminInstitutionUpdate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    if data.status is not None and data.status not in {"active", "inactive"}:
+        raise HTTPException(status_code=400, detail="Invalid institution status")
+    db.execute(
+        text("""
+            UPDATE institutions
+            SET name = COALESCE(:name, name), status = COALESCE(:status, status)
+            WHERE id = :id
+        """),
+        {"name": data.name.strip() if data.name else None, "status": data.status, "id": institution_id},
+    )
+    db.commit()
+    row = db.execute(
+        text("""
+            SELECT i.id, i.name, i.code, i.status, i.created_at, COUNT(d.id) AS department_count
+            FROM institutions i LEFT JOIN departments d ON d.institution_id = i.id
+            WHERE i.id = :id GROUP BY i.id
+        """),
+        {"id": institution_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    return institution_response(row)
+
+
+@admin_router.delete("/institutions/{institution_id}")
+def delete_admin_institution(
+    institution_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    row = db.execute(
+        text("SELECT name FROM institutions WHERE id = :id"), {"id": institution_id}
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    db.execute(text("DELETE FROM institutions WHERE id = :id"), {"id": institution_id})
+    record_system_event(
+        db, current_user["id"], "institution_deleted", f"Deleted institution {row.name}"
+    )
+    db.commit()
+    return {"status": "deleted", "id": institution_id}
+
+
+@admin_router.get("/departments")
+def list_admin_departments(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT d.id, d.name, d.code, d.status, d.created_at,
+                   d.institution_id, inst.name AS institution_name,
+                   COUNT(c.id) AS course_count
+            FROM departments d
+            LEFT JOIN courses c ON c.department_id = d.id
+            LEFT JOIN institutions inst ON inst.id = d.institution_id
+            GROUP BY d.id, inst.name
+            ORDER BY d.name
+        """)
+    ).fetchall()
+    return {"items": [department_response(row) for row in rows], "total": len(rows)}
+
+
+@admin_router.post("/departments", status_code=201)
+def create_admin_department(
+    data: AdminDepartmentCreate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    if not data.name.strip() or not data.code.strip():
+        raise HTTPException(status_code=400, detail="Department name and code are required")
+    code = data.code.strip().upper()
+    existing = db.execute(
+        text("SELECT id FROM departments WHERE code = :code"), {"code": code}
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="Department code already exists")
+    row = db.execute(
+        text("""
+            INSERT INTO departments (name, code, status, institution_id)
+            VALUES (:name, :code, 'active', :institution_id)
+            RETURNING id, name, code, status, created_at, institution_id, 0 AS course_count
+        """),
+        {"name": data.name.strip(), "code": code, "institution_id": data.institution_id},
+    ).fetchone()
+    record_system_event(
+        db, current_user["id"], "department_created", f"Created department {data.name.strip()}"
+    )
+    db.commit()
+    return department_response(row)
+
+
+@admin_router.patch("/departments/{department_id}")
+def update_admin_department(
+    department_id: int,
+    data: AdminDepartmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    if data.status is not None and data.status not in {"active", "inactive"}:
+        raise HTTPException(status_code=400, detail="Invalid department status")
+    db.execute(
+        text("""
+            UPDATE departments
+            SET name = COALESCE(:name, name),
+                status = COALESCE(:status, status),
+                institution_id = COALESCE(:institution_id, institution_id)
+            WHERE id = :id
+        """),
+        {
+            "name": data.name.strip() if data.name else None,
+            "status": data.status,
+            "institution_id": data.institution_id,
+            "id": department_id,
+        },
+    )
+    db.commit()
+    row = db.execute(
+        text("""
+            SELECT d.id, d.name, d.code, d.status, d.created_at,
+                   d.institution_id, inst.name AS institution_name,
+                   COUNT(c.id) AS course_count
+            FROM departments d
+            LEFT JOIN courses c ON c.department_id = d.id
+            LEFT JOIN institutions inst ON inst.id = d.institution_id
+            WHERE d.id = :id GROUP BY d.id, inst.name
+        """),
+        {"id": department_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Department not found")
+    return department_response(row)
+
+
+@admin_router.delete("/departments/{department_id}")
+def delete_admin_department(
+    department_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    row = db.execute(
+        text("SELECT name FROM departments WHERE id = :id"), {"id": department_id}
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Department not found")
+    # Courses keep existing; their department_id is set NULL by the FK.
+    db.execute(text("DELETE FROM departments WHERE id = :id"), {"id": department_id})
+    record_system_event(
+        db, current_user["id"], "department_deleted", f"Deleted department {row.name}"
+    )
+    db.commit()
+    return {"status": "deleted", "id": department_id}
+
+
+@admin_router.get("/subjects")
+def list_admin_subjects(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT su.id, su.name, su.code, su.status, su.created_at,
+                   su.department_id, d.name AS department_name,
+                   su.course_id, c.name AS course_name,
+                   su.semester_id, sem.name AS semester_name
+            FROM subjects su
+            LEFT JOIN departments d ON d.id = su.department_id
+            LEFT JOIN courses c ON c.id = su.course_id
+            LEFT JOIN semesters sem ON sem.id = su.semester_id
+            ORDER BY su.name
+        """)
+    ).fetchall()
+    return {"items": [subject_response(row) for row in rows], "total": len(rows)}
+
+
+@admin_router.post("/subjects", status_code=201)
+def create_admin_subject(
+    data: AdminSubjectCreate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Subject name is required")
+
+    # Auto-generate a code like MBA-MKT-S1-1 (course code + semester + a
+    # running index across the course) when the client doesn't supply one.
+    code = data.code.strip().upper() if data.code else None
+    if not code and data.course_id and data.semester_id:
+        info = db.execute(
+            text("""
+                SELECT c.code AS course_code, sem.semester_number AS semnum
+                FROM courses c
+                JOIN semesters sem ON sem.id = :semester_id
+                WHERE c.id = :course_id
+            """),
+            {"course_id": data.course_id, "semester_id": data.semester_id},
+        ).fetchone()
+        if info:
+            existing = db.execute(
+                text("SELECT COUNT(*) AS n FROM subjects WHERE course_id = :course_id"),
+                {"course_id": data.course_id},
+            ).fetchone()
+            code = f"{info.course_code}-S{info.semnum}-{int(existing.n) + 1}"
+
+    row = db.execute(
+        text("""
+            INSERT INTO subjects (name, code, department_id, course_id, semester_id, status)
+            VALUES (:name, :code, :department_id, :course_id, :semester_id, 'active')
+            RETURNING id
+        """),
+        {
+            "name": data.name.strip(),
+            "code": code,
+            "department_id": data.department_id,
+            "course_id": data.course_id,
+            "semester_id": data.semester_id,
+        },
+    ).fetchone()
+    record_system_event(
+        db, current_user["id"], "subject_created", f"Created subject {data.name.strip()}"
+    )
+    db.commit()
+    return _subject_by_id(db, row.id)
+
+
+@admin_router.patch("/subjects/{subject_id}")
+def update_admin_subject(
+    subject_id: int,
+    data: AdminSubjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    if data.status is not None and data.status not in {"active", "inactive"}:
+        raise HTTPException(status_code=400, detail="Invalid subject status")
+    db.execute(
+        text("""
+            UPDATE subjects
+            SET name = COALESCE(:name, name),
+                code = COALESCE(:code, code),
+                department_id = COALESCE(:department_id, department_id),
+                course_id = COALESCE(:course_id, course_id),
+                semester_id = COALESCE(:semester_id, semester_id),
+                status = COALESCE(:status, status)
+            WHERE id = :id
+        """),
+        {
+            "name": data.name.strip() if data.name else None,
+            "code": data.code.strip().upper() if data.code else None,
+            "department_id": data.department_id,
+            "course_id": data.course_id,
+            "semester_id": data.semester_id,
+            "status": data.status,
+            "id": subject_id,
+        },
+    )
+    db.commit()
+    return _subject_by_id(db, subject_id)
+
+
+@admin_router.delete("/subjects/{subject_id}")
+def delete_admin_subject(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    row = db.execute(text("SELECT id FROM subjects WHERE id = :id"), {"id": subject_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    db.execute(text("DELETE FROM subjects WHERE id = :id"), {"id": subject_id})
+    db.commit()
+    return {"status": "deleted", "id": subject_id}
+
+
+def _subject_by_id(db: Session, subject_id: int) -> Dict[str, Any]:
+    row = db.execute(
+        text("""
+            SELECT su.id, su.name, su.code, su.status, su.created_at,
+                   su.department_id, d.name AS department_name,
+                   su.course_id, c.name AS course_name,
+                   su.semester_id, sem.name AS semester_name
+            FROM subjects su
+            LEFT JOIN departments d ON d.id = su.department_id
+            LEFT JOIN courses c ON c.id = su.course_id
+            LEFT JOIN semesters sem ON sem.id = su.semester_id
+            WHERE su.id = :id
+        """),
+        {"id": subject_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    return subject_response(row)
+
+
+@admin_router.get("/batches")
+def list_admin_all_batches(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT b.id, b.name, b.start_year, b.end_year, b.status, b.created_at,
+                   c.id AS course_id, c.name AS course_name, c.code AS course_code,
+                   COUNT(DISTINCT cs.id) AS section_count
+            FROM batches b
+            JOIN courses c ON c.id = b.course_id
+            LEFT JOIN class_sections cs ON cs.batch_id = b.id
+            GROUP BY b.id, c.id
+            ORDER BY c.name, b.name
+        """)
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "start_year": row.start_year,
+                "end_year": row.end_year,
+                "status": row.status,
+                "course_id": row.course_id,
+                "course_name": row.course_name,
+                "course_code": row.course_code,
+                "section_count": int(row.section_count),
+                "created_at": str(row.created_at),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@admin_router.get("/semesters")
+def list_admin_all_semesters(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT s.id, s.semester_number, s.name,
+                   c.id AS course_id, c.name AS course_name, c.code AS course_code,
+                   (SELECT COUNT(*) FROM class_sections cs WHERE cs.semester_id = s.id)
+                       AS section_count,
+                   (SELECT COUNT(*) FROM subjects su WHERE su.semester_id = s.id)
+                       AS subject_count
+            FROM semesters s
+            JOIN courses c ON c.id = s.course_id
+            ORDER BY c.name, s.semester_number
+        """)
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "semester_number": row.semester_number,
+                "name": row.name,
+                "course_id": row.course_id,
+                "course_name": row.course_name,
+                "course_code": row.course_code,
+                "section_count": int(row.section_count),
+                "subject_count": int(row.subject_count),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
     }
 
 
@@ -1061,7 +1814,7 @@ def list_admin_courses(
     rows = db.execute(
         text("""
             SELECT c.id, c.name, c.code, c.total_semesters, c.duration_years, c.status,
-                   c.created_at,
+                   c.created_at, c.department_id, dept.name AS department_name,
                    COUNT(DISTINCT b.id) AS batch_count,
                    COUNT(DISTINCT cs.id) AS section_count,
                    COUNT(DISTINCT s.id) AS student_count,
@@ -1071,7 +1824,8 @@ def list_admin_courses(
             LEFT JOIN class_sections cs ON cs.course_id = c.id
             LEFT JOIN students s ON s.course_id = c.id
             LEFT JOIN faculty_sections fs ON fs.section_id = cs.id
-            GROUP BY c.id
+            LEFT JOIN departments dept ON dept.id = c.department_id
+            GROUP BY c.id, dept.name
             ORDER BY c.name
         """)
     ).fetchall()
@@ -1098,8 +1852,8 @@ def create_admin_course(
 
     row = db.execute(
         text("""
-            INSERT INTO courses (name, code, total_semesters, duration_years, status)
-            VALUES (:name, :code, :total_semesters, :duration_years, 'active')
+            INSERT INTO courses (name, code, total_semesters, duration_years, status, department_id)
+            VALUES (:name, :code, :total_semesters, :duration_years, 'active', :department_id)
             RETURNING id
         """),
         {
@@ -1107,6 +1861,7 @@ def create_admin_course(
             "code": data.code.strip().upper(),
             "total_semesters": data.total_semesters,
             "duration_years": data.duration_years,
+            "department_id": data.department_id,
         },
     ).fetchone()
     for semester_number in range(1, data.total_semesters + 1):
@@ -1128,9 +1883,12 @@ def create_admin_course(
     course_row = db.execute(
         text("""
             SELECT c.id, c.name, c.code, c.total_semesters, c.duration_years, c.status,
-                   c.created_at, 0 AS batch_count, 0 AS section_count,
+                   c.created_at, c.department_id, dept.name AS department_name,
+                   0 AS batch_count, 0 AS section_count,
                    0 AS student_count, 0 AS faculty_count
-            FROM courses c WHERE c.id = :course_id
+            FROM courses c
+            LEFT JOIN departments dept ON dept.id = c.department_id
+            WHERE c.id = :course_id
         """),
         {"course_id": row.id},
     ).fetchone()
@@ -1151,12 +1909,15 @@ def update_admin_course(
     db.execute(
         text("""
             UPDATE courses
-            SET name = COALESCE(:name, name), status = COALESCE(:status, status)
+            SET name = COALESCE(:name, name),
+                status = COALESCE(:status, status),
+                department_id = COALESCE(:department_id, department_id)
             WHERE id = :course_id
         """),
         {
             "name": data.name.strip() if data.name else None,
             "status": data.status,
+            "department_id": data.department_id,
             "course_id": course_id,
         },
     )
@@ -1164,7 +1925,7 @@ def update_admin_course(
     row = db.execute(
         text("""
             SELECT c.id, c.name, c.code, c.total_semesters, c.duration_years, c.status,
-                   c.created_at,
+                   c.created_at, c.department_id, dept.name AS department_name,
                    COUNT(DISTINCT b.id) AS batch_count,
                    COUNT(DISTINCT cs.id) AS section_count,
                    COUNT(DISTINCT s.id) AS student_count,

@@ -11,8 +11,9 @@ class UserRegister(BaseModel):
     specialization: Optional[str] = None
 
 # Pydantic schema for user login
+# `email` accepts an email address OR a scholar number, so it is a plain str.
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 # Pydantic schema for Google sign-in (login-only: matches an existing user)

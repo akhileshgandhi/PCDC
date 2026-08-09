@@ -20,3 +20,4 @@ build/
 # Runtime logs
 backend/server.out.log
 backend/server.err.log
+.vercel

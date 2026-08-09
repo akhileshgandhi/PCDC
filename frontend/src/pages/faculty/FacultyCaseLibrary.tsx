@@ -5,14 +5,17 @@ import { Link } from "react-router-dom"
 
 import {
   assignCaseToSections,
+  assignCaseToStudents,
   closeFacultyCaseAssignment,
   deleteFacultyCase,
   getFacultyAssignedCases,
   getFacultyCases,
   getFacultySections,
+  getFacultyStudents,
   type FacultyAssignedCase,
   type FacultyCase,
   type FacultySection,
+  type FacultyStudent,
 } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
@@ -482,12 +485,20 @@ interface AssignToClassDialogProps {
   onAssigned: (message: string) => void
 }
 
+type AssignMode = "sections" | "students"
+
 function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDialogProps) {
+  const [mode, setMode] = useState<AssignMode>("sections")
   const [sections, setSections] = useState<FacultySection[]>([])
   const [selectedSectionIds, setSelectedSectionIds] = useState<number[]>([])
+  const [students, setStudents] = useState<FacultyStudent[]>([])
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([])
+  const [studentSearch, setStudentSearch] = useState("")
+  const [studentsLoaded, setStudentsLoaded] = useState(false)
   const [dueDate, setDueDate] = useState("")
   const [instructions, setInstructions] = useState("")
   const [isLoadingSections, setIsLoadingSections] = useState(true)
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false)
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
@@ -508,6 +519,29 @@ function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDi
     }
   }, [])
 
+  // Lazy-load the roster the first time the faculty switches to "specific students".
+  useEffect(() => {
+    if (mode !== "students" || studentsLoaded) return
+    let isMounted = true
+    setIsLoadingStudents(true)
+    getFacultyStudents()
+      .then((data) => {
+        if (isMounted) {
+          setStudents(data.items)
+          setStudentsLoaded(true)
+        }
+      })
+      .catch(() => {
+        if (isMounted) setError("Unable to load your students.")
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingStudents(false)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [mode, studentsLoaded])
+
   function toggleSection(sectionId: number) {
     setSelectedSectionIds((current) =>
       current.includes(sectionId)
@@ -516,23 +550,65 @@ function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDi
     )
   }
 
+  function toggleStudent(studentId: number) {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId],
+    )
+  }
+
+  const filteredStudents = students.filter((student) => {
+    if (!studentSearch) return true
+    const term = studentSearch.toLowerCase()
+    return (
+      student.name.toLowerCase().includes(term) ||
+      student.email.toLowerCase().includes(term) ||
+      student.section_name.toLowerCase().includes(term)
+    )
+  })
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (selectedSectionIds.length === 0) {
-      setError("Select at least one section.")
+    setError("")
+    if (mode === "sections") {
+      if (selectedSectionIds.length === 0) {
+        setError("Select at least one section.")
+        return
+      }
+      setIsSaving(true)
+      try {
+        const result = await assignCaseToSections(caseStudy.id, {
+          section_ids: selectedSectionIds,
+          due_date: dueDate || undefined,
+          instructions: instructions || undefined,
+        })
+        const totalNew = result.assignments.reduce((sum, item) => sum + item.newly_assigned, 0)
+        onAssigned(
+          `Assigned "${caseStudy.title}" to ${result.assignments.length} section(s); ${totalNew} student(s) newly notified.`,
+        )
+      } catch {
+        setError("Unable to assign this case. It may already be assigned or not published.")
+      } finally {
+        setIsSaving(false)
+      }
+      return
+    }
+
+    if (selectedStudentIds.length === 0) {
+      setError("Select at least one student.")
       return
     }
     setIsSaving(true)
-    setError("")
     try {
-      const result = await assignCaseToSections(caseStudy.id, {
-        section_ids: selectedSectionIds,
+      const result = await assignCaseToStudents(caseStudy.id, {
+        student_ids: selectedStudentIds,
         due_date: dueDate || undefined,
         instructions: instructions || undefined,
       })
-      const totalNew = result.assignments.reduce((sum, item) => sum + item.newly_assigned, 0)
       onAssigned(
-        `Assigned "${caseStudy.title}" to ${result.assignments.length} section(s); ${totalNew} student(s) newly notified.`,
+        `Assigned "${caseStudy.title}" to ${result.newly_assigned} student(s)` +
+          (result.skipped ? ` (${result.skipped} already assigned/attempted).` : "."),
       )
     } catch {
       setError("Unable to assign this case. It may already be assigned or not published.")
@@ -563,33 +639,109 @@ function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDi
           </div>
 
           <div className="mt-5 grid gap-4">
-            <div>
-              <p className="text-sm font-semibold text-[#111827]">Select Section(s)</p>
-              <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-[#e6e8eb] p-3">
-                {isLoadingSections ? (
-                  <p className="text-sm text-[#6b7280]">Loading sections...</p>
-                ) : sections.length === 0 ? (
-                  <p className="text-sm text-[#6b7280]">
-                    You have no sections yet. Ask an admin to assign you to a class section.
-                  </p>
-                ) : (
-                  sections.map((section) => (
-                    <label key={section.id} className="flex items-center gap-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={selectedSectionIds.includes(section.id)}
-                        onChange={() => toggleSection(section.id)}
-                        className="size-4"
-                      />
-                      <span>
-                        {section.name} · {section.semester_name} · {section.batch_name} (
-                        {section.student_count} students)
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+            {/* Scope: whole class (sections) vs specific students (single/group) */}
+            <div className="grid grid-cols-2 gap-1 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] p-1">
+              <button
+                type="button"
+                onClick={() => setMode("sections")}
+                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                  mode === "sections" ? "bg-white text-[#0b1d3a] shadow-sm" : "text-[#6b7280]"
+                }`}
+              >
+                Whole class
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("students")}
+                className={`rounded px-3 py-2 text-sm font-semibold transition ${
+                  mode === "students" ? "bg-white text-[#0b1d3a] shadow-sm" : "text-[#6b7280]"
+                }`}
+              >
+                Specific students
+              </button>
             </div>
+
+            {mode === "sections" ? (
+              <div>
+                <p className="text-sm font-semibold text-[#111827]">Select Section(s)</p>
+                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto rounded-md border border-[#e6e8eb] p-3">
+                  {isLoadingSections ? (
+                    <p className="text-sm text-[#6b7280]">Loading sections...</p>
+                  ) : sections.length === 0 ? (
+                    <p className="text-sm text-[#6b7280]">
+                      You have no sections yet. Ask an admin to assign you to a class section.
+                    </p>
+                  ) : (
+                    sections.map((section) => (
+                      <label key={section.id} className="flex items-center gap-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedSectionIds.includes(section.id)}
+                          onChange={() => toggleSection(section.id)}
+                          className="size-4"
+                        />
+                        <span>
+                          {section.name} · {section.semester_name} · {section.batch_name} (
+                          {section.student_count} students)
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[#111827]">
+                    Select Student(s){" "}
+                    {selectedStudentIds.length > 0 ? (
+                      <span className="font-medium text-[#6b7280]">
+                        · {selectedStudentIds.length} selected
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+                <input
+                  type="search"
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                  placeholder="Search name, email, or section…"
+                  className="mt-2 h-10 w-full rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                />
+                <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-md border border-[#e6e8eb] p-2">
+                  {isLoadingStudents ? (
+                    <p className="p-2 text-sm text-[#6b7280]">Loading students...</p>
+                  ) : filteredStudents.length === 0 ? (
+                    <p className="p-2 text-sm text-[#6b7280]">
+                      {students.length === 0
+                        ? "No students enrolled in your sections yet."
+                        : "No students match your search."}
+                    </p>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <label
+                        key={student.student_id}
+                        className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-[#f6f7fb]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedStudentIds.includes(student.student_id)}
+                          onChange={() => toggleStudent(student.student_id)}
+                          className="size-4"
+                        />
+                        <span className="min-w-0">
+                          <span className="font-medium text-[#111827]">{student.name}</span>{" "}
+                          <span className="text-[#9ca3af]">· {student.section_name}</span>
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-[#9ca3af]">
+                  Pick one student, or several for a group. Only your own students are shown.
+                </p>
+              </div>
+            )}
 
             <label className="grid gap-2 text-sm font-semibold text-[#111827]">
               Due Date (optional)
@@ -632,7 +784,11 @@ function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDi
               disabled={isSaving}
               className="rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#0b1d3a] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "Assigning..." : "Assign to Selected Sections"}
+              {isSaving
+                ? "Assigning..."
+                : mode === "sections"
+                  ? "Assign to Selected Sections"
+                  : `Assign to ${selectedStudentIds.length || ""} Student${selectedStudentIds.length === 1 ? "" : "s"}`.trim()}
             </button>
           </div>
         </form>
