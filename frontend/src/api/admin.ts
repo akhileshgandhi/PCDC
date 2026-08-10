@@ -57,6 +57,8 @@ export interface CreateAdminUserPayload {
   employee_id?: string
   experience_years?: number
   college_id?: string
+  institution_ids?: number[]
+  department_ids?: number[]
 }
 
 export interface UpdateAdminUserPayload {

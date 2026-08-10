@@ -2397,17 +2397,37 @@ def get_faculty_teaching(
             )
         return result
 
+    # Admin-assigned scope: which institutions/departments this faculty may pick
+    # from. If no scope rows exist, the faculty sees the full hierarchy.
+    scope_rows = db.execute(
+        text("SELECT institution_id, department_id FROM faculty_scope WHERE faculty_id = :fid"),
+        {"fid": fid},
+    ).fetchall()
+    scoped = len(scope_rows) > 0
+    allowed_inst = {r.institution_id for r in scope_rows}
+    inst_wide = {r.institution_id for r in scope_rows if r.department_id is None}
+    allowed_depts_by_inst: Dict[int, set] = {}
+    for r in scope_rows:
+        if r.department_id is not None:
+            allowed_depts_by_inst.setdefault(r.institution_id, set()).add(r.department_id)
+
     # Full admin-configured hierarchy: institution -> department -> course ->
     # semester -> (sections + subjects). Empty branches are omitted.
     options = []
     for inst in db.execute(
         text("SELECT id, name, code FROM institutions ORDER BY name")
     ).fetchall():
+        if scoped and inst.id not in allowed_inst:
+            continue
+        dept_filter = allowed_depts_by_inst.get(inst.id, set())
+        limit_depts = scoped and inst.id not in inst_wide
         departments = []
         for dept in db.execute(
             text("SELECT id, name, code FROM departments WHERE institution_id = :iid ORDER BY name"),
             {"iid": inst.id},
         ).fetchall():
+            if limit_depts and dept.id not in dept_filter:
+                continue
             courses = []
             for course in db.execute(
                 text(

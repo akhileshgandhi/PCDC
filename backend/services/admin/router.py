@@ -34,6 +34,10 @@ class AdminUserCreate(BaseModel):
     employee_id: Optional[str] = None
     experience_years: Optional[int] = None
     college_id: Optional[str] = None
+    # Faculty scope: institutions/departments the admin allows this faculty to
+    # pick from during onboarding. Departments imply their institution.
+    institution_ids: Optional[List[int]] = None
+    department_ids: Optional[List[int]] = None
 
 
 class AdminUserStatusUpdate(BaseModel):
@@ -537,6 +541,31 @@ def create_admin_user(
     )
     if role == "student" and data.section_id is not None and student_id is not None:
         enroll_student_in_section(db, student_id, data.section_id, current_user["id"])
+
+    # Record the admin-assigned scope (institutions/departments) for faculty so
+    # onboarding only shows what they're allowed to pick from.
+    if role == "faculty":
+        scope_pairs = set()  # (institution_id, department_id|None)
+        for dept_id in data.department_ids or []:
+            drow = db.execute(
+                text("SELECT institution_id FROM departments WHERE id = :id"),
+                {"id": dept_id},
+            ).fetchone()
+            if drow and drow.institution_id is not None:
+                scope_pairs.add((drow.institution_id, dept_id))
+        # Institutions selected without any of their departments -> institution-wide.
+        depts_by_inst = {inst for inst, _ in scope_pairs}
+        for inst_id in data.institution_ids or []:
+            if inst_id not in depts_by_inst:
+                scope_pairs.add((inst_id, None))
+        for inst_id, dept_id in scope_pairs:
+            db.execute(
+                text(
+                    "INSERT INTO faculty_scope (faculty_id, institution_id, department_id) "
+                    "VALUES (:f, :i, :d)"
+                ),
+                {"f": row.id, "i": inst_id, "d": dept_id},
+            )
 
     # Send an invite email with a one-time "set your password" link (faculty).
     email_sent = False

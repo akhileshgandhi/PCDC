@@ -282,6 +282,8 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
         role: "faculty",
         department: departmentNames || undefined,
         designation: designation.trim() || undefined,
+        institution_ids: selectedInstitutions,
+        department_ids: selectedDepartments,
       })
       onInvited()
     } catch {
