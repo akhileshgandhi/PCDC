@@ -21,3 +21,7 @@ build/
 backend/server.out.log
 backend/server.err.log
 .vercel
+.vercel.*.bak
+
+# Contains live secrets — never commit
+scripts/add_vercel_env.sh

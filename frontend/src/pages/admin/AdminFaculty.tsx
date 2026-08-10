@@ -1,4 +1,4 @@
-import { ChevronRight, Mail, Plus, Search, UserPlus, X } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Mail, Plus, Search, UserPlus, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
@@ -6,8 +6,10 @@ import {
   createAdminUser,
   getAdminDepartments,
   getAdminFaculty,
+  getAdminInstitutions,
   type AdminDepartment,
   type AdminFacultyRow,
+  type AdminInstitution,
   type FacultyState,
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
@@ -222,17 +224,45 @@ function initials(name: string): string {
 function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onInvited: () => void }) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
-  const [department, setDepartment] = useState("")
   const [designation, setDesignation] = useState("")
+  const [institutions, setInstitutions] = useState<AdminInstitution[]>([])
   const [departments, setDepartments] = useState<AdminDepartment[]>([])
+  const [selectedInstitutions, setSelectedInstitutions] = useState<number[]>([])
+  const [selectedDepartments, setSelectedDepartments] = useState<number[]>([])
+  const [openDeptInst, setOpenDeptInst] = useState<number | null>(null)
   const [shown, setShown] = useState(false)
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setShown(true)
-    getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
+    Promise.all([getAdminInstitutions(), getAdminDepartments()])
+      .then(([inst, dept]) => {
+        setInstitutions(inst.items)
+        setDepartments(dept.items)
+      })
+      .catch(() => undefined)
   }, [])
+
+  function toggleInstitution(id: number) {
+    setSelectedInstitutions((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      // Drop any selected departments that no longer belong to a selected institution.
+      setSelectedDepartments((deps) =>
+        deps.filter((depId) => {
+          const dep = departments.find((d) => d.id === depId)
+          return dep?.institution_id != null && next.includes(dep.institution_id)
+        }),
+      )
+      return next
+    })
+  }
+
+  function toggleDepartment(id: number) {
+    setSelectedDepartments((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
+  }
 
   async function submit() {
     if (!name.trim() || !email.trim()) {
@@ -242,11 +272,15 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
     setSaving(true)
     setError("")
     try {
+      const departmentNames = departments
+        .filter((d) => selectedDepartments.includes(d.id))
+        .map((d) => d.name)
+        .join(", ")
       await createAdminUser({
         name: name.trim(),
         email: email.trim(),
         role: "faculty",
-        department: department || undefined,
+        department: departmentNames || undefined,
         designation: designation.trim() || undefined,
       })
       onInvited()
@@ -289,15 +323,72 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
             <span>Email <span className="text-[#d92d20]">*</span></span>
             <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="anand.iyer@pcdc.example" />
           </label>
-          <label className={label}>
-            Department
-            <select className={field} value={department} onChange={(e) => setDepartment(e.target.value)}>
-              <option value="">—</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.name}>{d.name}</option>
-              ))}
-            </select>
-          </label>
+          <div className={label}>
+            <span>Institution(s)</span>
+            <p className="-mt-0.5 text-xs font-normal text-[#667085]">
+              Pick one or more; their departments appear below.
+            </p>
+            {institutions.length === 0 ? (
+              <p className="text-sm text-[#98a2b3]">No institutions yet.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {institutions.map((inst) => {
+                  const active = selectedInstitutions.includes(inst.id)
+                  return (
+                    <button
+                      type="button"
+                      key={inst.id}
+                      onClick={() => toggleInstitution(inst.id)}
+                      className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm transition ${
+                        active
+                          ? "border-[#34c6a3] bg-[#eafaf5] font-semibold text-[#0b6b52]"
+                          : "border-[#dde4ec] bg-white text-[#344054] hover:border-[#b7c2d0]"
+                      }`}
+                    >
+                      <span className="truncate">{inst.name}</span>
+                      <span
+                        className={`grid size-4 shrink-0 place-items-center rounded-full border ${
+                          active ? "border-[#34c6a3] bg-[#34c6a3] text-white" : "border-[#cdd5df]"
+                        }`}
+                      >
+                        {active ? <Check size={11} strokeWidth={3} aria-hidden="true" /> : null}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className={label}>
+            <span>Department(s)</span>
+            {selectedInstitutions.length === 0 ? (
+              <p className="rounded-md border border-dashed border-[#dde4ec] px-3 py-3 text-sm font-normal text-[#98a2b3]">
+                Select an institution first.
+              </p>
+            ) : (
+              <div className="grid gap-4">
+                {selectedInstitutions.map((instId) => {
+                  const inst = institutions.find((i) => i.id === instId)
+                  const deptsForInst = departments.filter((d) => d.institution_id === instId)
+                  return (
+                    <DepartmentPicker
+                      key={instId}
+                      institutionName={inst?.name ?? "Institution"}
+                      departments={deptsForInst}
+                      selectedIds={selectedDepartments}
+                      onToggle={toggleDepartment}
+                      open={openDeptInst === instId}
+                      onToggleOpen={() =>
+                        setOpenDeptInst((cur) => (cur === instId ? null : instId))
+                      }
+                    />
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           <label className={label}>
             Designation
             <input className={field} value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Associate Professor" />
@@ -313,6 +404,113 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DepartmentPicker({
+  institutionName,
+  departments,
+  selectedIds,
+  onToggle,
+  open,
+  onToggleOpen,
+}: {
+  institutionName: string
+  departments: AdminDepartment[]
+  selectedIds: number[]
+  onToggle: (id: number) => void
+  open: boolean
+  onToggleOpen: () => void
+}) {
+  const chosen = departments.filter((d) => selectedIds.includes(d.id))
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-[#e6ebf1] bg-[#fbfcfe]">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+        <span className="text-xs font-bold uppercase tracking-wide text-[#475467]">
+          {institutionName}
+        </span>
+        {chosen.length > 0 ? (
+          <span className="rounded-full bg-[#eafaf5] px-2 py-0.5 text-[11px] font-semibold text-[#0b6b52]">
+            {chosen.length} selected
+          </span>
+        ) : null}
+      </div>
+
+      {departments.length === 0 ? (
+        <p className="px-3 pb-3 pt-1.5 text-sm text-[#98a2b3]">No departments in this institution.</p>
+      ) : (
+        <div className="px-3 pb-3 pt-2">
+          <button
+            type="button"
+            onClick={onToggleOpen}
+            className={`flex h-11 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-sm transition ${
+              open ? "border-[#34c6a3] ring-2 ring-[#34c6a3]/20" : "border-[#dde4ec] hover:border-[#b7c2d0]"
+            }`}
+          >
+            <span className="text-[#98a2b3]">
+              {chosen.length ? "Add or remove departments" : "Select departments"}
+            </span>
+            <ChevronDown
+              size={18}
+              className={`shrink-0 text-[#667085] transition ${open ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            />
+          </button>
+
+          {/* Inline expanding options (no overlap) */}
+          {open ? (
+            <div className="mt-1.5 grid max-h-52 gap-0.5 overflow-y-auto rounded-md border border-[#e6ebf1] bg-white p-1">
+              {departments.map((d) => {
+                const active = selectedIds.includes(d.id)
+                return (
+                  <button
+                    type="button"
+                    key={d.id}
+                    onClick={() => onToggle(d.id)}
+                    className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition ${
+                      active ? "bg-[#eafaf5] font-semibold text-[#0b6b52]" : "text-[#344054] hover:bg-[#f6f9fb]"
+                    }`}
+                  >
+                    <span>{d.name}</span>
+                    <span
+                      className={`grid size-4 shrink-0 place-items-center rounded border ${
+                        active ? "border-[#34c6a3] bg-[#34c6a3] text-white" : "border-[#cdd5df]"
+                      }`}
+                    >
+                      {active ? <Check size={11} strokeWidth={3} aria-hidden="true" /> : null}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+
+          {/* Selected chips */}
+          {chosen.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {chosen.map((d) => (
+                <span
+                  key={d.id}
+                  className="inline-flex items-center gap-1 rounded-full bg-[#eef2f7] py-1 pl-2.5 pr-1 text-xs font-medium text-[#344054]"
+                >
+                  {d.name}
+                  <button
+                    type="button"
+                    onClick={() => onToggle(d.id)}
+                    aria-label={`Remove ${d.name}`}
+                    className="grid size-4 place-items-center rounded-full text-[#667085] transition hover:bg-[#dde4ec] hover:text-[#17202a]"
+                  >
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }
