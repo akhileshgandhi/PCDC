@@ -4,7 +4,6 @@ import {
   FileUp,
   Settings,
   ShieldCheck,
-  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -27,12 +26,6 @@ const defaultSummary: AdminDashboardSummary = {
 }
 
 const quickLinks = [
-  {
-    label: "Add User",
-    description: "Create a single account and queue welcome email.",
-    to: "/admin/users?action=add",
-    icon: UserPlus,
-  },
   {
     label: "Import Users",
     description: "Download template and prepare CSV onboarding.",
@@ -111,17 +104,11 @@ export default function AdminDashboard() {
             </p>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
-                to="/admin/users?action=add"
+                to="/admin/users"
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-5 py-3 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-[#5dd7bb]"
               >
-                Add User
-                <ArrowRight size={17} aria-hidden="true" />
-              </Link>
-              <Link
-                to="/admin/users"
-                className="inline-flex items-center justify-center rounded-md border border-[#34c6a3] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
                 Review Users
+                <ArrowRight size={17} aria-hidden="true" />
               </Link>
             </div>
           </div>
@@ -136,6 +123,7 @@ export default function AdminDashboard() {
                     label={titleCase(role)}
                     value={summary.users_by_role[role] ?? 0}
                     isLoading={isLoading}
+                    to={`/admin/users?role=${role}`}
                   />
                 ),
               )}
@@ -155,18 +143,25 @@ export default function AdminDashboard() {
             value={summary.total_users}
             icon={Users}
             isLoading={isLoading}
+            to="/admin/users"
+            linkLabel="View all users"
           />
           <SummaryCard
             label="Active Today"
             value={summary.active_today}
             icon={ShieldCheck}
             isLoading={isLoading}
+            to="/admin/users?status=active"
+            linkLabel="View active users"
           />
           <SummaryCard
-            label="Pending Imports"
+            label="Pending Case Imports"
             value={summary.pending_imports}
             icon={FileUp}
             isLoading={isLoading}
+            description="Case studies uploaded for the library that are still in draft or awaiting your review."
+            to="/admin/case-import"
+            linkLabel="Review imports"
           />
         </section>
 
@@ -242,9 +237,12 @@ interface SummaryCardProps {
   value: number
   icon: LucideIcon
   isLoading: boolean
+  description?: string
+  to?: string
+  linkLabel?: string
 }
 
-function SummaryCard({ label, value, icon: Icon, isLoading }: SummaryCardProps) {
+function SummaryCard({ label, value, icon: Icon, isLoading, description, to, linkLabel }: SummaryCardProps) {
   return (
     <article className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
@@ -259,6 +257,18 @@ function SummaryCard({ label, value, icon: Icon, isLoading }: SummaryCardProps) 
       <p className="mt-2 text-3xl font-semibold text-[#17202a]">
         {isLoading ? "..." : value}
       </p>
+      {description ? (
+        <p className="mt-2 text-xs leading-5 text-[#98a2b3]">{description}</p>
+      ) : null}
+      {to && !isLoading ? (
+        <Link
+          to={to}
+          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033]"
+        >
+          {linkLabel ?? "Review"}
+          <ArrowRight size={12} aria-hidden="true" />
+        </Link>
+      ) : null}
     </article>
   )
 }
@@ -267,16 +277,20 @@ interface RoleCountProps {
   label: string
   value: number
   isLoading: boolean
+  to: string
 }
 
-function RoleCount({ label, value, isLoading }: RoleCountProps) {
+function RoleCount({ label, value, isLoading, to }: RoleCountProps) {
   return (
-    <div className="flex items-center justify-between rounded-md bg-[#f5f7fa] px-4 py-3">
+    <Link
+      to={to}
+      className="flex items-center justify-between rounded-md bg-[#f5f7fa] px-4 py-3 transition hover:bg-[#eef2f7]"
+    >
       <span className="text-sm font-semibold text-[#667085]">{label}</span>
       <span className="text-sm font-semibold text-[#17202a]">
         {isLoading ? "..." : value}
       </span>
-    </div>
+    </Link>
   )
 }
 

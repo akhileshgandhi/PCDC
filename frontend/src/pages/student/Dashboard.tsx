@@ -281,51 +281,56 @@ export default function Dashboard() {
           <h2 className="mb-4 text-2xl font-semibold">Active Engagements</h2>
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <Card title="Active Case Study" className="border-sky-100 bg-sky-50">
-              <p className="mb-4 text-sm font-medium text-[#6b7280]">
-                Apply strategic thinking to real business challenges.
-              </p>
-              {summary.active_case ? (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">{summary.active_case.title}</h3>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge>{titleCase(summary.active_case.domain)}</Badge>
-                      <Badge>
-                        {summary.active_case.difficulty_label ||
-                          `Level ${summary.active_case.difficulty}`}
-                      </Badge>
+              <div className="flex-1">
+                <p className="mb-4 text-sm font-medium text-[#6b7280]">
+                  Apply strategic thinking to real business challenges.
+                </p>
+                {summary.active_case ? (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">{summary.active_case.title}</h3>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge>{titleCase(summary.active_case.domain)}</Badge>
+                        <Badge>
+                          {summary.active_case.difficulty_label ||
+                            `Level ${summary.active_case.difficulty}`}
+                        </Badge>
+                      </div>
                     </div>
+                    {summary.active_case.due_date ? (
+                      <p className="text-xs font-semibold text-[#6b7280]">
+                        Due {formatDueDate(summary.active_case.due_date)}
+                      </p>
+                    ) : null}
                   </div>
-                  {summary.active_case.due_date ? (
-                    <p className="text-xs font-semibold text-[#6b7280]">
-                      Due {formatDueDate(summary.active_case.due_date)}
+                ) : (
+                  <div className="py-2 text-center">
+                    <p className="text-sm font-medium text-[#6b7280]">
+                      {isLoading ? "Loading..." : "No case study in progress right now."}
                     </p>
-                  ) : null}
-                  <Link
-                    to={`/student/case-studies/${summary.active_case.case_id}/attempt`}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
-                  >
-                    Continue Attempt
-                    <ArrowRight size={17} aria-hidden="true" />
-                  </Link>
-                </div>
+                  </div>
+                )}
+              </div>
+              {summary.active_case ? (
+                <Link
+                  to={`/student/case-studies/${summary.active_case.case_id}/attempt`}
+                  className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
+                >
+                  Continue Attempt
+                  <ArrowRight size={17} aria-hidden="true" />
+                </Link>
               ) : (
-                <div className="py-2 text-center">
-                  <p className="text-sm font-medium text-[#6b7280]">
-                    {isLoading ? "Loading..." : "No case study in progress right now."}
-                  </p>
-                </div>
+                <Link
+                  to="/student/case-studies"
+                  className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+                >
+                  Browse Case Studies
+                </Link>
               )}
-              <MatrixFilterButton
-                label="Browse Case Studies"
-                filterValue="case_study"
-                activeFilter={activeMatrixFilter}
-                onSelect={setActiveMatrixFilter}
-              />
             </Card>
 
             <Card title="Simulations" className="border-teal-100 bg-teal-50">
-              <p className="mb-4 text-sm font-medium text-[#6b7280]">
+              <p className="flex-1 text-sm font-medium text-[#6b7280]">
                 Practice high-stakes decisions in realistic simulated scenarios.
               </p>
               <MatrixFilterButton
@@ -337,7 +342,7 @@ export default function Dashboard() {
             </Card>
 
             <Card title="Academic Fundamentals" className="border-rose-100 bg-rose-50">
-              <p className="mb-4 text-sm font-medium text-[#6b7280]">
+              <p className="flex-1 text-sm font-medium text-[#6b7280]">
                 Strengthen your grasp of core business concepts.
               </p>
               <MatrixFilterButton
@@ -349,23 +354,23 @@ export default function Dashboard() {
             </Card>
 
             <Card title="Career Compass" className="border-orange-100 bg-orange-50">
-              <div className="py-2 text-center">
+              <div className="flex-1 py-2 text-center">
                 <Compass size={28} aria-hidden="true" className="mx-auto text-[#92702a]" />
                 <p className="mt-3 text-sm font-medium text-[#6b7280]">
                   Explore roles and pathways aligned to your strengths.
                 </p>
               </div>
-              <button
-                type="button"
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+              <Link
+                to="/student/career-pathway"
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
               >
                 Explore Career Compass
-              </button>
+              </Link>
             </Card>
           </div>
         </section>
 
-        <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+        <section id="capability-matrix" className="scroll-mt-24 rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-semibold">Capability Matrix</h2>
@@ -621,9 +626,9 @@ interface CardProps {
 
 function Card({ title, children, className }: CardProps) {
   return (
-    <article className={`rounded-lg border p-5 shadow-sm ${className ?? "border-[#e6e8eb] bg-white"}`}>
+    <article className={`flex h-full flex-col rounded-lg border p-5 shadow-sm ${className ?? "border-[#e6e8eb] bg-white"}`}>
       <h2 className="mb-4 text-lg font-semibold">{title}</h2>
-      {children}
+      <div className="flex flex-1 flex-col">{children}</div>
     </article>
   )
 }
@@ -646,8 +651,11 @@ function MatrixFilterButton({
     <button
       type="button"
       aria-pressed={isActive}
-      onClick={() => onSelect(isActive ? "case_study" : filterValue)}
-      className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition ${
+      onClick={() => {
+        onSelect(isActive ? "case_study" : filterValue)
+        document.getElementById("capability-matrix")?.scrollIntoView({ behavior: "smooth" })
+      }}
+      className={`mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition ${
         isActive
           ? "bg-[#081d3a] text-white"
           : "border border-[#081d3a] text-[#081d3a] hover:bg-[#081d3a] hover:text-white"

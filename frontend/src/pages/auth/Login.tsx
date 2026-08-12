@@ -3,7 +3,6 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { useAuth } from "../../context/AuthContext"
-import GoogleSignInButton from "../../components/auth/GoogleSignInButton"
 import AuthLayout from "../../layouts/AuthLayout"
 import { decodeJwtPayload, portalPathForRole } from "../../utils/auth"
 
@@ -123,14 +122,6 @@ export default function Login() {
           )}
           {isLoading ? "Logging in..." : "Login"}
         </button>
-
-        <div className="flex items-center gap-3 py-1">
-          <span className="h-px flex-1 bg-slate-200" />
-          <span className="text-xs font-medium uppercase tracking-wide text-slate-400">or</span>
-          <span className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <GoogleSignInButton onError={setError} />
 
         <p className="text-center text-sm text-slate-600">
           Contact your program administrator for account access.

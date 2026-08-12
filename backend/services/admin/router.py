@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from services.auth.service import create_setup_token, get_current_user, hash_password
 from shared.cache import cache_get, cache_set
 from shared.database import get_db
-from shared.email import app_base_url, faculty_invite_email, send_email
+from shared.email import app_base_url, faculty_invite_email, password_reset_email, send_email
 
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -221,18 +221,15 @@ def ensure_career_track(db: Session, career_track_id: Optional[int]) -> None:
         raise HTTPException(status_code=404, detail="Career track not found")
 
 
-ROMAN_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
-
-
 def semester_name(semester_number: int) -> str:
-    if 1 <= semester_number <= len(ROMAN_NUMERALS):
-        return f"Semester {ROMAN_NUMERALS[semester_number - 1]}"
+    # Plain "Semester N" — matches every seeded/legacy course so naming stays
+    # consistent across the whole system regardless of how a course was created.
     return f"Semester {semester_number}"
 
 
 def ensure_course(db: Session, course_id: int) -> Any:
     row = db.execute(
-        text("SELECT id, name, total_semesters FROM courses WHERE id = :course_id"),
+        text("SELECT id, name, total_semesters, duration_years FROM courses WHERE id = :course_id"),
         {"course_id": course_id},
     ).fetchone()
     if not row:
@@ -305,6 +302,41 @@ def get_student_for_user(db: Session, user_id: int) -> Any:
     if not row:
         raise HTTPException(status_code=404, detail="Student profile not found")
     return row
+
+
+def fetch_full_user_row(db: Session, user_id: int) -> Any:
+    # Single source of truth for "give me everything about this user, including
+    # the joined course/batch/section context" — used after any write so the
+    # response never silently drops fields a narrower RETURNING clause omitted.
+    return db.execute(
+        text("""
+            SELECT u.id, u.name, u.email, u.role, u.program, u.specialization,
+                   u.admission_year, u.status, u.last_login_at, u.created_at, u.updated_at,
+                   u.department, u.designation, u.employee_id, u.experience_years,
+                   u.college_id,
+                   COALESCE(sub.course_name, NULL) AS course_name,
+                   COALESCE(sub.batch_name, NULL) AS batch_name,
+                   COALESCE(sub.section_name, NULL) AS section_name,
+                   COALESCE(fac_sub.sections_teaching, 0) AS sections_teaching
+            FROM users u
+            LEFT JOIN LATERAL (
+                SELECT c.name AS course_name, b.name AS batch_name, cs.name AS section_name
+                FROM students s
+                LEFT JOIN courses c ON c.id = s.course_id
+                LEFT JOIN batches b ON b.id = s.batch_id
+                LEFT JOIN class_sections cs ON cs.id = s.current_section_id
+                WHERE s.user_id = u.id
+                LIMIT 1
+            ) sub ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*)::int AS sections_teaching
+                FROM faculty_sections fs
+                WHERE fs.faculty_id = u.id
+            ) fac_sub ON u.role = 'faculty'
+            WHERE u.id = :user_id
+        """),
+        {"user_id": user_id},
+    ).fetchone()
 
 
 def user_response(row: Any) -> Dict[str, Any]:
@@ -391,6 +423,38 @@ def admin_dashboard_summary(
             for row in event_rows
         ],
     })
+
+
+@admin_router.get("/notifications")
+def admin_notifications(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Recent platform activity for the admin notification bell. Not cached —
+    the bell should always reflect the latest events."""
+    require_admin(current_user)
+    rows = db.execute(
+        text("""
+            SELECT id, event_type, message, created_at
+            FROM system_events
+            ORDER BY id DESC
+            LIMIT :limit
+        """),
+        {"limit": limit},
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "event_type": row.event_type,
+                "message": row.message,
+                "created_at": str(row.created_at),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
 
 
 @admin_router.get("/users")
@@ -873,6 +937,42 @@ class AdminUserUpdate(BaseModel):
     college_id: Optional[str] = None
 
 
+@admin_router.get("/users/{user_id}")
+def get_admin_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+
+    row = fetch_full_user_row(db, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    login_rows = db.execute(
+        text("""
+            SELECT id, user_agent, ip_address, created_at
+            FROM login_events
+            WHERE user_id = :user_id
+            ORDER BY created_at DESC
+            LIMIT 10
+        """),
+        {"user_id": user_id},
+    ).fetchall()
+
+    detail = user_response(row)
+    detail["login_history"] = [
+        {
+            "id": r.id,
+            "user_agent": r.user_agent,
+            "ip_address": r.ip_address,
+            "created_at": str(r.created_at),
+        }
+        for r in login_rows
+    ]
+    return detail
+
+
 @admin_router.patch("/users/{user_id}")
 def update_admin_user(
     user_id: int,
@@ -926,10 +1026,7 @@ def update_admin_user(
             UPDATE users
             SET {set_sql}
             WHERE id = :user_id
-            RETURNING id, name, email, role, program, specialization,
-                      admission_year, department, designation, employee_id,
-                      experience_years, college_id, status, last_login_at,
-                      created_at, updated_at
+            RETURNING id, name
         """),
         params,
     ).fetchone()
@@ -943,7 +1040,7 @@ def update_admin_user(
         f"Updated profile for {row.name}",
     )
     db.commit()
-    return user_response(row)
+    return user_response(fetch_full_user_row(db, user_id))
 
 
 @admin_router.patch("/users/{user_id}/status")
@@ -960,8 +1057,7 @@ def update_admin_user_status(
             UPDATE users
             SET status = :status, updated_at = NOW()
             WHERE id = :user_id
-            RETURNING id, name, email, role, program, specialization,
-                      admission_year, status, last_login_at, created_at, updated_at
+            RETURNING id, name
         """),
         {"user_id": user_id, "status": status},
     )
@@ -975,7 +1071,7 @@ def update_admin_user_status(
         f"Set {row.name} to {status}",
     )
     db.commit()
-    return user_response(row)
+    return user_response(fetch_full_user_row(db, user_id))
 
 
 @admin_router.patch("/users/{user_id}/role")
@@ -992,8 +1088,7 @@ def update_admin_user_role(
             UPDATE users
             SET role = :role, updated_at = NOW()
             WHERE id = :user_id
-            RETURNING id, name, email, role, program, specialization,
-                      admission_year, status, last_login_at, created_at, updated_at
+            RETURNING id, name
         """),
         {"user_id": user_id, "role": role},
     )
@@ -1008,22 +1103,31 @@ def update_admin_user_role(
         f"Changed {row.name} role to {role}",
     )
     db.commit()
-    return user_response(row)
+    return user_response(fetch_full_user_row(db, user_id))
 
 
 @admin_router.post("/users/{user_id}/reset-password")
 def reset_admin_user_password(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, str]:
     require_admin(current_user)
     row = db.execute(
-        text("SELECT id, name FROM users WHERE id = :user_id"),
+        text("SELECT id, name, email FROM users WHERE id = :user_id"),
         {"user_id": user_id},
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
+    if not row.email:
+        raise HTTPException(status_code=400, detail="This user has no email on file to send a reset link to.")
+
+    raw_token = create_setup_token(db, row.id, purpose="reset")
+    base = (request.headers.get("origin") or "").rstrip("/") or app_base_url()
+    reset_url = f"{base}/set-password?token={raw_token}"
+    subject, text_body, html_body = password_reset_email(row.name, row.email, reset_url)
+    email_sent = send_email(row.email, subject, text_body, html_body)
 
     db.execute(
         text("""
@@ -1031,20 +1135,24 @@ def reset_admin_user_password(
                 recipient_user_id, event_type, channel, status, subject, body
             )
             VALUES (
-                :recipient_user_id, 'password_reset', 'email', 'pending',
-                'Reset your PCDC password', 'Password reset requested by admin.'
+                :recipient_user_id, 'password_reset', 'email', :status, :subject, :body
             )
         """),
-        {"recipient_user_id": user_id},
+        {
+            "recipient_user_id": user_id,
+            "status": "sent" if email_sent else "failed",
+            "subject": subject,
+            "body": text_body,
+        },
     )
     record_system_event(
         db,
         current_user["id"],
         "password_reset_requested",
-        f"Queued password reset for {row.name}",
+        f"Sent password reset link to {row.name}",
     )
     db.commit()
-    return {"status": "reset_email_queued"}
+    return {"status": "reset_email_sent" if email_sent else "reset_email_failed"}
 
 
 @admin_router.get("/career-tracks")
@@ -1872,6 +1980,19 @@ def create_admin_course(
         raise HTTPException(status_code=400, detail="Course name and code are required")
     if data.total_semesters < 1:
         raise HTTPException(status_code=400, detail="Total semesters must be at least 1")
+    if data.duration_years < 1:
+        raise HTTPException(status_code=400, detail="Duration must be at least 1 year")
+    # Every program follows 2 semesters per academic year — reject any other
+    # combination (e.g. 2 semesters over a 2-year duration).
+    expected_semesters = data.duration_years * 2
+    if data.total_semesters != expected_semesters:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{data.duration_years} year(s) should have {expected_semesters} "
+                f"semesters (2 per year), not {data.total_semesters}."
+            ),
+        )
     existing = db.execute(
         text("SELECT id FROM courses WHERE code = :code"),
         {"code": data.code.strip().upper()},
@@ -2138,11 +2259,24 @@ def create_admin_batch(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_admin(current_user)
-    ensure_course(db, course_id)
+    course = ensure_course(db, course_id)
     if not data.name.strip():
         raise HTTPException(status_code=400, detail="Batch name is required")
+    # Reject nonsensical years outright (e.g. a typo like "2065555").
+    if not (1900 <= data.start_year <= 2100) or not (1900 <= data.end_year <= 2100):
+        raise HTTPException(status_code=400, detail="Start and end year must be realistic calendar years (1900–2100).")
     if data.end_year < data.start_year:
         raise HTTPException(status_code=400, detail="End year must not be before start year")
+    # The batch's year span must match the course's duration exactly.
+    span = data.end_year - data.start_year
+    if course.duration_years and span != course.duration_years:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This batch spans {span} year(s), but \"{course.name}\" runs for "
+                f"{course.duration_years} year(s). Adjust the start/end year."
+            ),
+        )
     row = db.execute(
         text("""
             INSERT INTO batches (course_id, name, start_year, end_year, status)

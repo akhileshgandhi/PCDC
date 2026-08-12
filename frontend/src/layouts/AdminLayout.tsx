@@ -1,12 +1,11 @@
 import type { ReactNode } from "react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Bell,
   BookMarked,
   CalendarRange,
   ChevronDown,
   Database,
-  FileUp,
   GraduationCap,
   Layers,
   LayoutDashboard,
@@ -21,7 +20,21 @@ import {
 } from "lucide-react"
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
+import { getAdminNotifications, type AdminNotification } from "../api/admin"
 import { clearToken, getCurrentUser } from "../utils/auth"
+
+const NOTIF_SEEN_KEY = "pcdc_admin_notif_last_seen_id"
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso.endsWith("Z") ? iso : `${iso}Z`).getTime()
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000))
+  if (diffSec < 60) return "just now"
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  return `${Math.floor(diffHr / 24)}d ago`
+}
 
 interface AdminLayoutProps {
   children: ReactNode
@@ -64,15 +77,6 @@ const navGroups: NavGroup[] = [
       { label: "All Users", to: "/admin/users", icon: Users },
     ],
   },
-  {
-    label: "System",
-    icon: Settings,
-    items: [
-      { label: "Case Import", to: "/admin/case-import", icon: FileUp },
-      { label: "Settings", to: "/admin/settings", icon: Settings },
-      { label: "Notifications", to: "/admin/notifications", icon: Bell },
-    ],
-  },
 ]
 
 const mobileItems = [
@@ -92,7 +96,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     .slice(0, 2)
     .toUpperCase()
 
-  // Groups start expanded when the current route lives inside them.
+  // Groups start expanded only when the current route lives inside them —
+  // e.g. Dashboard matches no group, so everything stays collapsed.
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
     const open = new Set<string>()
     for (const group of navGroups) {
@@ -100,7 +105,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         open.add(group.label)
       }
     }
-    if (open.size === 0) open.add("Academic Setup")
     return open
   })
 
@@ -117,6 +121,75 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     clearToken()
     navigate("/login", { replace: true })
   }
+
+  // Users and Faculty already ship their own search box — showing the global
+  // one too reads as two identical search bars on the same screen.
+  const hasOwnSearch =
+    location.pathname.startsWith("/admin/users") || location.pathname.startsWith("/admin/people/faculty")
+
+  const [topSearch, setTopSearch] = useState("")
+  function handleTopSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const term = topSearch.trim()
+    if (!term) return
+    navigate(`/admin/users?search=${encodeURIComponent(term)}`)
+  }
+
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifications, setNotifications] = useState<AdminNotification[]>([])
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [lastSeenId, setLastSeenId] = useState(() => {
+    const stored = localStorage.getItem(NOTIF_SEEN_KEY)
+    return stored ? Number(stored) : 0
+  })
+  const notifRef = useRef<HTMLDivElement>(null)
+  const unreadCount = notifications.filter((n) => n.id > lastSeenId).length
+
+  useEffect(() => {
+    getAdminNotifications(20)
+      .then((data) => setNotifications(data.items))
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    if (notifOpen) document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [notifOpen])
+
+  function toggleNotifications() {
+    const next = !notifOpen
+    setNotifOpen(next)
+    if (next) {
+      setNotifLoading(true)
+      getAdminNotifications(20)
+        .then((data) => {
+          setNotifications(data.items)
+          const maxId = data.items.reduce((max, n) => Math.max(max, n.id), lastSeenId)
+          setLastSeenId(maxId)
+          localStorage.setItem(NOTIF_SEEN_KEY, String(maxId))
+        })
+        .catch(() => undefined)
+        .finally(() => setNotifLoading(false))
+    }
+  }
+
+  const [profileOpen, setProfileOpen] = useState(false)
+  const profileRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false)
+      }
+    }
+    if (profileOpen) document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [profileOpen])
 
   const navLinkClass = (compact = false) =>
     ({ isActive }: { isActive: boolean }) =>
@@ -210,32 +283,113 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               </p>
             </div>
 
-            <label className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 py-2 text-sm text-[#667085] md:flex">
-              <Search size={17} aria-hidden="true" />
-              <span className="sr-only">Search admin workspace</span>
-              <input
-                type="search"
-                placeholder="Search users, imports..."
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#667085]"
-              />
-            </label>
+            {hasOwnSearch ? null : (
+              <form
+                onSubmit={handleTopSearch}
+                className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 py-2 text-sm text-[#667085] md:flex"
+              >
+                <button type="submit" aria-label="Search users" className="text-[#667085]">
+                  <Search size={17} aria-hidden="true" />
+                </button>
+                <input
+                  type="search"
+                  value={topSearch}
+                  onChange={(event) => setTopSearch(event.target.value)}
+                  placeholder="Search users by name or email..."
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-[#667085]"
+                />
+              </form>
+            )}
 
-            <button
-              type="button"
-              className="hidden size-9 place-items-center rounded-md text-[#17202a] transition hover:bg-[#f5f7fa] sm:grid"
-              aria-label="Notifications"
-            >
-              <Bell size={18} aria-hidden="true" />
-            </button>
+            <div className="relative hidden sm:block" ref={notifRef}>
+              <button
+                type="button"
+                onClick={toggleNotifications}
+                className="relative grid size-9 place-items-center rounded-md text-[#17202a] transition hover:bg-[#f5f7fa]"
+                aria-label="Notifications"
+                aria-expanded={notifOpen}
+              >
+                <Bell size={18} aria-hidden="true" />
+                {unreadCount > 0 ? (
+                  <span className="absolute right-1 top-1 grid size-4 place-items-center rounded-full bg-[#d92d20] text-[9px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                ) : null}
+              </button>
 
-            <div className="flex items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-2 py-2">
-              <div className="grid size-10 place-items-center rounded-md bg-[#102033] text-sm font-semibold text-white">
-                {initials || <UserCircle size={24} aria-hidden="true" />}
-              </div>
-              <div className="hidden min-w-32 sm:block">
-                <p className="truncate text-sm font-semibold text-[#17202a]">{displayName}</p>
-                <p className="truncate text-xs text-[#667085]">Admin</p>
-              </div>
+              {notifOpen ? (
+                <div className="absolute right-0 top-full z-30 mt-2 w-96 max-w-[90vw] overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-lg">
+                  <div className="border-b border-[#eef2f7] px-4 py-3">
+                    <h3 className="text-sm font-semibold text-[#17202a]">Notifications</h3>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifLoading ? (
+                      <p className="px-4 py-6 text-center text-sm text-[#667085]">Loading…</p>
+                    ) : notifications.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-[#667085]">
+                        No notifications yet.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-[#eef2f7]">
+                        {notifications.map((n) => (
+                          <li key={n.id} className="px-4 py-3 hover:bg-[#f9fafb]">
+                            <p className="text-sm text-[#17202a]">{n.message}</p>
+                            <p className="mt-1 text-xs text-[#98a2b3]">{timeAgo(n.created_at)}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="relative" ref={profileRef}>
+              <button
+                type="button"
+                onClick={() => setProfileOpen((v) => !v)}
+                aria-expanded={profileOpen}
+                aria-label="Profile menu"
+                className="flex items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-2 py-2 transition hover:border-[#34c6a3]"
+              >
+                <div className="grid size-10 place-items-center rounded-md bg-[#102033] text-sm font-semibold text-white">
+                  {initials || <UserCircle size={24} aria-hidden="true" />}
+                </div>
+                <div className="hidden min-w-32 text-left sm:block">
+                  <p className="truncate text-sm font-semibold text-[#17202a]">{displayName}</p>
+                  <p className="truncate text-xs text-[#667085]">Admin</p>
+                </div>
+              </button>
+
+              {profileOpen ? (
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-lg">
+                  <div className="border-b border-[#eef2f7] px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-[#17202a]">{displayName}</p>
+                    <p className="truncate text-xs text-[#667085]">{currentUser?.email ?? "Admin"}</p>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false)
+                        navigate("/admin/settings")
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#17202a] transition hover:bg-[#f5f7fa]"
+                    >
+                      <Settings size={16} aria-hidden="true" />
+                      Account settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#b42318] transition hover:bg-[#fff5f5]"
+                    >
+                      <LogOut size={16} aria-hidden="true" />
+                      Log out
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </header>

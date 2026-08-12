@@ -1,15 +1,19 @@
 import { ChevronRight, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 
 import { getFacultyStudents, type FacultyStudent } from "../../api/faculty"
-import OnboardingTabs from "../../components/faculty/OnboardingTabs"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 export default function FacultyStudents() {
+  const [searchParams] = useSearchParams()
   const [students, setStudents] = useState<FacultyStudent[]>([])
   const [sectionName, setSectionName] = useState("")
-  const [search, setSearch] = useState("")
+  const [search, setSearch] = useState(searchParams.get("search") ?? "")
+
+  useEffect(() => {
+    setSearch(searchParams.get("search") ?? "")
+  }, [searchParams])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -57,8 +61,6 @@ export default function FacultyStudents() {
             history. Students are added by your program office (admin).
           </p>
         </div>
-
-        <OnboardingTabs studentCount={students.length} />
 
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

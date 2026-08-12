@@ -13,6 +13,7 @@ import {
   type FacultyState,
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
+import { DESIGNATION_OPTIONS } from "../../constants/designations"
 
 type FilterKey = "all" | FacultyState
 
@@ -393,7 +394,12 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
 
           <label className={label}>
             Designation
-            <input className={field} value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Associate Professor" />
+            <select className={field} value={designation} onChange={(e) => setDesignation(e.target.value)}>
+              <option value="">Select designation</option>
+              {DESIGNATION_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </label>
           {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
           <button

@@ -22,6 +22,7 @@ An AI-evaluated business case-study platform with **Admin**, **Faculty**, and
 ## First-time setup
 
 **Backend** (install deps + apply DB migrations):
+
 ```cmd
 cd backend
 conda activate PCDC
@@ -30,6 +31,7 @@ python -m alembic upgrade head
 ```
 
 **Frontend** (install deps):
+
 ```cmd
 cd frontend
 npm install
@@ -42,23 +44,28 @@ npm install
 You need **both** servers running.
 
 ### Terminal 1 — Backend (FastAPI, port 8000)
+
 ```cmd
 cd backend
 conda activate PCDC
 python -m uvicorn main:app --reload --port 8000
 ```
+
 If `conda activate PCDC` misbehaves, call the env Python directly:
+
 ```cmd
 "C:\Users\user\.conda\envs\PCDC\python.exe" -m uvicorn main:app --reload --port 8000
 ```
 
 ### Terminal 2 — Frontend (Vite, port 5173)
+
 ```cmd
 cd frontend
 npm run dev
 ```
 
 ### Open
+
 ```
 http://localhost:5173
 ```
@@ -70,12 +77,12 @@ http://localhost:5173
 
 ## Test accounts (shared demo DB)
 
-| Role | Login | Password |
-|---|---|---|
-| Admin | `admin@pcdc.com` | `Admin@123` |
-| Faculty | `deepak.k@pcdc.in` | `Faculty@123` |
-| Student | `amanpreetdutta09@gmail.com` | `Student@123` |
-| Student (first login) | `123456789` | `123456789` (forces a password change) |
+| Role                  | Login                          | Password                                 |
+| --------------------- | ------------------------------ | ---------------------------------------- |
+| Admin                 | `admin@pcdc.com`             | `Admin@123`                            |
+| Faculty               | `deepak.k@pcdc.in`           | `Faculty@123`                          |
+| Student               | `amanpreetdutta09@gmail.com` | `Student@123`                          |
+| Student (first login) | `123456789`                  | `123456789` (forces a password change) |
 
 Students log in with their **email or scholar number**.
 
@@ -83,14 +90,14 @@ Students log in with their **email or scholar number**.
 
 ## Common tasks
 
-| Task | Command (from the folder shown) |
-|---|---|
-| Run backend | `backend`: `python -m uvicorn main:app --reload --port 8000` |
-| Run frontend | `frontend`: `npm run dev` |
-| Frontend type-check | `frontend`: `npx tsc -b` |
-| Frontend production build | `frontend`: `npm run build` |
-| Create a DB migration | `backend`: `python -m alembic revision -m "msg"` |
-| Apply migrations | `backend`: `python -m alembic upgrade head` |
+| Task                      | Command (from the folder shown)                                  |
+| ------------------------- | ---------------------------------------------------------------- |
+| Run backend               | `backend`: `python -m uvicorn main:app --reload --port 8000` |
+| Run frontend              | `frontend`: `npm run dev`                                    |
+| Frontend type-check       | `frontend`: `npx tsc -b`                                     |
+| Frontend production build | `frontend`: `npm run build`                                  |
+| Create a DB migration     | `backend`: `python -m alembic revision -m "msg"`             |
+| Apply migrations          | `backend`: `python -m alembic upgrade head`                  |
 
 ---
 

@@ -740,9 +740,21 @@ def submit_initial_analysis(
             "word_count": word_count,
         },
     )
-    opening_message = generate_opening_discussion_message(
-        db, attempt.id, case_row.title, parse_situation(case_row.content), initial_analysis
-    )
+    # Commit the submission itself before touching the AI. A slow or failing
+    # LLM call must never take the student's submitted analysis down with it —
+    # that's what was turning transient AI hiccups into "submission failed".
+    db.commit()
+    try:
+        opening_message = generate_opening_discussion_message(
+            db, attempt.id, case_row.title, parse_situation(case_row.content), initial_analysis
+        )
+    except Exception as error:  # noqa: BLE001 - any AI failure falls back, never blocks submit
+        print(f"OPENING DISCUSSION MESSAGE ERROR: {error}")
+        opening_message = (
+            "Your analysis is in. Let's dig into it — what's the single biggest risk "
+            "in your recommendation, and why?"
+        )
+        log_conversation(db, attempt.id, "ai", "discussion", opening_message)
     db.commit()
     return {"ai_unlocked": True, "attempt_id": attempt_id, "opening_message": opening_message}
 
@@ -1830,6 +1842,10 @@ def call_llm(
         "messages": [{"role": "system", "content": system_prompt}, *messages],
         # Lower this on serverless hosts with short function limits (e.g. Vercel).
         "timeout": int(os.getenv("LLM_TIMEOUT_SECONDS", "90")),
+        # Near-zero temperature so the same case + same answers score the same
+        # way for every student — sampling randomness otherwise causes a wide
+        # spread on identical input (evaluation, rapid fire, defense scoring).
+        "temperature": 0,
     }
     # Force valid JSON for the calls that parse it (evaluation, rapid fire,
     # defense). json_object mode works for both OpenAI and Gemini and stops

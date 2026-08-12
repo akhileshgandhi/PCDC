@@ -838,7 +838,11 @@ function titleCase(value: string) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(
-    new Date(value),
-  )
+  // Date-only values (e.g. "2026-08-12") parse as UTC midnight — render in UTC too,
+  // otherwise browsers west of UTC show the previous day.
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value))
 }

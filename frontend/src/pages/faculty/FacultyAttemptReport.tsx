@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom"
 
 import { getFacultyAttemptDetail, type FacultyAttemptDetail } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
+import { scoreColorHex } from "../../utils/scoreColor"
 
 const DIMENSIONS: Array<{ key: keyof NonNullable<FacultyAttemptDetail["evaluation"]>; label: string }> = [
   { key: "thinking_depth", label: "Thinking depth" },
@@ -14,11 +15,7 @@ const DIMENSIONS: Array<{ key: keyof NonNullable<FacultyAttemptDetail["evaluatio
   { key: "reflection_score", label: "Reflection" },
 ]
 
-function tone(score: number): string {
-  if (score >= 75) return "#16a34a"
-  if (score >= 55) return "#c9a227"
-  return "#b91c1c"
-}
+const tone = scoreColorHex
 
 function toBulletItems(raw: string): string[] {
   const text = (raw ?? "").trim()
@@ -100,15 +97,25 @@ export default function FacultyAttemptReport() {
               <>
                 <section className="flex flex-wrap items-center gap-5 rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
                   <div>
-                    <p className="text-4xl font-extrabold text-[#0b1d3a]">
-                      {evaluation.total_score}
-                      <span className="text-base font-semibold text-[#6b7280]">/100</span>
-                    </p>
                     {data.marks ? (
-                      <p className="mt-1 text-sm font-semibold text-[#17202a]">
-                        {data.marks.total_awarded} / {data.marks.total_max} marks
+                      <>
+                        <p className="text-4xl font-extrabold text-[#0b1d3a]">
+                          {data.marks.total_awarded}
+                          <span className="text-base font-semibold text-[#6b7280]">
+                            {" "}
+                            / {data.marks.total_max}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-[#17202a]">
+                          Overall score: {evaluation.total_score}/100
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-4xl font-extrabold text-[#0b1d3a]">
+                        {evaluation.total_score}
+                        <span className="text-base font-semibold text-[#6b7280]">/100</span>
                       </p>
-                    ) : null}
+                    )}
                   </div>
                   <div className="flex-1 min-w-[200px]">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[#c9a227]">

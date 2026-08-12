@@ -1264,6 +1264,36 @@ def dashboard_summary(
     })
 
 
+@faculty_router.get("/notifications")
+def faculty_notifications(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    rows = db.execute(
+        text("""
+            SELECT id, event_type, subject, body, created_at
+            FROM notification_log
+            WHERE recipient_user_id = :faculty_id
+            ORDER BY id DESC
+            LIMIT :limit
+        """),
+        {"faculty_id": current_user["id"], "limit": limit},
+    ).fetchall()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "event_type": row.event_type,
+                "message": row.subject or row.body or row.event_type,
+                "created_at": str(row.created_at),
+            }
+            for row in rows
+        ],
+    }
+
+
 @faculty_router.get("/cases")
 def faculty_cases(
     domain: Optional[str] = None,

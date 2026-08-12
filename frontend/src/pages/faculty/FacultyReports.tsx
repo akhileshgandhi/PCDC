@@ -8,6 +8,7 @@ import {
   type FacultyStudent,
 } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
+import { scoreColorHexOrNeutral } from "../../utils/scoreColor"
 
 type ReportType = "section_summary" | "student_performance"
 
@@ -340,12 +341,7 @@ function ReportTable({ head, rows }: ReportTableProps) {
   )
 }
 
-function scoreTone(score: number): string {
-  if (score >= 75) return "#16a34a"
-  if (score >= 60) return "#b45309"
-  if (score > 0) return "#b91c1c"
-  return "#9ca3af"
-}
+const scoreTone = scoreColorHexOrNeutral
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {

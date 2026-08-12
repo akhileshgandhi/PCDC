@@ -2,6 +2,7 @@ import {
   ChevronDown,
   ChevronRight,
   GraduationCap,
+  Pencil,
   Plus,
   Trash2,
   Upload,
@@ -24,17 +25,21 @@ import {
   getAdminCourses,
   getAdminCourseSections,
   getAdminCourseSemesters,
+  getAdminDepartments,
   getAdminSection,
   getAdminUsers,
   removeAdminSectionFaculty,
   removeAdminSectionStudent,
+  updateAdminCourse,
   type AdminBatch,
   type AdminCourse,
+  type AdminDepartment,
   type AdminSection,
   type AdminSectionDetail,
   type AdminSemester,
   type AdminUser,
 } from "../../api/admin"
+import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 
 export default function AdminCourses() {
@@ -43,7 +48,24 @@ export default function AdminCourses() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [showAddCourse, setShowAddCourse] = useState(false)
+  const [editingCourse, setEditingCourse] = useState<AdminCourse | null>(null)
+  const [deletingCourse, setDeletingCourse] = useState<AdminCourse | null>(null)
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
+
+  async function confirmDeleteCourse() {
+    if (!deletingCourse) return
+    const course = deletingCourse
+    try {
+      await deleteAdminCourse(course.id)
+      setNotice(`Course "${course.name}" deleted.`)
+      if (selectedCourseId === course.id) setSelectedCourseId(null)
+      await loadCourses()
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Unable to delete course.")
+    } finally {
+      setDeletingCourse(null)
+    }
+  }
 
   async function loadCourses() {
     setIsLoading(true)
@@ -131,26 +153,27 @@ export default function AdminCourses() {
                       years
                     </p>
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={async () => {
-                        if (!window.confirm(`Delete course "${course.name}"? This will remove all batches, sections, faculty assignments, and unlink enrolled students.`)) return
-                        try {
-                          await deleteAdminCourse(course.id)
-                          setNotice(`Course "${course.name}" deleted.`)
-                          if (selectedCourseId === course.id) setSelectedCourseId(null)
-                          await loadCourses()
-                        } catch (err: any) {
-                          setError(err?.response?.data?.detail || "Unable to delete course.")
-                        }
-                      }}
-                      className="rounded-md p-1.5 text-[#667085] transition hover:bg-[#fff5f5] hover:text-[#b42318]"
-                      title="Delete course"
+                      onClick={() => setEditingCourse(course)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-2.5 py-1.5 text-xs font-semibold text-[#17202a] transition hover:border-[#34c6a3] hover:text-[#176b5a]"
+                      title="Edit course"
+                      aria-label={`Edit ${course.name}`}
                     >
-                      <Trash2 size={16} />
+                      <Pencil size={14} aria-hidden="true" />
+                      Edit
                     </button>
-                    <ChevronRight size={20} className="text-[#667085]" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => setDeletingCourse(course)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-semibold text-[#667085] transition hover:border-[#f3c4c4] hover:bg-[#fff5f5] hover:text-[#b42318]"
+                      title="Delete course"
+                      aria-label={`Delete ${course.name}`}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                      Delete
+                    </button>
                   </div>
                 </div>
                 <button
@@ -188,6 +211,27 @@ export default function AdminCourses() {
           }}
         />
       ) : null}
+
+      {editingCourse ? (
+        <EditCourseDialog
+          course={editingCourse}
+          onClose={() => setEditingCourse(null)}
+          onSaved={async () => {
+            setEditingCourse(null)
+            setNotice("Course updated.")
+            await loadCourses()
+          }}
+        />
+      ) : null}
+
+      {deletingCourse ? (
+        <ConfirmDialog
+          title="Delete course?"
+          message={`Delete course "${deletingCourse.name}"? This will remove all batches, sections, faculty assignments, and unlink enrolled students.`}
+          onConfirm={confirmDeleteCourse}
+          onCancel={() => setDeletingCourse(null)}
+        />
+      ) : null}
     </AdminLayout>
   )
 }
@@ -209,6 +253,7 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
   const [expandedSemesters, setExpandedSemesters] = useState<Set<number>>(new Set())
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set())
   const [sectionDetails, setSectionDetails] = useState<Record<number, AdminSectionDetail>>({})
+  const [advancingBatch, setAdvancingBatch] = useState<AdminBatch | null>(null)
 
   async function loadDetail() {
     setIsLoading(true)
@@ -267,18 +312,18 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
     })
   }
 
-  async function handleAdvanceSemester(batch: AdminBatch) {
-    if (!window.confirm(`Advance all active students in "${batch.name}" to their next semester's section?`)) {
-      return
-    }
+  async function confirmAdvanceSemester() {
+    if (!advancingBatch) return
     try {
-      const result = await advanceBatchSemester(batch.id)
+      const result = await advanceBatchSemester(advancingBatch.id)
       onNotice(
         `Advanced ${result.advanced_count} student(s). ${result.flagged_count} flagged (no next-semester section).`,
       )
       await Promise.all([loadDetail(), onRefresh()])
     } catch {
       onNotice("")
+    } finally {
+      setAdvancingBatch(null)
     }
   }
 
@@ -317,7 +362,7 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
                 <span className="text-[#667085]">{batch.start_year}-{batch.end_year}</span>
                 <button
                   type="button"
-                  onClick={() => handleAdvanceSemester(batch)}
+                  onClick={() => setAdvancingBatch(batch)}
                   className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#176b5a] hover:bg-[#e8f8f4]"
                   title="Advance semester"
                 >
@@ -414,6 +459,17 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
           }}
         />
       ) : null}
+
+      {advancingBatch ? (
+        <ConfirmDialog
+          title="Advance semester?"
+          message={`Advance all active students in "${advancingBatch.name}" to their next semester's section?`}
+          confirmLabel="Advance"
+          danger={false}
+          onConfirm={confirmAdvanceSemester}
+          onCancel={() => setAdvancingBatch(null)}
+        />
+      ) : null}
     </section>
   )
 }
@@ -441,6 +497,32 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<string>("")
   const fileRef = useRef<HTMLInputElement>(null)
+  const [removeFacultyTarget, setRemoveFacultyTarget] = useState<{ id: number; name: string } | null>(null)
+  const [removeStudentTarget, setRemoveStudentTarget] = useState<{ id: number; name: string } | null>(null)
+
+  async function confirmRemoveFaculty() {
+    if (!removeFacultyTarget) return
+    try {
+      await removeAdminSectionFaculty(section.id, removeFacultyTarget.id)
+      await onChanged()
+    } catch {
+      onNotice("Unable to remove faculty.")
+    } finally {
+      setRemoveFacultyTarget(null)
+    }
+  }
+
+  async function confirmRemoveStudent() {
+    if (!removeStudentTarget) return
+    try {
+      await removeAdminSectionStudent(section.id, removeStudentTarget.id)
+      await onChanged()
+    } catch {
+      onNotice("Unable to remove student.")
+    } finally {
+      setRemoveStudentTarget(null)
+    }
+  }
 
   useEffect(() => {
     if (showFacultyForm && facultyOptions.length === 0) {
@@ -555,15 +637,7 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                         <span className="text-[#667085]">— {f.subject}</span>
                         <button
                           type="button"
-                          onClick={async () => {
-                            if (!window.confirm(`Remove ${f.faculty_name} from this section?`)) return
-                            try {
-                              await removeAdminSectionFaculty(section.id, f.faculty_id)
-                              await onChanged()
-                            } catch {
-                              onNotice("Unable to remove faculty.")
-                            }
-                          }}
+                          onClick={() => setRemoveFacultyTarget({ id: f.faculty_id, name: f.faculty_name })}
                           className="ml-1 rounded-full p-0.5 text-[#667085] hover:bg-[#fff5f5] hover:text-[#b42318]"
                           title="Remove faculty"
                         >
@@ -663,15 +737,7 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                             <td className="px-2 py-2">
                               <button
                                 type="button"
-                                onClick={async () => {
-                                  if (!window.confirm(`Remove ${s.name} from this section?`)) return
-                                  try {
-                                    await removeAdminSectionStudent(section.id, s.student_id)
-                                    await onChanged()
-                                  } catch {
-                                    onNotice("Unable to remove student.")
-                                  }
-                                }}
+                                onClick={() => setRemoveStudentTarget({ id: s.student_id, name: s.name })}
                                 className="rounded p-0.5 text-[#667085] hover:bg-[#fff5f5] hover:text-[#b42318]"
                                 title="Remove student"
                               >
@@ -719,6 +785,24 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
           )}
         </div>
       ) : null}
+      {removeFacultyTarget ? (
+        <ConfirmDialog
+          title="Remove faculty?"
+          message={`Remove ${removeFacultyTarget.name} from this section?`}
+          confirmLabel="Remove"
+          onConfirm={confirmRemoveFaculty}
+          onCancel={() => setRemoveFacultyTarget(null)}
+        />
+      ) : null}
+      {removeStudentTarget ? (
+        <ConfirmDialog
+          title="Remove student?"
+          message={`Remove ${removeStudentTarget.name} from this section?`}
+          confirmLabel="Remove"
+          onConfirm={confirmRemoveStudent}
+          onCancel={() => setRemoveStudentTarget(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -736,8 +820,27 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
+  // Every existing program follows 2 semesters per academic year — enforce that
+  // relationship so a course can't be created with an inconsistent combination
+  // (e.g. 2 semesters over a 2-year duration).
+  function handleDurationChange(value: string) {
+    setDurationYears(value)
+    const years = Number(value)
+    if (years > 0) setTotalSemesters(String(years * 2))
+  }
+
+  const expectedSemesters = Number(durationYears) > 0 ? Number(durationYears) * 2 : null
+  const semestersMismatch =
+    expectedSemesters !== null && Number(totalSemesters) !== expectedSemesters
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (semestersMismatch) {
+      setError(
+        `${durationYears} year(s) should have ${expectedSemesters} semesters (2 per year), not ${totalSemesters}.`,
+      )
+      return
+    }
     setIsSaving(true)
     setError("")
     try {
@@ -748,8 +851,8 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
         duration_years: Number(durationYears),
       })
       onCreated()
-    } catch {
-      setError("Unable to create course. Check that the code is unique.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Unable to create course. Check that the code is unique.")
     } finally {
       setIsSaving(false)
     }
@@ -791,13 +894,124 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
               type="number"
               min={1}
               value={durationYears}
-              onChange={(event) => setDurationYears(event.target.value)}
+              onChange={(event) => handleDurationChange(event.target.value)}
               className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
             />
           </DialogField>
         </div>
+        {semestersMismatch ? (
+          <p className="text-xs font-medium text-[#b42318]">
+            {durationYears} year(s) should have {expectedSemesters} semesters (2 per year).
+          </p>
+        ) : null}
         {error ? <DialogError message={error} /> : null}
         <DialogActions onClose={onClose} isSaving={isSaving} submitLabel="Create Course" />
+      </form>
+    </Modal>
+  )
+}
+
+interface EditCourseDialogProps {
+  course: AdminCourse
+  onClose: () => void
+  onSaved: () => void
+}
+
+function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
+  const [name, setName] = useState(course.name)
+  const [status, setStatus] = useState<"active" | "inactive">(course.status)
+  const [departmentId, setDepartmentId] = useState(course.department_id ? String(course.department_id) : "")
+  const [departments, setDepartments] = useState<AdminDepartment[]>([])
+  const [error, setError] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
+  }, [])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!name.trim()) {
+      setError("Course name is required.")
+      return
+    }
+    setIsSaving(true)
+    setError("")
+    try {
+      await updateAdminCourse(course.id, {
+        name: name.trim(),
+        status,
+        department_id: departmentId ? Number(departmentId) : undefined,
+      })
+      onSaved()
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Unable to update course.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Edit Course" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <DialogField label="Course Name">
+          <input
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+          />
+        </DialogField>
+        <DialogField label="Course Code">
+          <input
+            disabled
+            value={course.code}
+            className="h-11 w-full rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm text-[#667085] outline-none"
+          />
+        </DialogField>
+        <DialogField label="Department">
+          <select
+            value={departmentId}
+            onChange={(event) => setDepartmentId(event.target.value)}
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+          >
+            <option value="">No department</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </DialogField>
+        <DialogField label="Status">
+          <select
+            value={status}
+            onChange={(event) => setStatus(event.target.value as "active" | "inactive")}
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </DialogField>
+        <div className="grid grid-cols-2 gap-4">
+          <DialogField label="Total Semesters">
+            <input
+              disabled
+              value={course.total_semesters}
+              className="h-11 w-full rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm text-[#667085] outline-none"
+            />
+          </DialogField>
+          <DialogField label="Duration (years)">
+            <input
+              disabled
+              value={course.duration_years}
+              className="h-11 w-full rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm text-[#667085] outline-none"
+            />
+          </DialogField>
+        </div>
+        <p className="-mt-2 text-xs text-[#667085]">
+          Semesters and duration can't be changed once a course has been created.
+        </p>
+        {error ? <DialogError message={error} /> : null}
+        <DialogActions onClose={onClose} isSaving={isSaving} submitLabel="Save Changes" />
       </form>
     </Modal>
   )
@@ -818,6 +1032,21 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (
+      !/^\d{4}$/.test(startYear) ||
+      !/^\d{4}$/.test(endYear) ||
+      Number(startYear) < 1900 ||
+      Number(startYear) > 2100 ||
+      Number(endYear) < 1900 ||
+      Number(endYear) > 2100
+    ) {
+      setError("Start and end year must be realistic 4-digit calendar years (1900–2100).")
+      return
+    }
+    if (Number(endYear) < Number(startYear)) {
+      setError("End year must not be before start year.")
+      return
+    }
     setIsSaving(true)
     setError("")
     try {
@@ -827,8 +1056,8 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
         end_year: Number(endYear),
       })
       onCreated()
-    } catch {
-      setError("Unable to create batch.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Unable to create batch.")
     } finally {
       setIsSaving(false)
     }
@@ -851,6 +1080,8 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
             <input
               required
               type="number"
+              min={1900}
+              max={2100}
               value={startYear}
               onChange={(event) => setStartYear(event.target.value)}
               className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
@@ -860,6 +1091,8 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
             <input
               required
               type="number"
+              min={1900}
+              max={2100}
               value={endYear}
               onChange={(event) => setEndYear(event.target.value)}
               className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
@@ -926,36 +1159,34 @@ function AddSectionDialog({
             className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
           />
         </DialogField>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <DialogField label="Semester">
-            <select
-              required
-              value={semesterId}
-              onChange={(event) => setSemesterId(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-            >
-              {semesters.map((semester) => (
-                <option key={semester.id} value={semester.id}>
-                  {semester.name}
-                </option>
-              ))}
-            </select>
-          </DialogField>
-          <DialogField label="Batch">
-            <select
-              required
-              value={batchId}
-              onChange={(event) => setBatchId(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-            >
-              {batches.map((batch) => (
-                <option key={batch.id} value={batch.id}>
-                  {batch.name}
-                </option>
-              ))}
-            </select>
-          </DialogField>
-        </div>
+        <DialogField label="Semester">
+          <select
+            required
+            value={semesterId}
+            onChange={(event) => setSemesterId(event.target.value)}
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+          >
+            {semesters.map((semester) => (
+              <option key={semester.id} value={semester.id}>
+                {semester.name}
+              </option>
+            ))}
+          </select>
+        </DialogField>
+        <DialogField label="Batch">
+          <select
+            required
+            value={batchId}
+            onChange={(event) => setBatchId(event.target.value)}
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+          >
+            {batches.map((batch) => (
+              <option key={batch.id} value={batch.id}>
+                {batch.name} ({batch.start_year}–{batch.end_year})
+              </option>
+            ))}
+          </select>
+        </DialogField>
         <DialogField label="Academic Year (optional)">
           <input
             value={academicYear}

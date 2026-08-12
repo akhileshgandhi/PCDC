@@ -261,6 +261,20 @@ export async function getFacultyDashboardSummary() {
   return response.data
 }
 
+export interface FacultyNotification {
+  id: number
+  event_type: string
+  message: string
+  created_at: string
+}
+
+export async function getFacultyNotifications(limit = 20) {
+  const response = await api.get<{ items: FacultyNotification[] }>("/faculty/notifications", {
+    params: { limit },
+  })
+  return response.data
+}
+
 export async function getFacultyCases(filters: FacultyCaseFilters = {}) {
   const response = await api.get<FacultyCase[]>("/faculty/cases", {
     params: {

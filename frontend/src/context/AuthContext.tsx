@@ -53,30 +53,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  const loginWithGoogle = async (credential: string) => {
-    try {
-      const response = await api.post<LoginResponse>("/auth/google", { credential })
-      const accessToken = response.data.access_token
-
-      storeToken(accessToken)
-      setToken(accessToken)
-      setUser(userFromToken(accessToken))
-
-      return accessToken
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (!error.response) {
-          throw new Error("Unable to connect. Please try again.")
-        }
-        const detail = error.response.data?.detail
-        throw new Error(
-          typeof detail === "string" ? detail : "Google sign-in failed. Please try again.",
-        )
-      }
-      throw new Error("Google sign-in failed. Please try again.")
-    }
-  }
-
   const logout = () => {
     clearToken()
     setToken(null)
@@ -89,7 +65,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       token,
       isAuthenticated: Boolean(token && user),
       login,
-      loginWithGoogle,
       logout,
     }),
     [token, user],

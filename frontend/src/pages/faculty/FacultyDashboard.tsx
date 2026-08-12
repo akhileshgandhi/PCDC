@@ -139,13 +139,19 @@ export default function FacultyDashboard() {
           <article className="rounded-lg border border-[#e6e8eb] bg-white p-6 shadow-sm">
             <h3 className="text-lg font-semibold">Review Queue</h3>
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <QueueMetric label="Pending" value={summary.pending_reviews} />
-              <QueueMetric label="Alerts" value={summary.capability_alerts} />
+              <QueueMetric
+                label="Pending"
+                value={summary.pending_reviews}
+                to="/faculty/reports"
+                description="Attempts submitted or awaiting defense that you haven't reviewed yet."
+              />
+              <QueueMetric
+                label="Alerts"
+                value={summary.capability_alerts}
+                to="/faculty/analytics"
+                description="Students whose capability score has dropped below 60 and may need coaching."
+              />
             </div>
-            <p className="mt-5 text-sm leading-6 text-[#6b7280]">
-              Pending reviews currently map to submitted or defense-complete
-              case attempts until a dedicated faculty-review status is added.
-            </p>
           </article>
         </section>
 
@@ -161,34 +167,39 @@ export default function FacultyDashboard() {
             value={sections.length}
             icon={FolderKanban}
             isLoading={isLoading}
+            to="#my-sections"
           />
           <SummaryCard
             label="My Students"
             value={totalSectionStudents}
             icon={Users}
             isLoading={isLoading}
+            to="/faculty/students"
           />
           <SummaryCard
             label="Simulations Running"
             value={summary.simulations_running}
             icon={Clock3}
             isLoading={isLoading}
+            to="/faculty/case-library"
           />
           <SummaryCard
             label="Pending Reviews"
             value={summary.pending_reviews}
             icon={BookOpen}
             isLoading={isLoading}
+            to="/faculty/reports"
           />
           <SummaryCard
             label="Capability Alerts"
             value={summary.capability_alerts}
             icon={AlertTriangle}
             isLoading={isLoading}
+            to="/faculty/analytics"
           />
         </section>
 
-        <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+        <section id="my-sections" className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm scroll-mt-24">
           <div className="mb-5">
             <h2 className="text-2xl font-semibold">My Sections</h2>
             <p className="mt-1 text-sm text-[#6b7280]">
@@ -273,11 +284,15 @@ interface SummaryCardProps {
   value: number
   icon: LucideIcon
   isLoading: boolean
+  to: string
 }
 
-function SummaryCard({ label, value, icon: Icon, isLoading }: SummaryCardProps) {
+function SummaryCard({ label, value, icon: Icon, isLoading, to }: SummaryCardProps) {
   return (
-    <article className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+    <Link
+      to={to}
+      className="block rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9a227] hover:shadow-md"
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="grid size-10 place-items-center rounded-md bg-[#eef3f8] text-[#0b1d3a]">
           <Icon size={19} aria-hidden="true" />
@@ -290,20 +305,27 @@ function SummaryCard({ label, value, icon: Icon, isLoading }: SummaryCardProps) 
       <p className="mt-2 text-3xl font-semibold text-[#111827]">
         {isLoading ? "..." : value}
       </p>
-    </article>
+    </Link>
   )
 }
 
 interface QueueMetricProps {
   label: string
   value: number
+  to: string
+  description: string
 }
 
-function QueueMetric({ label, value }: QueueMetricProps) {
+function QueueMetric({ label, value, to, description }: QueueMetricProps) {
   return (
-    <div className="rounded-md bg-[#f6f7fb] p-4 text-center">
+    <Link
+      to={to}
+      title={description}
+      className="block rounded-md bg-[#f6f7fb] p-4 text-center transition hover:-translate-y-0.5 hover:bg-[#eef3f8] hover:shadow-sm"
+    >
       <p className="text-3xl font-semibold text-[#0b1d3a]">{value}</p>
       <p className="mt-1 text-xs font-semibold uppercase text-[#6b7280]">{label}</p>
-    </div>
+      <p className="mt-1 text-[11px] leading-4 text-[#9ca3af]">{description}</p>
+    </Link>
   )
 }

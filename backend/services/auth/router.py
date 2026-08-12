@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from .service import (
     register_user,
     login_user,
-    login_with_google,
     get_current_user,
     validate_setup_token,
     set_password_with_token,
@@ -12,7 +11,7 @@ from .service import (
     send_password_reset,
 )
 from shared.email import app_base_url
-from .models import UserRegister, UserLogin, GoogleAuthRequest, UserResponse, Token
+from .models import UserRegister, UserLogin, UserResponse, Token
 from shared.database import get_db
 
 auth_router = APIRouter(prefix="/auth")
@@ -29,6 +28,7 @@ class ChangePasswordRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     identifier: str  # email or scholar number
+    email: str | None = None  # students: registered email (verification factor)
 
 @auth_router.post("/register", response_model=UserResponse)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -46,10 +46,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     return login_user(db, user_data.email, user_data.password)
 
-@auth_router.post("/google", response_model=Token)
-async def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
-    return login_with_google(db, payload.credential)
-
 @auth_router.post("/forgot-password")
 async def post_forgot_password(
     payload: ForgotPasswordRequest,
@@ -59,7 +55,7 @@ async def post_forgot_password(
     """Public: email a reset link to the matching account. Always returns a
     generic success so account existence is never revealed."""
     base = (request.headers.get("origin") or "").rstrip("/") or app_base_url()
-    return send_password_reset(db, payload.identifier, base)
+    return send_password_reset(db, payload.identifier, payload.email or "", base)
 
 
 @auth_router.get("/set-password")

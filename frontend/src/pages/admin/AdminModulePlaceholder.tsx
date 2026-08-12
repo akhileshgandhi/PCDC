@@ -14,26 +14,28 @@ export default function AdminModulePlaceholder({
 }: AdminModulePlaceholderProps) {
   return (
     <AdminLayout>
-      <section className="rounded-lg border border-[#dde4ec] bg-white p-6 shadow-sm">
-        <Link
-          to="/admin/dashboard"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#176b5a] transition hover:text-[#102033]"
-        >
-          <ArrowLeft size={16} aria-hidden="true" />
-          Dashboard
-        </Link>
-        <div className="mt-8 flex max-w-3xl items-start gap-4">
-          <span className="grid size-11 shrink-0 place-items-center rounded-md bg-[#e8f8f4] text-[#176b5a]">
-            <Construction size={22} aria-hidden="true" />
-          </span>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-normal text-[#17202a]">
-              {title}
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-[#667085]">{description}</p>
+      <div className="space-y-5">
+        <section className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm sm:p-6">
+          <Link
+            to="/admin/dashboard"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#176b5a] transition hover:text-[#102033]"
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            Dashboard
+          </Link>
+          <div className="mt-8 flex max-w-3xl items-start gap-4">
+            <span className="grid size-11 shrink-0 place-items-center rounded-md bg-[#e8f8f4] text-[#176b5a]">
+              <Construction size={22} aria-hidden="true" />
+            </span>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-normal text-[#17202a]">
+                {title}
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-[#667085]">{description}</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </AdminLayout>
   )
 }

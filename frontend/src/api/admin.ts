@@ -286,6 +286,22 @@ export async function createAdminUser(payload: CreateAdminUserPayload) {
   return response.data
 }
 
+export interface AdminUserLoginEvent {
+  id: number
+  user_agent: string | null
+  ip_address: string | null
+  created_at: string
+}
+
+export interface AdminUserDetail extends AdminUser {
+  login_history: AdminUserLoginEvent[]
+}
+
+export async function getAdminUser(userId: number) {
+  const response = await api.get<AdminUserDetail>(`/admin/users/${userId}`)
+  return response.data
+}
+
 export async function updateAdminUserStatus(userId: number, status: AdminUserStatus) {
   const response = await api.patch<AdminUser>(`/admin/users/${userId}/status`, { status })
   return response.data
@@ -297,7 +313,9 @@ export async function updateAdminUserRole(userId: number, role: AdminUserRole) {
 }
 
 export async function resetAdminUserPassword(userId: number) {
-  const response = await api.post<{ status: string }>(`/admin/users/${userId}/reset-password`)
+  const response = await api.post<{ status: "reset_email_sent" | "reset_email_failed" }>(
+    `/admin/users/${userId}/reset-password`,
+  )
   return response.data
 }
 
@@ -321,6 +339,21 @@ export async function downloadImportTemplate(role?: string) {
 
 export async function getAdminAcademicSummary() {
   const response = await api.get<AcademicSummary>("/admin/academic/summary")
+  return response.data
+}
+
+export interface AdminNotification {
+  id: number
+  event_type: string
+  message: string
+  created_at: string
+}
+
+export async function getAdminNotifications(limit = 20) {
+  const response = await api.get<{ items: AdminNotification[]; total: number }>(
+    "/admin/notifications",
+    { params: { limit } },
+  )
   return response.data
 }
 
@@ -529,7 +562,7 @@ export async function createAdminCourse(payload: {
 
 export async function updateAdminCourse(
   courseId: number,
-  payload: { name?: string; status?: "active" | "inactive" },
+  payload: { name?: string; status?: "active" | "inactive"; department_id?: number },
 ) {
   const response = await api.patch<AdminCourse>(`/admin/courses/${courseId}`, payload)
   return response.data

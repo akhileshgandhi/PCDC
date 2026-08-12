@@ -43,6 +43,7 @@ type BuilderMode = "scratch" | "ai"
 
 interface CoreFormState {
   title: string
+  description: string
   industry: string
   difficulty: string
   duration_minutes: string
@@ -153,6 +154,7 @@ function normalizeCaseData(data: FacultyCaseEditor): FacultyCaseEditor {
 
 const emptyCoreForm: CoreFormState = {
   title: "",
+  description: "",
   industry: "business",
   difficulty: "3",
   duration_minutes: "45",
@@ -311,6 +313,7 @@ export default function FacultyCaseBuilder() {
     try {
       const data = await createFacultyCase({
         title: coreForm.title,
+        expected_outcomes: coreForm.description,
         industry: coreForm.industry,
         difficulty: Number(coreForm.difficulty),
         duration_minutes: Number(coreForm.duration_minutes),
@@ -336,6 +339,7 @@ export default function FacultyCaseBuilder() {
     try {
       const data = await updateFacultyCase(caseData.id, {
         title: coreForm.title,
+        expected_outcomes: coreForm.description,
         industry: coreForm.industry,
         difficulty: Number(coreForm.difficulty),
         duration_minutes: Number(coreForm.duration_minutes),
@@ -918,7 +922,7 @@ function EditorStep({
       <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Draft #{caseData.id}</h2>
+            <h2 className="text-2xl font-semibold">Case #{caseData.id}</h2>
             <p className="mt-1 text-sm text-[#6b7280]">
               Status: <span className="font-semibold capitalize">{caseData.status}</span>
             </p>
@@ -1049,6 +1053,16 @@ function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsF
           placeholder="e.g. Negotiating Shelf Space with a Retail Chain"
           onChange={(value) => onFieldChange("title", value)}
         />
+        <label className="grid gap-2 text-sm font-semibold text-[#111827] lg:col-span-2">
+          Description
+          <textarea
+            value={form.description}
+            onChange={(event) => onFieldChange("description", event.target.value)}
+            placeholder="A short summary shown to students and on the case listing."
+            rows={3}
+            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+          />
+        </label>
         <label className="grid gap-2 text-sm font-semibold text-[#111827]">
           Industry
           <select
@@ -1714,6 +1728,7 @@ function Feedback({ errors, notice }: FeedbackProps) {
 function caseToCoreForm(caseData: FacultyCaseEditor): CoreFormState {
   return {
     title: caseData.title,
+    description: caseData.expected_outcomes,
     industry: caseData.industry,
     difficulty: String(caseData.difficulty),
     duration_minutes: String(caseData.duration_minutes),

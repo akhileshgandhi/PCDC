@@ -288,7 +288,12 @@ export default function CaseAttempt() {
       if (isExpiredError(error)) {
         setExpired(true)
       } else {
-        setActionError("Unable to submit your analysis right now. Please try again.")
+        const detail = (error as any)?.response?.data?.detail
+        setActionError(
+          typeof detail === "string"
+            ? detail
+            : "Unable to submit your analysis right now. Please try again.",
+        )
       }
     } finally {
       setIsSubmitting(false)

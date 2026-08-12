@@ -99,19 +99,28 @@ export default function AdminTeachingApprovals() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={toggle}
-              disabled={loading || saving}
-              aria-pressed={requireApproval}
-              className={`inline-flex shrink-0 items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${
-                requireApproval
-                  ? "bg-[#102033] text-white hover:bg-[#1b3452]"
-                  : "border border-[#dde4ec] bg-white text-[#17202a] hover:bg-[#f5f7fa]"
-              }`}
-            >
-              {loading ? "Loading…" : requireApproval ? "Approval required" : "Approval off"}
-            </button>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className={`text-sm font-semibold ${requireApproval ? "text-[#17202a]" : "text-[#667085]"}`}>
+                {loading ? "Loading…" : requireApproval ? "On" : "Off"}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                onClick={toggle}
+                disabled={loading || saving}
+                aria-checked={requireApproval}
+                aria-label="Require approval for faculty self-selection"
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-60 ${
+                  requireApproval ? "bg-[#0f9d68]" : "bg-[#d0d5dd]"
+                }`}
+              >
+                <span
+                  className={`inline-block size-4 transform rounded-full bg-white shadow transition ${
+                    requireApproval ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

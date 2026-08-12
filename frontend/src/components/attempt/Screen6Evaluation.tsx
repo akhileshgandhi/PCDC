@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 
 import RadarChart, { type RadarMetric } from "./RadarChart"
 import type { QuestionScore } from "../../api/cases"
+import { scoreColorClass } from "../../utils/scoreColor"
 
 export interface EvaluationData {
   total_score: number
@@ -42,11 +43,7 @@ function gradeColor(grade: string) {
   return "text-[#DC2626] bg-[#FEF2F2]"
 }
 
-function scoreColor(score: number) {
-  if (score >= 80) return "text-[#16A34A]"
-  if (score >= 60) return "text-[#C9A227]"
-  return "text-[#DC2626]"
-}
+const scoreColor = scoreColorClass
 
 function ScoreBar({ score, max }: { score: number; max: number }) {
   const pct = Math.min((score / max) * 100, 100)
@@ -99,7 +96,7 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
   const marksPct = hasMarks ? (marksScored / totalMarks) * 100 : evaluation.total_score
 
   return (
-    <section className="mx-auto max-w-[900px] space-y-5">
+    <section className="space-y-5">
 
       {/* Header — Grade + Marks */}
       <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">

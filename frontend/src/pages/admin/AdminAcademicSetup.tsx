@@ -37,6 +37,7 @@ import {
   type AdminSemester,
   type AdminSubject,
 } from "../../api/admin"
+import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 
 const TABS = [
@@ -68,6 +69,37 @@ export default function AdminAcademicSetup() {
   const [summary, setSummary] = useState<AcademicSummary | null>(null)
   const [creating, setCreating] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  // Shared "Institute" filter — every tab except Institutions itself filters
+  // its list down to the selected institution. Departments/Subjects link to an
+  // institution directly; Courses/Batches/Semesters/Sections link through their
+  // department or course, so we build lookup maps once here.
+  const [institutions, setInstitutions] = useState<AdminInstitution[]>([])
+  const [allDepartments, setAllDepartments] = useState<AdminDepartment[]>([])
+  const [allCourses, setAllCourses] = useState<AdminCourse[]>([])
+  const [institutionFilter, setInstitutionFilter] = useState("")
+
+  function loadFilterData() {
+    getAdminInstitutions().then((d) => setInstitutions(d.items)).catch(() => undefined)
+    getAdminDepartments().then((d) => setAllDepartments(d.items)).catch(() => undefined)
+    getAdminCourses().then((d) => setAllCourses(d.items)).catch(() => undefined)
+  }
+
+  useEffect(() => {
+    loadFilterData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey])
+
+  const deptToInstitution: Record<number, number> = {}
+  allDepartments.forEach((d) => {
+    if (d.institution_id != null) deptToInstitution[d.id] = d.institution_id
+  })
+  const courseToInstitution: Record<number, number> = {}
+  allCourses.forEach((c) => {
+    if (c.department_id != null && deptToInstitution[c.department_id] != null) {
+      courseToInstitution[c.id] = deptToInstitution[c.department_id]
+    }
+  })
 
   function loadSummary() {
     getAdminAcademicSummary()
@@ -112,7 +144,8 @@ export default function AdminAcademicSetup() {
           ) : null}
         </div>
 
-        {/* Tabs */}
+        {/* Tabs + Institute filter */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {TABS.map((t) => {
             const isActive = t.key === activeTab
@@ -143,15 +176,64 @@ export default function AdminAcademicSetup() {
           })}
         </div>
 
+        {activeTab !== "institutions" ? (
+          <label className="flex items-center gap-2 text-sm font-semibold text-[#17202a]">
+            Institute
+            <select
+              value={institutionFilter}
+              onChange={(e) => setInstitutionFilter(e.target.value)}
+              className="h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            >
+              <option value="">All institutes</option>
+              {institutions.map((i) => (
+                <option key={i.id} value={i.id}>{i.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        </div>
+
         {/* Active tab */}
         <div key={`${activeTab}-${refreshKey}`}>
           {activeTab === "institutions" ? <InstitutionsTab onChanged={handleChanged} /> : null}
-          {activeTab === "departments" ? <DepartmentsTab onChanged={handleChanged} /> : null}
-          {activeTab === "courses" ? <CoursesTab onChanged={handleChanged} /> : null}
-          {activeTab === "batches" ? <BatchesTab onChanged={handleChanged} /> : null}
-          {activeTab === "semesters" ? <SemestersTab onChanged={handleChanged} /> : null}
-          {activeTab === "sections" ? <SectionsTab onChanged={handleChanged} /> : null}
-          {activeTab === "subjects" ? <SubjectsTab onChanged={handleChanged} /> : null}
+          {activeTab === "departments" ? (
+            <DepartmentsTab onChanged={handleChanged} institutionFilter={institutionFilter} />
+          ) : null}
+          {activeTab === "courses" ? (
+            <CoursesTab
+              onChanged={handleChanged}
+              institutionFilter={institutionFilter}
+              deptToInstitution={deptToInstitution}
+            />
+          ) : null}
+          {activeTab === "batches" ? (
+            <BatchesTab
+              onChanged={handleChanged}
+              institutionFilter={institutionFilter}
+              courseToInstitution={courseToInstitution}
+            />
+          ) : null}
+          {activeTab === "semesters" ? (
+            <SemestersTab
+              onChanged={handleChanged}
+              institutionFilter={institutionFilter}
+              courseToInstitution={courseToInstitution}
+            />
+          ) : null}
+          {activeTab === "sections" ? (
+            <SectionsTab
+              onChanged={handleChanged}
+              institutionFilter={institutionFilter}
+              courseToInstitution={courseToInstitution}
+            />
+          ) : null}
+          {activeTab === "subjects" ? (
+            <SubjectsTab
+              onChanged={handleChanged}
+              institutionFilter={institutionFilter}
+              deptToInstitution={deptToInstitution}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -248,6 +330,25 @@ function Empty({ text }: { text: string }) {
   return <p className="px-5 py-10 text-center text-sm text-[#667085]">{text}</p>
 }
 
+// Shown when a list fails to load (network/server error) — distinct from a
+// genuinely empty list, so a failed fetch never looks like missing data.
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="px-5 py-10 text-center">
+      <p className="text-sm font-medium text-[#b42318]">
+        Couldn't load this list. Your data is safe — this is likely a connection issue.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-3 rounded-md border border-[#dde4ec] px-4 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3]"
+      >
+        Retry
+      </button>
+    </div>
+  )
+}
+
 // Right-side slide-over drawer used by all Academic Setup forms.
 function Drawer({
   title,
@@ -334,17 +435,27 @@ const labelClass = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
 function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
   const [items, setItems] = useState<AdminInstitution[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [editing, setEditing] = useState<AdminInstitution | null>(null)
+  const [deleting, setDeleting] = useState<AdminInstitution | null>(null)
 
-  useEffect(() => {
+  function load() {
+    setLoading(true)
+    setLoadError(false)
     getAdminInstitutions()
       .then((data) => setItems(data.items))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
-  async function handleDelete(inst: AdminInstitution) {
-    if (!window.confirm(`Delete institution "${inst.name}"? Its departments will be unassigned.`)) return
-    await deleteAdminInstitution(inst.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminInstitution(deleting.id)
+    setDeleting(null)
     onChanged()
   }
 
@@ -352,6 +463,8 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
     <Card title="Institutions" description="The colleges under the trust. Departments belong to an institution.">
       {loading ? (
         <Loading />
+      ) : loadError ? (
+        <ErrorState onRetry={load} />
       ) : items.length === 0 ? (
         <Empty text="No institutions yet. Add one to start." />
       ) : (
@@ -380,7 +493,7 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-1.5">
                       <IconButton label="Edit" onClick={() => setEditing(inst)}><Pencil size={15} /></IconButton>
-                      <IconButton label="Delete" danger onClick={() => handleDelete(inst)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(inst)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -397,6 +510,14 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
             setEditing(null)
             onChanged()
           }}
+        />
+      ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete institution?"
+          message={`Delete institution "${deleting.name}"? Its departments will be unassigned.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
         />
       ) : null}
     </Card>
@@ -484,29 +605,51 @@ function InstitutionForm({
 
 /* -------------------------------- Departments ------------------------------- */
 
-function DepartmentsTab({ onChanged }: { onChanged: () => void }) {
+function DepartmentsTab({
+  onChanged,
+  institutionFilter,
+}: {
+  onChanged: () => void
+  institutionFilter: string
+}) {
   const [items, setItems] = useState<AdminDepartment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [editing, setEditing] = useState<AdminDepartment | null>(null)
+  const [deleting, setDeleting] = useState<AdminDepartment | null>(null)
 
-  useEffect(() => {
+  function load() {
+    setLoading(true)
+    setLoadError(false)
     getAdminDepartments()
       .then((data) => setItems(data.items))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
-  async function handleDelete(dep: AdminDepartment) {
-    if (!window.confirm(`Delete department "${dep.name}"? Its courses will be unassigned.`)) return
-    await deleteAdminDepartment(dep.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminDepartment(deleting.id)
+    setDeleting(null)
     onChanged()
   }
+
+  const visible = institutionFilter
+    ? items.filter((d) => String(d.institution_id) === institutionFilter)
+    : items
 
   return (
     <Card title="Departments" description="The top level of the academic structure. Every course belongs to one.">
       {loading ? (
         <Loading />
-      ) : items.length === 0 ? (
-        <Empty text="No departments yet. Add one to start organising courses." />
+      ) : loadError ? (
+        <ErrorState onRetry={load} />
+      ) : visible.length === 0 ? (
+        <Empty text={institutionFilter ? "No departments for this institute." : "No departments yet. Add one to start organising courses."} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
@@ -521,7 +664,7 @@ function DepartmentsTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((dep) => (
+              {visible.map((dep) => (
                 <tr key={dep.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{dep.name}</td>
                   <td className="px-5 py-4">
@@ -535,7 +678,7 @@ function DepartmentsTab({ onChanged }: { onChanged: () => void }) {
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-1.5">
                       <IconButton label="Edit" onClick={() => setEditing(dep)}><Pencil size={15} /></IconButton>
-                      <IconButton label="Delete" danger onClick={() => handleDelete(dep)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(dep)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -552,6 +695,14 @@ function DepartmentsTab({ onChanged }: { onChanged: () => void }) {
             setEditing(null)
             onChanged()
           }}
+        />
+      ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete department?"
+          message={`Delete department "${deleting.name}"? Its courses will be unassigned.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
         />
       ) : null}
     </Card>
@@ -668,20 +819,44 @@ function DepartmentForm({
 
 /* --------------------------------- Subjects --------------------------------- */
 
-function SubjectsTab({ onChanged }: { onChanged: () => void }) {
+function SubjectsTab({
+  onChanged,
+  institutionFilter,
+  deptToInstitution,
+}: {
+  onChanged: () => void
+  institutionFilter: string
+  deptToInstitution: Record<number, number>
+}) {
   const [items, setItems] = useState<AdminSubject[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [editing, setEditing] = useState<AdminSubject | null>(null)
+  const [deleting, setDeleting] = useState<AdminSubject | null>(null)
 
-  useEffect(() => {
+  const visible = institutionFilter
+    ? items.filter(
+        (s) => s.department_id != null && String(deptToInstitution[s.department_id]) === institutionFilter,
+      )
+    : items
+
+  function load() {
+    setLoading(true)
+    setLoadError(false)
     getAdminSubjects()
       .then((data) => setItems(data.items))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
-  async function handleDelete(subject: AdminSubject) {
-    if (!window.confirm(`Delete subject "${subject.name}"?`)) return
-    await deleteAdminSubject(subject.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminSubject(deleting.id)
+    setDeleting(null)
     onChanged()
   }
 
@@ -689,8 +864,10 @@ function SubjectsTab({ onChanged }: { onChanged: () => void }) {
     <Card title="Subjects" description="Defined per course and semester, so the same name can exist in different courses.">
       {loading ? (
         <Loading />
-      ) : items.length === 0 ? (
-        <Empty text="No subjects yet. Add one to build the catalog." />
+      ) : loadError ? (
+        <ErrorState onRetry={load} />
+      ) : visible.length === 0 ? (
+        <Empty text={institutionFilter ? "No subjects for this institute." : "No subjects yet. Add one to build the catalog."} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
@@ -705,7 +882,7 @@ function SubjectsTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((subject) => (
+              {visible.map((subject) => (
                 <tr key={subject.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{subject.name}</td>
                   <td className="px-5 py-4 text-[#475467]">{subject.course_name ?? "—"}</td>
@@ -715,7 +892,7 @@ function SubjectsTab({ onChanged }: { onChanged: () => void }) {
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-1.5">
                       <IconButton label="Edit" onClick={() => setEditing(subject)}><Pencil size={15} /></IconButton>
-                      <IconButton label="Delete" danger onClick={() => handleDelete(subject)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(subject)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -732,6 +909,14 @@ function SubjectsTab({ onChanged }: { onChanged: () => void }) {
             setEditing(null)
             onChanged()
           }}
+        />
+      ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete subject?"
+          message={`Delete subject "${deleting.name}"?`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
         />
       ) : null}
     </Card>
@@ -857,19 +1042,43 @@ function SubjectForm({
 
 /* ---------------------------------- Courses --------------------------------- */
 
-function CoursesTab({ onChanged }: { onChanged: () => void }) {
+function CoursesTab({
+  onChanged,
+  institutionFilter,
+  deptToInstitution,
+}: {
+  onChanged: () => void
+  institutionFilter: string
+  deptToInstitution: Record<number, number>
+}) {
   const [items, setItems] = useState<AdminCourse[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [deleting, setDeleting] = useState<AdminCourse | null>(null)
 
-  useEffect(() => {
+  const visible = institutionFilter
+    ? items.filter(
+        (c) => c.department_id != null && String(deptToInstitution[c.department_id]) === institutionFilter,
+      )
+    : items
+
+  function load() {
+    setLoading(true)
+    setLoadError(false)
     getAdminCourses()
       .then((data) => setItems(data.items))
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
-  async function handleDelete(course: AdminCourse) {
-    if (!window.confirm(`Delete course "${course.name}"? This removes its semesters, batches, and sections.`)) return
-    await deleteAdminCourse(course.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminCourse(deleting.id)
+    setDeleting(null)
     onChanged()
   }
 
@@ -877,8 +1086,10 @@ function CoursesTab({ onChanged }: { onChanged: () => void }) {
     <Card title="Courses" description="Programs within a department. Manage batches, semesters and sections from a course.">
       {loading ? (
         <Loading />
-      ) : items.length === 0 ? (
-        <Empty text="No courses yet." />
+      ) : loadError ? (
+        <ErrorState onRetry={load} />
+      ) : visible.length === 0 ? (
+        <Empty text={institutionFilter ? "No courses for this institute." : "No courses yet."} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
@@ -894,7 +1105,7 @@ function CoursesTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((course) => (
+              {visible.map((course) => (
                 <tr key={course.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{course.name}</td>
                   <td className="px-5 py-4">
@@ -909,7 +1120,7 @@ function CoursesTab({ onChanged }: { onChanged: () => void }) {
                       <Link to="/admin/courses" className="text-sm font-semibold text-[#0b5fff] hover:underline">
                         Manage
                       </Link>
-                      <IconButton label="Delete" danger onClick={() => handleDelete(course)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(course)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -918,6 +1129,14 @@ function CoursesTab({ onChanged }: { onChanged: () => void }) {
           </table>
         </div>
       )}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete course?"
+          message={`Delete course "${deleting.name}"? This removes its semesters, batches, and sections.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      ) : null}
     </Card>
   )
 }
@@ -936,6 +1155,19 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
   }, [])
 
+  // Every existing program follows 2 semesters per academic year — enforce that
+  // relationship so a course can't be created with an inconsistent combination
+  // (e.g. 2 semesters over a 2-year duration).
+  function handleDurationChange(value: string) {
+    setDurationYears(value)
+    const years = Number(value)
+    if (years > 0) setTotalSemesters(String(years * 2))
+  }
+
+  const expectedSemesters = Number(durationYears) > 0 ? Number(durationYears) * 2 : null
+  const semestersMismatch =
+    expectedSemesters !== null && Number(totalSemesters) !== expectedSemesters
+
   async function submit() {
     if (!departmentId) {
       setError("Please select a department.")
@@ -945,19 +1177,33 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
       setError("Course name and code are required.")
       return
     }
+    if (!totalSemesters || Number(totalSemesters) < 1) {
+      setError("Total semesters must be at least 1.")
+      return
+    }
+    if (!durationYears || Number(durationYears) < 1) {
+      setError("Duration must be at least 1 year.")
+      return
+    }
+    if (semestersMismatch) {
+      setError(
+        `${durationYears} year(s) should have ${expectedSemesters} semesters (2 per year), not ${totalSemesters}.`,
+      )
+      return
+    }
     setSaving(true)
     setError("")
     try {
       await createAdminCourse({
         name: name.trim(),
         code: code.trim().toUpperCase(),
-        total_semesters: Number(totalSemesters) || 1,
-        duration_years: Number(durationYears) || 1,
+        total_semesters: Number(totalSemesters),
+        duration_years: Number(durationYears),
         department_id: Number(departmentId),
       })
       onSaved()
-    } catch {
-      setError("Could not create course. The code may already exist.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not create course. The code may already exist.")
     } finally {
       setSaving(false)
     }
@@ -995,10 +1241,18 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
             </label>
             <label className={labelClass}>
               <ReqLabel>Duration (years)</ReqLabel>
-              <input type="number" min={1} className={fieldClass} value={durationYears} onChange={(e) => setDurationYears(e.target.value)} />
+              <input type="number" min={1} className={fieldClass} value={durationYears} onChange={(e) => handleDurationChange(e.target.value)} />
             </label>
           </div>
-          <p className="mt-1.5 text-xs text-[#667085]">Semesters are created automatically.</p>
+          {semestersMismatch ? (
+            <p className="mt-1.5 text-xs font-medium text-[#b42318]">
+              {durationYears} year(s) should have {expectedSemesters} semesters (2 per year).
+            </p>
+          ) : (
+            <p className="mt-1.5 text-xs text-[#667085]">
+              Semesters are created automatically — 2 per academic year.
+            </p>
+          )}
         </div>
         {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
         <DrawerSubmit label="Add course" icon={<Plus size={16} aria-hidden="true" />} saving={saving} onClick={submit} />
@@ -1009,20 +1263,42 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
 
 /* -------------------------- Batches / Semesters / Sections ------------------- */
 
-function BatchesTab({ onChanged }: { onChanged: () => void }) {
+function BatchesTab({
+  onChanged,
+  institutionFilter,
+  courseToInstitution,
+}: {
+  onChanged: () => void
+  institutionFilter: string
+  courseToInstitution: Record<number, number>
+}) {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getAdminAllBatches>>["items"]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null)
+  const visible = institutionFilter
+    ? items.filter((b) => String(courseToInstitution[b.course_id]) === institutionFilter)
+    : items
+  function load() {
+    setLoading(true)
+    setLoadError(false)
+    getAdminAllBatches()
+      .then((d) => setItems(d.items))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false))
+  }
   useEffect(() => {
-    getAdminAllBatches().then((d) => setItems(d.items)).finally(() => setLoading(false))
+    load()
   }, [])
-  async function handleDelete(b: { id: number; name: string }) {
-    if (!window.confirm(`Delete batch "${b.name}"? Its sections and enrolments will be removed.`)) return
-    await deleteAdminBatch(b.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminBatch(deleting.id)
+    setDeleting(null)
     onChanged()
   }
   return (
     <Card title="Batches" description="Student cohorts within a course. Add batches from a course's page.">
-      {loading ? <Loading /> : items.length === 0 ? <Empty text="No batches yet." /> : (
+      {loading ? <Loading /> : loadError ? <ErrorState onRetry={load} /> : visible.length === 0 ? <Empty text={institutionFilter ? "No batches for this institute." : "No batches yet."} /> : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
@@ -1036,7 +1312,7 @@ function BatchesTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((b) => (
+              {visible.map((b) => (
                 <tr key={b.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{b.name}</td>
                   <td className="px-5 py-4 text-[#475467]">{b.course_name}</td>
@@ -1045,7 +1321,7 @@ function BatchesTab({ onChanged }: { onChanged: () => void }) {
                   <td className="px-5 py-4"><StatusBadge status={b.status} /></td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end">
-                      <IconButton label="Delete" danger onClick={() => handleDelete(b)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(b)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -1054,6 +1330,14 @@ function BatchesTab({ onChanged }: { onChanged: () => void }) {
           </table>
         </div>
       )}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete batch?"
+          message={`Delete batch "${deleting.name}"? Its sections and enrolments will be removed.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      ) : null}
     </Card>
   )
 }
@@ -1080,6 +1364,21 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
       setError("Batch name, start year and end year are required.")
       return
     }
+    if (
+      !/^\d{4}$/.test(startYear) ||
+      !/^\d{4}$/.test(endYear) ||
+      Number(startYear) < 1900 ||
+      Number(startYear) > 2100 ||
+      Number(endYear) < 1900 ||
+      Number(endYear) > 2100
+    ) {
+      setError("Start and end year must be realistic 4-digit calendar years (1900–2100).")
+      return
+    }
+    if (Number(endYear) < Number(startYear)) {
+      setError("End year must not be before start year.")
+      return
+    }
     setSaving(true)
     setError("")
     try {
@@ -1089,8 +1388,8 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
         end_year: Number(endYear),
       })
       onSaved()
-    } catch {
-      setError("Could not create batch.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not create batch.")
     } finally {
       setSaving(false)
     }
@@ -1119,11 +1418,11 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
         <div className="grid grid-cols-2 gap-3">
           <label className={labelClass}>
             <ReqLabel>Start year</ReqLabel>
-            <input type="number" className={fieldClass} value={startYear} onChange={(e) => setStartYear(e.target.value)} placeholder="2025" />
+            <input type="number" min={1900} max={2100} className={fieldClass} value={startYear} onChange={(e) => setStartYear(e.target.value)} placeholder="2025" />
           </label>
           <label className={labelClass}>
             <ReqLabel>End year</ReqLabel>
-            <input type="number" className={fieldClass} value={endYear} onChange={(e) => setEndYear(e.target.value)} placeholder="2027" />
+            <input type="number" min={1900} max={2100} className={fieldClass} value={endYear} onChange={(e) => setEndYear(e.target.value)} placeholder="2027" />
           </label>
         </div>
         {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
@@ -1133,15 +1432,37 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
   )
 }
 
-function SemestersTab({ onChanged }: { onChanged: () => void }) {
+function SemestersTab({
+  onChanged,
+  institutionFilter,
+  courseToInstitution,
+}: {
+  onChanged: () => void
+  institutionFilter: string
+  courseToInstitution: Record<number, number>
+}) {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getAdminAllSemesters>>["items"]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null)
+  const visible = institutionFilter
+    ? items.filter((s) => String(courseToInstitution[s.course_id]) === institutionFilter)
+    : items
+  function load() {
+    setLoading(true)
+    setLoadError(false)
+    getAdminAllSemesters()
+      .then((d) => setItems(d.items))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false))
+  }
   useEffect(() => {
-    getAdminAllSemesters().then((d) => setItems(d.items)).finally(() => setLoading(false))
+    load()
   }, [])
-  async function handleDelete(s: { id: number; name: string }) {
-    if (!window.confirm(`Delete "${s.name}"? Its sections and subjects will be removed.`)) return
-    await deleteAdminSemester(s.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminSemester(deleting.id)
+    setDeleting(null)
     onChanged()
   }
   return (
@@ -1149,7 +1470,7 @@ function SemestersTab({ onChanged }: { onChanged: () => void }) {
       title="Semesters"
       description="Created automatically with each course. Sections and subjects both hang off a semester."
     >
-      {loading ? <Loading /> : items.length === 0 ? <Empty text="No semesters yet." /> : (
+      {loading ? <Loading /> : loadError ? <ErrorState onRetry={load} /> : visible.length === 0 ? <Empty text={institutionFilter ? "No semesters for this institute." : "No semesters yet."} /> : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
@@ -1163,7 +1484,7 @@ function SemestersTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((s) => (
+              {visible.map((s) => (
                 <tr key={s.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{s.name}</td>
                   <td className="px-5 py-4 font-medium text-[#0f766e]">
@@ -1174,7 +1495,7 @@ function SemestersTab({ onChanged }: { onChanged: () => void }) {
                   <td className="px-5 py-4"><StatusBadge status="active" /></td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end">
-                      <IconButton label="Delete" danger onClick={() => handleDelete(s)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(s)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -1183,24 +1504,54 @@ function SemestersTab({ onChanged }: { onChanged: () => void }) {
           </table>
         </div>
       )}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete semester?"
+          message={`Delete "${deleting.name}"? Its sections and subjects will be removed.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      ) : null}
     </Card>
   )
 }
 
-function SectionsTab({ onChanged }: { onChanged: () => void }) {
+function SectionsTab({
+  onChanged,
+  institutionFilter,
+  courseToInstitution,
+}: {
+  onChanged: () => void
+  institutionFilter: string
+  courseToInstitution: Record<number, number>
+}) {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getAdminSections>>["items"]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null)
+  const visible = institutionFilter
+    ? items.filter((s) => String(courseToInstitution[s.course_id]) === institutionFilter)
+    : items
+  function load() {
+    setLoading(true)
+    setLoadError(false)
+    getAdminSections()
+      .then((d) => setItems(d.items))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false))
+  }
   useEffect(() => {
-    getAdminSections().then((d) => setItems(d.items)).finally(() => setLoading(false))
+    load()
   }, [])
-  async function handleDelete(s: { id: number; name: string }) {
-    if (!window.confirm(`Delete section "${s.name}"? Its enrolments and faculty links will be removed.`)) return
-    await deleteAdminSection(s.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteAdminSection(deleting.id)
+    setDeleting(null)
     onChanged()
   }
   return (
     <Card title="Sections" description="Class sections. Assign faculty and enroll students from the Sections manager.">
-      {loading ? <Loading /> : items.length === 0 ? <Empty text="No sections yet." /> : (
+      {loading ? <Loading /> : loadError ? <ErrorState onRetry={load} /> : visible.length === 0 ? <Empty text={institutionFilter ? "No sections for this institute." : "No sections yet."} /> : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
@@ -1214,7 +1565,7 @@ function SectionsTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((s) => (
+              {visible.map((s) => (
                 <tr key={s.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{s.name}</td>
                   <td className="px-5 py-4 text-[#0f766e]">{s.course_name}</td>
@@ -1226,7 +1577,7 @@ function SectionsTab({ onChanged }: { onChanged: () => void }) {
                       <Link to="/admin/sections" className="text-sm font-semibold text-[#0b5fff] hover:underline">
                         Manage
                       </Link>
-                      <IconButton label="Delete" danger onClick={() => handleDelete(s)}><Trash2 size={15} /></IconButton>
+                      <IconButton label="Delete" danger onClick={() => setDeleting(s)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
                 </tr>
@@ -1235,6 +1586,14 @@ function SectionsTab({ onChanged }: { onChanged: () => void }) {
           </table>
         </div>
       )}
+      {deleting ? (
+        <ConfirmDialog
+          title="Delete section?"
+          message={`Delete section "${deleting.name}"? Its enrolments and faculty links will be removed.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleting(null)}
+        />
+      ) : null}
     </Card>
   )
 }

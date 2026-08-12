@@ -14,24 +14,18 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
 import {
-  createAdminUser,
   deleteAdminUser,
-  getAdminCourseBatches,
-  getAdminCourses,
-  getAdminCourseSections,
   getAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
   updateAdminUserRole,
   updateAdminUserStatus,
-  type AdminBatch,
-  type AdminCourse,
-  type AdminSection,
   type AdminUser,
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
+import { DESIGNATION_OPTIONS } from "../../constants/designations"
 
 const roles: Array<{ label: string; value: "" | AdminUserRole }> = [
   { label: "All Roles", value: "" },
@@ -53,29 +47,26 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState("")
-  const [role, setRole] = useState("")
-  const [tab, setTab] = useState<"all" | "faculty" | "student">("all")
-  const [status, setStatus] = useState("")
+  const [search, setSearch] = useState(searchParams.get("search") ?? "")
+  const [role, setRole] = useState(searchParams.get("role") ?? "")
+  const [status, setStatus] = useState(searchParams.get("status") ?? "")
   const [program, setProgram] = useState("")
   const [batch, setBatch] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
-  const [showAddUser, setShowAddUser] = useState(searchParams.get("action") === "add")
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showingStart = total === 0 ? 0 : (page - 1) * pageSize + 1
   const showingEnd = Math.min(page * pageSize, total)
 
-  async function loadUsers(nextPage = page) {
+  async function loadUsers(nextPage = page, searchValue = search) {
     setIsLoading(true)
     try {
-      const effectiveRole = tab === "all" ? role : tab
       const data = await getAdminUsers({
-        search,
-        role: effectiveRole,
+        search: searchValue,
+        role,
         status,
         program,
         batch,
@@ -96,11 +87,20 @@ export default function AdminUsers() {
   useEffect(() => {
     loadUsers(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, role, status, program, batch])
+  }, [role, status, program, batch])
 
+  // Apply the ?search= term from the top-bar search (fires when it changes).
+  const searchQuery = searchParams.get("search") ?? ""
+  const didMountSearch = useRef(false)
   useEffect(() => {
-    setShowAddUser(searchParams.get("action") === "add")
-  }, [searchParams])
+    if (!didMountSearch.current) {
+      didMountSearch.current = true
+      return
+    }
+    setSearch(searchQuery)
+    loadUsers(1, searchQuery)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery])
 
   const activeCount = useMemo(
     () => users.filter((user) => user.status === "active").length,
@@ -110,17 +110,6 @@ export default function AdminUsers() {
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     loadUsers(1)
-  }
-
-  function closeAddUser() {
-    setSearchParams({})
-    setShowAddUser(false)
-  }
-
-  async function handleUserCreated(message: string) {
-    setNotice(message)
-    closeAddUser()
-    await loadUsers(1)
   }
 
   async function handleUserUpdated(updated: AdminUser) {
@@ -160,10 +149,14 @@ export default function AdminUsers() {
 
   async function handlePasswordReset(user: AdminUser) {
     try {
-      await resetAdminUserPassword(user.id)
-      setNotice(`Password reset email queued for ${user.name}.`)
-    } catch {
-      setError("Unable to queue password reset.")
+      const result = await resetAdminUserPassword(user.id)
+      if (result.status === "reset_email_sent") {
+        setNotice(`Password reset link sent to ${user.name}.`)
+      } else {
+        setError(`Could not deliver the reset email to ${user.name}.`)
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Unable to send password reset.")
     }
   }
 
@@ -182,12 +175,7 @@ export default function AdminUsers() {
     }
   }
 
-  const gridClass =
-    tab === "faculty"
-      ? "lg:grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_0.8fr_0.7fr_1.3fr]"
-      : tab === "student"
-        ? "lg:grid-cols-[1.5fr_1fr_1fr_0.9fr_0.8fr_0.7fr_1.3fr]"
-        : "lg:grid-cols-[1.6fr_0.9fr_0.9fr_1fr_0.7fr_1.1fr_1.3fr]"
+  const gridClass = "lg:grid-cols-[1.6fr_0.9fr_0.9fr_1fr_0.7fr_1.1fr_1.3fr]"
 
   const nameColumn: UserColumn = {
     label: "Name",
@@ -236,127 +224,32 @@ export default function AdminUsers() {
     ),
   }
 
-  let columns: UserColumn[]
-  if (tab === "faculty") {
-    columns = [
-      {
-        label: "Faculty",
-        render: (user) => (
-          <div className="min-w-0">
-            <Link
-              to={`/admin/user/${user.id}`}
-              className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
-            >
-              {user.name}
-            </Link>
-            <p className="mt-1 truncate text-sm text-[#667085]">{user.email}</p>
-          </div>
-        ),
-      },
-      {
-        label: "Department",
-        render: (user) => (
-          <span className="text-sm text-[#17202a]">{user.department || "-"}</span>
-        ),
-      },
-      {
-        label: "Designation",
-        render: (user) => (
-          <span className="text-sm text-[#17202a]">{user.designation || "-"}</span>
-        ),
-      },
-      {
-        label: "Employee ID",
-        render: (user) => (
-          <span className="text-sm font-medium text-[#17202a]">{user.employee_id || "-"}</span>
-        ),
-      },
-      {
-        label: "Experience",
-        render: (user) => (
-          <span className="text-sm text-[#667085]">
-            {user.experience_years != null ? `${user.experience_years} yrs` : "-"}
-          </span>
-        ),
-      },
-      {
-        label: "Teaching",
-        render: (user) => (
-          <span className={`text-sm font-medium ${user.sections_teaching > 0 ? "text-[#176b5a]" : "text-[#667085]"}`}>
-            {user.sections_teaching > 0 ? `${user.sections_teaching} section${user.sections_teaching !== 1 ? "s" : ""}` : "—"}
-          </span>
-        ),
-      },
-      statusColumn,
-      lastLoginColumn,
-    ]
-  } else if (tab === "student") {
-    columns = [
-      {
-        label: "Student",
-        render: (user) => (
-          <div className="min-w-0">
-            <Link
-              to={`/admin/user/${user.id}`}
-              className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
-            >
-              {user.name}
-            </Link>
-            <p className="mt-1 truncate text-sm text-[#667085]">{user.email}</p>
-          </div>
-        ),
-      },
-      {
-        label: "Department",
-        render: (user) => (
-          <span className="text-sm text-[#17202a]">{user.department || "-"}</span>
-        ),
-      },
-      {
-        label: "College ID",
-        render: (user) => (
-          <span className="text-sm font-medium text-[#17202a]">{user.college_id || "-"}</span>
-        ),
-      },
-      programColumn,
-      {
-        label: "Batch",
-        render: (user) => (
-          <span className="text-sm text-[#667085]">
-            {user.batch_name || (user.admission_year ? `${user.admission_year}` : "-")}
-          </span>
-        ),
-      },
-      statusColumn,
-    ]
-  } else {
-    columns = [
-      nameColumn,
-      {
-        label: "Role",
-        render: (user) => (
-          <select
-            value={user.role}
-            onChange={(event) => handleRoleChange(user, event.target.value as AdminUserRole)}
-            className="h-10 rounded-md border border-[#dde4ec] bg-white px-2 text-sm font-medium outline-none"
-            aria-label={`Change role for ${user.name}`}
-          >
-            {roles
-              .filter((option) => option.value)
-              .map((option) => (
-                <option key={option.label} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-          </select>
-        ),
-      },
-      programColumn,
-      courseSectionColumn,
-      statusColumn,
-      lastLoginColumn,
-    ]
-  }
+  const columns: UserColumn[] = [
+    nameColumn,
+    {
+      label: "Role",
+      render: (user) => (
+        <select
+          value={user.role}
+          onChange={(event) => handleRoleChange(user, event.target.value as AdminUserRole)}
+          className="h-10 rounded-md border border-[#dde4ec] bg-white px-2 text-sm font-medium outline-none"
+          aria-label={`Change role for ${user.name}`}
+        >
+          {roles
+            .filter((option) => option.value)
+            .map((option) => (
+              <option key={option.label} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+        </select>
+      ),
+    },
+    programColumn,
+    courseSectionColumn,
+    statusColumn,
+    lastLoginColumn,
+  ]
 
   return (
     <AdminLayout>
@@ -381,29 +274,6 @@ export default function AdminUsers() {
           </div>
         </section>
 
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { key: "all", label: "All Users" },
-              { key: "faculty", label: "Faculty" },
-              { key: "student", label: "Students" },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setTab(item.key)}
-              className={`rounded-md px-4 py-2 text-sm font-semibold transition ${
-                tab === item.key
-                  ? "bg-[#102033] text-white shadow-sm"
-                  : "border border-[#dde4ec] bg-white text-[#17202a] hover:border-[#34c6a3]"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
         <section className="rounded-lg border border-[#dde4ec] bg-white p-4 shadow-sm">
           <form
             onSubmit={handleSearchSubmit}
@@ -421,22 +291,18 @@ export default function AdminUsers() {
               />
             </label>
 
-            {tab === "all" ? (
-              <select
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-                className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                aria-label="Role"
-              >
-                {roles.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="hidden xl:block" aria-hidden="true" />
-            )}
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              aria-label="Role"
+            >
+              {roles.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
             <select
               value={status}
@@ -549,14 +415,6 @@ export default function AdminUsers() {
           </div>
         </section>
       </div>
-
-      {showAddUser ? (
-        <AddUserDialog
-          initialRole={tab === "faculty" ? "faculty" : "student"}
-          onClose={closeAddUser}
-          onCreated={handleUserCreated}
-        />
-      ) : null}
 
       {editingUser ? (
         <EditUserDialog
@@ -686,324 +544,13 @@ function UserRow({
   )
 }
 
-interface AddUserDialogProps {
-  onClose: () => void
-  onCreated: (message: string) => void
-  initialRole?: AdminUserRole
-}
-
-function AddUserDialog({ onClose, onCreated, initialRole }: AddUserDialogProps) {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [role, setRole] = useState<AdminUserRole>(initialRole ?? "student")
-  const [program, setProgram] = useState("")
-  const [specialization, setSpecialization] = useState("")
-  const [admissionYear, setAdmissionYear] = useState("")
-  const [department, setDepartment] = useState("")
-  const [designation, setDesignation] = useState("")
-  const [employeeId, setEmployeeId] = useState("")
-  const [experienceYears, setExperienceYears] = useState("")
-  const [collegeId, setCollegeId] = useState("")
-  const [error, setError] = useState("")
-  const [isSaving, setIsSaving] = useState(false)
-
-  const [courses, setCourses] = useState<AdminCourse[]>([])
-  const [batches, setBatches] = useState<AdminBatch[]>([])
-  const [sections, setSections] = useState<AdminSection[]>([])
-  const [courseId, setCourseId] = useState("")
-  const [batchId, setBatchId] = useState("")
-  const [sectionId, setSectionId] = useState("")
-
-  useEffect(() => {
-    if (role !== "student") return
-    let isMounted = true
-    getAdminCourses()
-      .then((data) => {
-        if (isMounted) setCourses(data.items)
-      })
-      .catch(() => {
-        if (isMounted) setCourses([])
-      })
-    return () => {
-      isMounted = false
-    }
-  }, [role])
-
-  useEffect(() => {
-    setBatchId("")
-    setSectionId("")
-    setBatches([])
-    setSections([])
-    if (!courseId) return
-    let isMounted = true
-    Promise.all([
-      getAdminCourseBatches(Number(courseId)),
-      getAdminCourseSections(Number(courseId)),
-    ])
-      .then(([batchData, sectionData]) => {
-        if (isMounted) {
-          setBatches(batchData.items)
-          setSections(sectionData.items)
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setBatches([])
-          setSections([])
-        }
-      })
-    return () => {
-      isMounted = false
-    }
-  }, [courseId])
-
-  const sectionsForBatch = sections.filter(
-    (section) => batches.find((batch) => String(batch.id) === batchId)?.name === section.batch_name,
-  )
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setIsSaving(true)
-    setError("")
-    try {
-      const result = await createAdminUser({
-        name,
-        email,
-        role,
-        program: program || undefined,
-        specialization: specialization || undefined,
-        admission_year: admissionYear ? Number(admissionYear) : undefined,
-        section_id: role === "student" && sectionId ? Number(sectionId) : undefined,
-        department: (role === "faculty" || role === "student") && department ? department : undefined,
-        designation: role === "faculty" && designation ? designation : undefined,
-        employee_id: role === "faculty" && employeeId ? employeeId : undefined,
-        experience_years: role === "faculty" && experienceYears ? Number(experienceYears) : undefined,
-        college_id: role === "student" && collegeId ? collegeId : undefined,
-      })
-      onCreated(`Created ${result.user.name}; welcome email queued.`)
-    } catch {
-      setError("Unable to create user. Check email uniqueness and required fields.")
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4">
-      <div className="w-full max-w-xl">
-        <form
-          onSubmit={handleSubmit}
-          className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold text-[#17202a]">Add User</h2>
-              <p className="mt-1 text-sm text-[#667085]">
-                Account creation queues onboarding email automatically.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold"
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="mt-5 grid gap-4">
-            <Field label="Name">
-              <input
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              />
-            </Field>
-            <Field label="Role">
-              <select
-                value={role}
-                onChange={(event) => setRole(event.target.value as AdminUserRole)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              >
-                {roles
-                  .filter((option) => option.value)
-                  .map((option) => (
-                    <option key={option.label} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Program">
-                <input
-                  value={program}
-                  onChange={(event) => setProgram(event.target.value)}
-                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                />
-              </Field>
-              <Field label="Batch">
-                <input
-                  value={admissionYear}
-                  onChange={(event) => setAdmissionYear(event.target.value)}
-                  inputMode="numeric"
-                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                />
-              </Field>
-            </div>
-            <Field label="Specialization">
-              <input
-                value={specialization}
-                onChange={(event) => setSpecialization(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              />
-            </Field>
-            {role === "faculty" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Department">
-                  <input
-                    value={department}
-                    onChange={(event) => setDepartment(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
-                </Field>
-                <Field label="Designation">
-                  <input
-                    value={designation}
-                    onChange={(event) => setDesignation(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
-                </Field>
-                <Field label="Employee ID">
-                  <input
-                    value={employeeId}
-                    onChange={(event) => setEmployeeId(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
-                </Field>
-                <Field label="Experience (Years)">
-                  <input
-                    value={experienceYears}
-                    onChange={(event) => setExperienceYears(event.target.value)}
-                    inputMode="numeric"
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
-                </Field>
-              </div>
-            ) : null}
-            {role === "student" ? (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Department">
-                    <input
-                      value={department}
-                      onChange={(event) => setDepartment(event.target.value)}
-                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                    />
-                  </Field>
-                  <Field label="College ID">
-                    <input
-                      value={collegeId}
-                      onChange={(event) => setCollegeId(event.target.value)}
-                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                    />
-                  </Field>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Course">
-                    <select
-                      value={courseId}
-                      onChange={(event) => setCourseId(event.target.value)}
-                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                    >
-                      <option value="">No course</option>
-                      {courses.map((course) => (
-                        <option key={course.id} value={course.id}>
-                          {course.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Batch">
-                    <select
-                      value={batchId}
-                      onChange={(event) => setBatchId(event.target.value)}
-                      disabled={!courseId}
-                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="">Select batch</option>
-                      {batches.map((batch) => (
-                        <option key={batch.id} value={batch.id}>
-                          {batch.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Section">
-                    <select
-                      value={sectionId}
-                      onChange={(event) => setSectionId(event.target.value)}
-                      disabled={!batchId}
-                      className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="">Select section</option>
-                      {sectionsForBatch.map((section) => (
-                        <option key={section.id} value={section.id}>
-                          {section.name} ({section.semester_name})
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
-              </>
-            ) : null}
-          </div>
-
-          {error ? (
-            <div className="mt-4 rounded-md border border-[#f3c4c4] bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-[#dde4ec] px-4 py-3 text-sm font-semibold"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving ? "Creating..." : "Create User"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-interface EditUserDialogProps {
+export interface EditUserDialogProps {
   user: AdminUser
   onClose: () => void
   onSaved: (updated: AdminUser) => void
 }
 
-function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) {
+export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) {
   const [name, setName] = useState(user.name)
   const [program, setProgram] = useState(user.program || "")
   const [specialization, setSpecialization] = useState(user.specialization || "")
@@ -1114,11 +661,16 @@ function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) {
                   />
                 </Field>
                 <Field label="Designation">
-                  <input
+                  <select
                     value={designation}
                     onChange={(event) => setDesignation(event.target.value)}
                     className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
+                  >
+                    <option value="">Select designation</option>
+                    {DESIGNATION_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Employee ID">
                   <input
@@ -1212,7 +764,7 @@ interface StatusBadgeProps {
   status: AdminUserStatus
 }
 
-function StatusBadge({ status }: StatusBadgeProps) {
+export function StatusBadge({ status }: StatusBadgeProps) {
   const className =
     status === "active" ? "bg-[#ecfdf3] text-[#027a48]" : "bg-[#f2f4f7] text-[#475467]"
 
@@ -1237,14 +789,14 @@ function StatPill({ label, value }: StatPillProps) {
   )
 }
 
-function titleCase(value: string) {
+export function titleCase(value: string) {
   return value
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ")
 }
 
-function formatDate(value: string) {
+export function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",

@@ -5,6 +5,5 @@ export interface AuthContextValue {
   token: string | null
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<string>
-  loginWithGoogle: (credential: string) => Promise<string>
   logout: () => void
 }

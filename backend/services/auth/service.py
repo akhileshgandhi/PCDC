@@ -288,20 +288,29 @@ def set_password_with_token(db: Session, raw_token: str, password: str) -> dict:
     return {"access_token": token, "token_type": "bearer"}
 
 
-def send_password_reset(db: Session, identifier: str, base_url: str) -> dict:
-    """Email a password-reset link to the account matching `identifier` (email
-    or scholar number). Always returns a generic result so we never reveal which
-    accounts exist or have an email on file."""
+def send_password_reset(db: Session, identifier: str, email: str, base_url: str) -> dict:
+    """Start a password reset for the account matching `identifier` (email or
+    scholar number).
+
+    - A STUDENT is identified by their scholar number and MUST supply an email;
+      the reset LINK is sent to that email (students often have no email on
+      file, so we don't match — we deliver to the address they give).
+    - Faculty / admin are identified by email and get the LINK at that email.
+
+    In the email/unknown paths we always return a generic status so account
+    existence is never revealed.
+    """
     from shared.email import password_reset_email, send_email
 
     ident = (identifier or "").strip()
+    provided_email = (email or "").strip()
     generic = {"status": "ok"}
     if not ident:
         return generic
     user = db.execute(
         text(
             """
-            SELECT id, name, email FROM users
+            SELECT id, name, email, college_id, role FROM users
             WHERE LOWER(email) = LOWER(:ident) OR college_id = :ident
             ORDER BY (LOWER(email) = LOWER(:ident)) DESC
             LIMIT 1
@@ -309,8 +318,23 @@ def send_password_reset(db: Session, identifier: str, base_url: str) -> dict:
         ),
         {"ident": ident},
     ).fetchone()
-    # Only accounts with an email on file can receive a link.
-    if user and user.email:
+    if not user:
+        return generic
+
+    # Student identified by scholar number -> email is required; send the reset
+    # link to the address they provide (not matched against any stored email).
+    if user.role == "student" and user.college_id and user.college_id == ident:
+        if not provided_email or "@" not in provided_email:
+            return {"status": "email_required"}
+        raw = create_setup_token(db, user.id, purpose="reset")
+        reset_url = f"{base_url.rstrip('/')}/set-password?token={raw}"
+        subject, text_body, html_body = password_reset_email(user.name, provided_email, reset_url)
+        send_email(provided_email, subject, text_body, html_body)
+        db.commit()
+        return generic
+
+    # Otherwise (faculty/admin), only accounts with an email on file can get a link.
+    if user.email:
         raw = create_setup_token(db, user.id, purpose="reset")
         reset_url = f"{base_url.rstrip('/')}/set-password?token={raw}"
         subject, text_body, html_body = password_reset_email(user.name, user.email, reset_url)

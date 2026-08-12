@@ -13,6 +13,7 @@ import {
 
 import { getFacultyAnalyticsSummary, type FacultyAnalyticsSummary } from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
+import { scoreColorHexOrNeutral } from "../../utils/scoreColor"
 
 export default function FacultyAnalytics() {
   const [summary, setSummary] = useState<FacultyAnalyticsSummary | null>(null)
@@ -184,12 +185,7 @@ export default function FacultyAnalytics() {
   )
 }
 
-function scoreTone(score: number): string {
-  if (score >= 75) return "#16a34a"
-  if (score >= 60) return "#b45309"
-  if (score > 0) return "#b91c1c"
-  return "#9ca3af"
-}
+const scoreTone = scoreColorHexOrNeutral
 
 interface StatProps {
   label: string
