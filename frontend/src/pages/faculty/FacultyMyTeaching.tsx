@@ -1,4 +1,4 @@
-import { CheckCircle2, Search } from "lucide-react"
+import { CheckCircle2, Search, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -124,21 +124,26 @@ export default function FacultyMyTeaching() {
       .filter((b) => b.subjects.length > 0)
   }, [blocks, instFilter, deptFilter, search])
 
-  const shownKeys = useMemo(
-    () => visibleBlocks.flatMap((b) => b.subjects.map((s) => keyOf(b.sectionId, s))),
-    [visibleBlocks],
-  )
-  const allShownChecked = shownKeys.length > 0 && shownKeys.every((k) => checked.has(k))
-
   const existingKeys = useMemo(() => new Set(existing.keys()), [existing])
+  // Adding is purely additive: already-saved selections are locked-checked and
+  // can never be removed by unchecking. Removal is explicit (the × in "Your
+  // teaching"). So the only pending change is what's newly added.
   const toAdd = useMemo(() => [...checked].filter((k) => !existingKeys.has(k)), [checked, existingKeys])
-  const toRemove = useMemo(
-    () => [...existingKeys].filter((k) => !checked.has(k)),
-    [checked, existingKeys],
+  const hasChanges = toAdd.length > 0
+
+  // Only NOT-yet-saved subjects are toggleable / count toward "select all".
+  const addableShownKeys = useMemo(
+    () =>
+      visibleBlocks
+        .flatMap((b) => b.subjects.map((s) => keyOf(b.sectionId, s)))
+        .filter((k) => !existingKeys.has(k)),
+    [visibleBlocks, existingKeys],
   )
-  const hasChanges = toAdd.length > 0 || toRemove.length > 0
+  const allShownChecked =
+    addableShownKeys.length > 0 && addableShownKeys.every((k) => checked.has(k))
 
   function toggle(key: string) {
+    if (existingKeys.has(key)) return // locked — remove via "Your teaching" instead
     setChecked((c) => {
       const next = new Set(c)
       if (next.has(key)) next.delete(key)
@@ -148,7 +153,8 @@ export default function FacultyMyTeaching() {
   }
 
   function toggleSection(b: Block) {
-    const keys = b.subjects.map((s) => keyOf(b.sectionId, s))
+    const keys = b.subjects.map((s) => keyOf(b.sectionId, s)).filter((k) => !existingKeys.has(k))
+    if (keys.length === 0) return
     const allOn = keys.every((k) => checked.has(k))
     setChecked((c) => {
       const next = new Set(c)
@@ -160,9 +166,24 @@ export default function FacultyMyTeaching() {
   function toggleAllShown() {
     setChecked((c) => {
       const next = new Set(c)
-      shownKeys.forEach((k) => (allShownChecked ? next.delete(k) : next.add(k)))
+      addableShownKeys.forEach((k) => (allShownChecked ? next.delete(k) : next.add(k)))
       return next
     })
+  }
+
+  async function handleRemoveSelection(selectionId: number) {
+    if (!window.confirm("Remove this subject from your teaching?")) return
+    setSaving(true)
+    setNotice("")
+    try {
+      await removeFacultyTeaching(selectionId)
+      setNotice("Removed.")
+      load()
+    } catch {
+      setError("Could not remove this selection.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function save() {
@@ -170,23 +191,15 @@ export default function FacultyMyTeaching() {
     setSaving(true)
     setNotice("")
     try {
-      if (toAdd.length > 0) {
-        await addFacultyTeachingBulk(
-          toAdd.map((k) => {
-            const [sid, subject] = splitKey(k)
-            return { section_id: sid, subject }
-          }),
-        )
-      }
-      for (const k of toRemove) {
-        const sel = existing.get(k)
-        if (sel) await removeFacultyTeaching(sel.id)
-      }
-      const added = toAdd.length
-      const removed = toRemove.length
+      await addFacultyTeachingBulk(
+        toAdd.map((k) => {
+          const [sid, subject] = splitKey(k)
+          return { section_id: sid, subject }
+        }),
+      )
       setNotice(
-        `Saved — ${added} added${removed ? `, ${removed} removed` : ""}.` +
-          (data?.require_approval && added ? " Pending admin approval." : ""),
+        `Saved — ${toAdd.length} added.` +
+          (data?.require_approval ? " Pending admin approval." : ""),
       )
       load()
     } catch {
@@ -268,15 +281,26 @@ export default function FacultyMyTeaching() {
                       {s.course_name} · {s.semester_name} · {s.section_name} · {s.batch_name}
                     </p>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      s.status === "active"
-                        ? "bg-[#ecfdf3] text-[#027a48]"
-                        : "bg-[#fff7df] text-[#92702a]"
-                    }`}
-                  >
-                    {s.status === "active" ? "Active" : "Pending"}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        s.status === "active"
+                          ? "bg-[#ecfdf3] text-[#027a48]"
+                          : "bg-[#fff7df] text-[#92702a]"
+                      }`}
+                    >
+                      {s.status === "active" ? "Active" : "Pending"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSelection(s.id)}
+                      disabled={saving}
+                      aria-label={`Remove ${s.subject}`}
+                      className="grid size-7 place-items-center rounded-md text-[#98a2b3] transition hover:bg-[#fff5f5] hover:text-[#b42318] disabled:opacity-50"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -328,10 +352,10 @@ export default function FacultyMyTeaching() {
             <button
               type="button"
               onClick={toggleAllShown}
-              disabled={shownKeys.length === 0}
+              disabled={addableShownKeys.length === 0}
               className="shrink-0 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:opacity-50"
             >
-              {allShownChecked ? "Clear all shown" : `Select all ${shownKeys.length} shown`}
+              {allShownChecked ? "Clear selection" : `Select all ${addableShownKeys.length} new`}
             </button>
           </div>
 
@@ -346,8 +370,10 @@ export default function FacultyMyTeaching() {
               </p>
             ) : (
               visibleBlocks.map((b) => {
-                const keys = b.subjects.map((s) => keyOf(b.sectionId, s))
-                const allOn = keys.every((k) => checked.has(k))
+                const addable = b.subjects
+                  .map((s) => keyOf(b.sectionId, s))
+                  .filter((k) => !existingKeys.has(k))
+                const allOn = addable.length > 0 && addable.every((k) => checked.has(k))
                 return (
                   <div key={b.sectionId} className="overflow-hidden rounded-lg border border-[#e6e8eb]">
                     <div className="flex items-center justify-between gap-3 border-b border-[#e6e8eb] bg-[#f6f7fb] px-4 py-3">
@@ -357,13 +383,17 @@ export default function FacultyMyTeaching() {
                           {b.courseName} · {b.semesterName} · {b.batchName}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleSection(b)}
-                        className="shrink-0 text-sm font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
-                      >
-                        {allOn ? "Clear all" : "Select all"}
-                      </button>
+                      {addable.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSection(b)}
+                          className="shrink-0 text-sm font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+                        >
+                          {allOn ? "Clear selection" : "Select all"}
+                        </button>
+                      ) : (
+                        <span className="shrink-0 text-xs font-semibold text-[#027a48]">All added</span>
+                      )}
                     </div>
                     <div className="divide-y divide-[#eef0f2]">
                       {b.subjects.map((subj) => {
@@ -378,7 +408,9 @@ export default function FacultyMyTeaching() {
                               type="checkbox"
                               className="size-4"
                               checked={checked.has(key)}
+                              disabled={Boolean(sel)}
                               onChange={() => toggle(key)}
+                              title={sel ? "Already in your teaching — remove it from the list above" : undefined}
                             />
                             <span className="flex-1 font-medium text-[#111827]">{subj}</span>
                             {sel ? (
@@ -409,13 +441,8 @@ export default function FacultyMyTeaching() {
         <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-[#e6e8eb] bg-white/95 backdrop-blur lg:pl-64">
           <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
             <p className="text-sm text-[#6b7280]">
-              <span className="font-semibold text-[#111827]">{toAdd.length}</span> to add
-              {toRemove.length ? (
-                <>
-                  {" · "}
-                  <span className="font-semibold text-[#b42318]">{toRemove.length}</span> to remove
-                </>
-              ) : null}
+              <span className="font-semibold text-[#111827]">{toAdd.length}</span> subject
+              {toAdd.length === 1 ? "" : "s"} to add
             </p>
             <div className="flex gap-2">
               <button

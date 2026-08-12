@@ -88,18 +88,40 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
   const grade = evaluation.overall_grade || "—"
   const gc = gradeColor(grade)
 
+  // Actual marks scored out of the case's total marks (written question marks +
+  // rapid fire marks), rather than the 0-100 capability score.
+  const writtenAwarded = evaluation.question_scores.reduce((s, q) => s + (q.marks_awarded || 0), 0)
+  const writtenTotal = evaluation.question_scores.reduce((s, q) => s + (q.marks_total || 0), 0)
+  const rapidMarks = Math.round((evaluation.rapid_fire_score / 100) * 3 * 10) / 10
+  const marksScored = Math.round((writtenAwarded + rapidMarks) * 10) / 10
+  const totalMarks = writtenTotal + 3
+  const hasMarks = writtenTotal > 0
+  const marksPct = hasMarks ? (marksScored / totalMarks) * 100 : evaluation.total_score
+
   return (
     <section className="mx-auto max-w-[900px] space-y-5">
 
-      {/* Header — Grade + Score */}
+      {/* Header — Grade + Marks */}
       <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">Report Card</p>
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-3xl font-semibold text-[#0B1D3A]">
-              Overall Score: <span className={scoreColor(evaluation.total_score)}>{evaluation.total_score}</span>
-              <span className="text-lg text-[#6B7280]"> / 100</span>
-            </h2>
+            {hasMarks ? (
+              <h2 className="text-3xl font-semibold text-[#0B1D3A]">
+                Marks Scored: <span className={scoreColor(marksPct)}>{marksScored}</span>
+                <span className="text-lg text-[#6B7280]"> / {totalMarks}</span>
+              </h2>
+            ) : (
+              <h2 className="text-3xl font-semibold text-[#0B1D3A]">
+                Overall Score: <span className={scoreColor(evaluation.total_score)}>{evaluation.total_score}</span>
+                <span className="text-lg text-[#6B7280]"> / 100</span>
+              </h2>
+            )}
+            {hasMarks && (
+              <p className="mt-1 text-sm text-[#6B7280]">
+                Written {writtenAwarded}/{writtenTotal} + Rapid Fire {rapidMarks}/3
+              </p>
+            )}
             {evaluation.grade_comment && (
               <p className="mt-2 text-sm text-[#6B7280]">{evaluation.grade_comment}</p>
             )}

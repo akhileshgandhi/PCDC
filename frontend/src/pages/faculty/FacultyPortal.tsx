@@ -5,7 +5,6 @@ import FacultyAttemptReport from "./FacultyAttemptReport"
 import FacultyAttempts from "./FacultyAttempts"
 import FacultyCaseBuilder from "./FacultyCaseBuilder"
 import FacultyCaseLibrary from "./FacultyCaseLibrary"
-import FacultyAddStudents from "./FacultyAddStudents"
 import FacultyDashboard from "./FacultyDashboard"
 import FacultyMyTeaching from "./FacultyMyTeaching"
 import FacultyReports from "./FacultyReports"
@@ -17,7 +16,7 @@ export default function FacultyPortal() {
       <Route path="/" element={<Navigate to="/faculty/dashboard" replace />} />
       <Route path="/dashboard" element={<FacultyDashboard />} />
       <Route path="/onboarding/my-teaching" element={<FacultyMyTeaching />} />
-      <Route path="/onboarding/add-students" element={<FacultyAddStudents />} />
+      <Route path="/onboarding/add-students" element={<Navigate to="/faculty/students" replace />} />
       <Route path="/case-library" element={<FacultyCaseLibrary />} />
       <Route path="/case-builder" element={<FacultyCaseBuilder />} />
       <Route path="/case-builder/:id" element={<FacultyCaseBuilder />} />

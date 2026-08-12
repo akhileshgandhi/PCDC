@@ -1,13 +1,12 @@
-import { ChevronRight, Search, UserPlus } from "lucide-react"
+import { ChevronRight, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 
 import { getFacultyStudents, type FacultyStudent } from "../../api/faculty"
 import OnboardingTabs from "../../components/faculty/OnboardingTabs"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 export default function FacultyStudents() {
-  const navigate = useNavigate()
   const [students, setStudents] = useState<FacultyStudent[]>([])
   const [sectionName, setSectionName] = useState("")
   const [search, setSearch] = useState("")
@@ -51,22 +50,12 @@ export default function FacultyStudents() {
   return (
     <FacultyLayout>
       <div className="space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-semibold text-[#111827]">Students</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
-              Everyone enrolled in the sections you teach. Open a student to see their record and
-              history.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate("/faculty/onboarding/add-students")}
-            className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:bg-[#f6f7fb]"
-          >
-            <UserPlus size={16} aria-hidden="true" />
-            Add students
-          </button>
+        <div>
+          <h1 className="text-3xl font-semibold text-[#111827]">Students</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
+            Everyone enrolled in the sections you teach. Open a student to see their record and
+            history. Students are added by your program office (admin).
+          </p>
         </div>
 
         <OnboardingTabs studentCount={students.length} />
@@ -109,19 +98,9 @@ export default function FacultyStudents() {
                 <h3 className="text-base font-semibold text-[#111827]">No students yet</h3>
                 <p className="mt-1 text-sm text-[#6b7280]">
                   {students.length === 0
-                    ? "Students you add to your sections will appear here."
+                    ? "Once the admin enrolls students into your sections, they'll appear here."
                     : "No students match your search."}
                 </p>
-                {students.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate("/faculty/onboarding/add-students")}
-                    className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17315c]"
-                  >
-                    <UserPlus size={16} aria-hidden="true" />
-                    Add students
-                  </button>
-                ) : null}
               </div>
             ) : (
               <div className="divide-y divide-[#eef0f2]">

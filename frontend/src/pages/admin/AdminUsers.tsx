@@ -1,30 +1,25 @@
 import {
-  Download,
   KeyRound,
   MoreHorizontal,
-  Plus,
   RefreshCw,
   Search,
   ShieldOff,
   ShieldCheck,
   Trash2,
-  Upload,
   UserCog,
   Eye,
 } from "lucide-react"
-import type { ChangeEvent, FormEvent, ReactNode } from "react"
+import type { FormEvent, ReactNode } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 
 import {
   createAdminUser,
   deleteAdminUser,
-  downloadImportTemplate,
   getAdminCourseBatches,
   getAdminCourses,
   getAdminCourseSections,
   getAdminUsers,
-  importAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
   updateAdminUserRole,
@@ -33,7 +28,6 @@ import {
   type AdminCourse,
   type AdminSection,
   type AdminUser,
-  type AdminUserImportResult,
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../api/admin"
@@ -70,9 +64,6 @@ export default function AdminUsers() {
   const [notice, setNotice] = useState("")
   const [showAddUser, setShowAddUser] = useState(searchParams.get("action") === "add")
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
-  const [isImporting, setIsImporting] = useState(false)
-  const [importResult, setImportResult] = useState<AdminUserImportResult | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showingStart = total === 0 ? 0 : (page - 1) * pageSize + 1
@@ -119,11 +110,6 @@ export default function AdminUsers() {
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     loadUsers(1)
-  }
-
-  function openAddUser() {
-    setSearchParams({ action: "add" })
-    setShowAddUser(true)
   }
 
   function closeAddUser() {
@@ -178,33 +164,6 @@ export default function AdminUsers() {
       setNotice(`Password reset email queued for ${user.name}.`)
     } catch {
       setError("Unable to queue password reset.")
-    }
-  }
-
-  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ""
-    if (!file) {
-      return
-    }
-    setIsImporting(true)
-    setError("")
-    setImportResult(null)
-    try {
-      const result = await importAdminUsers(file, tab !== "all" ? tab : undefined)
-      setImportResult(result)
-      setNotice(
-        `Imported ${result.created_count} user(s)${
-          result.error_count > 0 ? `; ${result.error_count} row(s) failed` : ""
-        }.`,
-      )
-      if (result.created_count > 0) {
-        await loadUsers(1)
-      }
-    } catch {
-      setError("Unable to import this CSV file.")
-    } finally {
-      setIsImporting(false)
     }
   }
 
@@ -413,46 +372,6 @@ export default function AdminUsers() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => downloadImportTemplate(tab !== "all" ? tab : undefined).catch(() => setError("Unable to download template."))}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] bg-white px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3]"
-              >
-                <Download size={17} aria-hidden="true" />
-                {tab === "faculty" ? "Faculty Template" : tab === "student" ? "Student Template" : "Template"}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleImportFile}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] bg-white px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Upload size={17} aria-hidden="true" />
-                {isImporting
-                  ? "Importing..."
-                  : tab === "faculty"
-                    ? "Import Faculty"
-                    : tab === "student"
-                      ? "Import Students"
-                      : "Import CSV"}
-              </button>
-              <button
-                type="button"
-                onClick={openAddUser}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-[#5dd7bb]"
-              >
-                <Plus size={17} aria-hidden="true" />
-                Add User
-              </button>
-            </div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -567,21 +486,6 @@ export default function AdminUsers() {
           <div className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] px-4 py-3 text-sm font-medium text-[#b42318]">
             {error}
           </div>
-        ) : null}
-
-        {importResult && importResult.errors.length > 0 ? (
-          <section className="rounded-lg border border-[#f3c4c4] bg-[#fff5f5] p-4">
-            <h2 className="text-sm font-semibold text-[#b42318]">
-              {importResult.errors.length} row(s) could not be imported
-            </h2>
-            <ul className="mt-2 space-y-1 text-sm text-[#b42318]">
-              {importResult.errors.map((item) => (
-                <li key={item.row}>
-                  Row {item.row} ({item.email || "no email"}): {item.error}
-                </li>
-              ))}
-            </ul>
-          </section>
         ) : null}
 
         <section className="overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-sm">

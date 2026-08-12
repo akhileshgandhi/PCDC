@@ -1200,8 +1200,12 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
     )
     evaluation = normalize_evaluation(parse_json_response(response))
     save_evaluation(db, attempt_id, evaluation)
-    evaluation["attempt_id"] = attempt_id
-    return evaluation
+    # Return the SAME shape as the reloaded "View Results" path (question_scores
+    # as a list, rapid-fire fields unpacked), so the report card is identical
+    # whether shown right after rapid fire or later.
+    consistent = get_evaluation(db, attempt_id) or evaluation
+    consistent["attempt_id"] = attempt_id
+    return consistent
 
 
 def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:

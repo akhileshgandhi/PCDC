@@ -18,12 +18,12 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 
 import {
+  aiFillFacultyCase,
   createFacultyCase,
   generateFacultyCase,
   generateFacultyCaseQuestions,
   getFacultyCaseGenerationJob,
   getFacultyCase,
-  getFacultyCourses,
   publishFacultyCase,
   updateFacultyCase,
   type CaseSectionKey,
@@ -32,9 +32,7 @@ import {
   type FacultyCaseEditor,
   type FacultyCaseInstructions,
   type FacultyCaseQuestion,
-  type FacultyCaseRecommendation,
   type FacultyCaseTiming,
-  type FacultyCourseOption,
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
 import CapabilitySelector from "../../components/faculty/CapabilitySelector"
@@ -167,7 +165,6 @@ export default function FacultyCaseBuilder() {
   const caseId = id ? Number(id) : null
   const [mode, setMode] = useState<BuilderMode | null>(caseId ? "scratch" : null)
   const [coreForm, setCoreForm] = useState<CoreFormState>(emptyCoreForm)
-  const [courses, setCourses] = useState<FacultyCourseOption[]>([])
   const [caseData, setCaseData] = useState<FacultyCaseEditor | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [notice, setNotice] = useState("")
@@ -181,21 +178,11 @@ export default function FacultyCaseBuilder() {
   const [caseSummary, setCaseSummary] = useState("")
   const [showQuestionsModal, setShowQuestionsModal] = useState(false)
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false)
+  const [aiBrief, setAiBrief] = useState("")
+  const [isAiFilling, setIsAiFilling] = useState(false)
+  const [isAiCreating, setIsAiCreating] = useState(false)
   const shouldOfferFullDraft = mode === "ai" && caseData && allSectionsEmpty(caseData)
 
-  useEffect(() => {
-    let isMounted = true
-    getFacultyCourses()
-      .then((data) => {
-        if (isMounted) setCourses(data.items)
-      })
-      .catch(() => {
-        if (isMounted) setCourses([])
-      })
-    return () => {
-      isMounted = false
-    }
-  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -388,16 +375,6 @@ export default function FacultyCaseBuilder() {
     })
   }
 
-  function updateRecommendation<K extends keyof FacultyCaseRecommendation>(
-    field: K,
-    value: FacultyCaseRecommendation[K],
-  ) {
-    setCaseData((current) => {
-      if (!current) return current
-      return { ...current, recommendation: { ...current.recommendation, [field]: value } }
-    })
-  }
-
   function updateTiming<K extends keyof FacultyCaseTiming>(field: K, value: number | null) {
     setCaseData((current) => {
       if (!current) return current
@@ -500,6 +477,57 @@ export default function FacultyCaseBuilder() {
     }
   }
 
+  // AI mode with no core fields: create a draft from defaults, then let AI infer
+  // and fill EVERYTHING (including title, capability, difficulty) from the brief.
+  async function handleAiCreate() {
+    if (!aiBrief.trim()) {
+      return
+    }
+    setIsAiCreating(true)
+    setErrors([])
+    setNotice("")
+    try {
+      const draft = await createFacultyCase({
+        title: aiBrief.trim().slice(0, 80),
+        industry: "business",
+        difficulty: 3,
+        duration_minutes: 28,
+        capabilities: ["Critical Thinking"],
+      })
+      const filled = await aiFillFacultyCase(draft.id, aiBrief.trim())
+      setCaseData(normalizeCaseData(filled))
+      setCoreForm(caseToCoreForm(filled))
+      setNotice("Full case generated. Review every section and edit as needed before publishing.")
+      navigate(`/faculty/case-builder/${filled.id}`, { replace: true })
+    } catch {
+      setErrors(["AI could not generate the case. Please try again with a clearer brief."])
+    } finally {
+      setIsAiCreating(false)
+    }
+  }
+
+  async function handleAiFill() {
+    if (!caseData || !aiBrief.trim()) {
+      return
+    }
+    if (!window.confirm("This fills the ENTIRE case (sections, instructions, questions, timing, marks, rubric) from your brief and overwrites current content. Continue?")) {
+      return
+    }
+    setIsAiFilling(true)
+    setNotice("")
+    try {
+      const filled = await aiFillFacultyCase(caseData.id, aiBrief.trim())
+      setCaseData(normalizeCaseData(filled))
+      setCoreForm(caseToCoreForm(filled))
+      setErrors([])
+      setNotice("Full case generated. Review every section and edit as needed before publishing.")
+    } catch {
+      setErrors(["AI full-case generation failed. Existing content was preserved."])
+    } finally {
+      setIsAiFilling(false)
+    }
+  }
+
   async function handlePublish() {
     if (!caseData) {
       return
@@ -576,15 +604,25 @@ export default function FacultyCaseBuilder() {
         ) : !mode ? (
           <EntryFork onSelect={setMode} />
         ) : !caseData ? (
-          <CoreFieldsStep
-            mode={mode}
-            form={coreForm}
-            isSaving={isSaving}
-            onBack={() => setMode(null)}
-            onFieldChange={updateCoreField}
-            onCapabilityToggle={toggleCapability}
-            onContinue={handleCreateDraft}
-          />
+          mode === "ai" ? (
+            <AiBriefStep
+              brief={aiBrief}
+              isBusy={isAiCreating}
+              onBriefChange={setAiBrief}
+              onBack={() => setMode(null)}
+              onGenerate={handleAiCreate}
+            />
+          ) : (
+            <CoreFieldsStep
+              mode={mode}
+              form={coreForm}
+              isSaving={isSaving}
+              onBack={() => setMode(null)}
+              onFieldChange={updateCoreField}
+              onCapabilityToggle={toggleCapability}
+              onContinue={handleCreateDraft}
+            />
+          )
         ) : (
           <EditorStep
             caseData={caseData}
@@ -602,8 +640,6 @@ export default function FacultyCaseBuilder() {
             onInstructionsChange={updateInstructions}
             onQuestionChange={updateQuestion}
             onTotalMarksChange={handleTotalMarksChange}
-            courses={courses}
-            onRecommendationChange={updateRecommendation}
             caseSummary={caseSummary}
             onCaseSummaryChange={setCaseSummary}
             showQuestionsModal={showQuestionsModal}
@@ -611,6 +647,10 @@ export default function FacultyCaseBuilder() {
             onCloseQuestionsModal={() => setShowQuestionsModal(false)}
             isGeneratingQuestions={isGeneratingQuestions}
             onGenerateQuestions={handleGenerateQuestions}
+            aiBrief={aiBrief}
+            onAiBriefChange={setAiBrief}
+            isAiFilling={isAiFilling}
+            onAiFill={handleAiFill}
           />
         )}
       </div>
@@ -661,6 +701,54 @@ function EntryCard({ title, description, icon: Icon, onClick }: EntryCardProps) 
       <span className="mt-6 block text-2xl font-semibold text-[#111827]">{title}</span>
       <span className="mt-3 block text-sm leading-6 text-[#6b7280]">{description}</span>
     </button>
+  )
+}
+
+interface AiBriefStepProps {
+  brief: string
+  isBusy: boolean
+  onBriefChange: (value: string) => void
+  onBack: () => void
+  onGenerate: () => void
+}
+
+function AiBriefStep({ brief, isBusy, onBriefChange, onBack, onGenerate }: AiBriefStepProps) {
+  return (
+    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold">Describe your case</h2>
+            <span className="rounded-full bg-[#fff7df] px-2 py-0.5 text-xs font-semibold text-[#92702a]">
+              Test
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-[#6b7280]">
+            Just write a line or two about the case. AI infers the title, capability, difficulty,
+            and fills every section, question, timing, and rubric — no fields to set up.
+          </p>
+        </div>
+        <button type="button" onClick={onBack} className="text-sm font-semibold text-[#6b7280]">
+          Change mode
+        </button>
+      </div>
+      <textarea
+        value={brief}
+        onChange={(event) => onBriefChange(event.target.value)}
+        rows={4}
+        placeholder="e.g. A regional healthy-snacks company negotiating shelf space and trade terms with a large retail chain. Focus on negotiation strategy under a limited budget."
+        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+      />
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={isBusy || !brief.trim()}
+        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isBusy ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
+        {isBusy ? "Generating the whole case…" : "Generate entire case"}
+      </button>
+    </section>
   )
 }
 
@@ -735,11 +823,6 @@ interface EditorStepProps {
     value: FacultyCaseQuestion[K],
   ) => void
   onTotalMarksChange: (value: number | null) => void
-  courses: FacultyCourseOption[]
-  onRecommendationChange: <K extends keyof FacultyCaseRecommendation>(
-    field: K,
-    value: FacultyCaseRecommendation[K],
-  ) => void
   caseSummary: string
   onCaseSummaryChange: (value: string) => void
   showQuestionsModal: boolean
@@ -747,6 +830,10 @@ interface EditorStepProps {
   onCloseQuestionsModal: () => void
   isGeneratingQuestions: boolean
   onGenerateQuestions: () => void
+  aiBrief: string
+  onAiBriefChange: (value: string) => void
+  isAiFilling: boolean
+  onAiFill: () => void
 }
 
 function EditorStep({
@@ -765,8 +852,6 @@ function EditorStep({
   onInstructionsChange,
   onQuestionChange,
   onTotalMarksChange,
-  courses,
-  onRecommendationChange,
   caseSummary,
   onCaseSummaryChange,
   showQuestionsModal,
@@ -774,6 +859,10 @@ function EditorStep({
   onCloseQuestionsModal,
   isGeneratingQuestions,
   onGenerateQuestions,
+  aiBrief,
+  onAiBriefChange,
+  isAiFilling,
+  onAiFill,
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
@@ -782,6 +871,48 @@ function EditorStep({
           {caseData.active_attempts} students have an active attempt on this case. Changes may
           affect their evaluation.
         </div>
+      ) : null}
+
+      {mode === "ai" ? (
+        <section className="rounded-lg border-2 border-dashed border-[#c9a227] bg-[#fffdf5] p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <Sparkles size={20} className="mt-0.5 shrink-0 text-[#c9a227]" aria-hidden="true" />
+            <div className="w-full">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-semibold text-[#111827]">Full Autofill with AI</h2>
+                <span className="rounded-full bg-[#fff7df] px-2 py-0.5 text-xs font-semibold text-[#92702a]">
+                  Test
+                </span>
+              </div>
+              <p className="mt-1 text-sm leading-6 text-[#6b7280]">
+                Describe the case in one or two lines. AI fills <span className="font-semibold">everything</span> —
+                sections, company/industry background, student instructions, 3 questions (with marks,
+                word limits, model answers, marking scheme), timing, and the rubric — using this case's
+                capability and difficulty. Review and edit before publishing.
+              </p>
+              <textarea
+                value={aiBrief}
+                onChange={(event) => onAiBriefChange(event.target.value)}
+                rows={3}
+                placeholder="e.g. A regional healthy-snacks company negotiating shelf space and trade terms with a large retail chain."
+                className="mt-3 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              />
+              <button
+                type="button"
+                onClick={onAiFill}
+                disabled={isAiFilling || !aiBrief.trim()}
+                className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isAiFilling ? (
+                  <Loader2 className="animate-spin" size={17} aria-hidden="true" />
+                ) : (
+                  <Sparkles size={17} aria-hidden="true" />
+                )}
+                {isAiFilling ? "Generating the whole case…" : "Generate entire case (Test)"}
+              </button>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
@@ -819,12 +950,6 @@ function EditorStep({
       </section>
 
       <RubricEditor caseId={caseData.id} />
-
-      <RecommendationPanel
-        recommendation={caseData.recommendation}
-        courses={courses}
-        onChange={onRecommendationChange}
-      />
 
       <TimingPanel
         timing={caseData.timing}
@@ -921,6 +1046,7 @@ function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsF
         <TextField
           label="Title"
           value={form.title}
+          placeholder="e.g. Negotiating Shelf Space with a Retail Chain"
           onChange={(value) => onFieldChange("title", value)}
         />
         <label className="grid gap-2 text-sm font-semibold text-[#111827]">
@@ -1010,18 +1136,20 @@ interface TextFieldProps {
   label: string
   value: string
   type?: string
+  placeholder?: string
   onChange: (value: string) => void
 }
 
-function TextField({ label, value, type = "text", onChange }: TextFieldProps) {
+function TextField({ label, value, type = "text", placeholder, onChange }: TextFieldProps) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-[#111827]">
       {label}
       <input
         type={type}
         value={value}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
       />
     </label>
   )
@@ -1030,20 +1158,22 @@ function TextField({ label, value, type = "text", onChange }: TextFieldProps) {
 interface NumberFieldProps {
   label: string
   value: number | null | undefined
+  placeholder?: string
   onChange: (value: number | null) => void
 }
 
-function NumberField({ label, value, onChange }: NumberFieldProps) {
+function NumberField({ label, value, placeholder, onChange }: NumberFieldProps) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-[#111827]">
       {label}
       <input
         type="number"
         value={value ?? ""}
+        placeholder={placeholder}
         onChange={(event) =>
           onChange(event.target.value === "" ? null : Number(event.target.value))
         }
-        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
       />
     </label>
   )
@@ -1053,18 +1183,20 @@ interface TextAreaFieldProps {
   label: string
   value: string
   rows?: number
+  placeholder?: string
   onChange: (value: string) => void
 }
 
-function TextAreaField({ label, value, rows = 3, onChange }: TextAreaFieldProps) {
+function TextAreaField({ label, value, rows = 3, placeholder, onChange }: TextAreaFieldProps) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-[#111827]">
       {label}
       <textarea
         value={value}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         rows={rows}
-        className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
       />
     </label>
   )
@@ -1094,92 +1226,6 @@ function SelectField({ label, value, options, onChange }: SelectFieldProps) {
         ))}
       </select>
     </label>
-  )
-}
-
-const recommendableSemesters = [1, 2, 3, 4]
-
-interface RecommendationPanelProps {
-  recommendation: FacultyCaseRecommendation
-  courses: FacultyCourseOption[]
-  onChange: <K extends keyof FacultyCaseRecommendation>(
-    field: K,
-    value: FacultyCaseRecommendation[K],
-  ) => void
-}
-
-function RecommendationPanel({ recommendation, courses, onChange }: RecommendationPanelProps) {
-  function toggleSemester(semester: number) {
-    const current = recommendation.recommended_semesters
-    onChange(
-      "recommended_semesters",
-      current.includes(semester)
-        ? current.filter((value) => value !== semester)
-        : [...current, semester].sort((a, b) => a - b),
-    )
-  }
-
-  function toggleCourse(courseId: number) {
-    const current = recommendation.recommended_course_ids
-    onChange(
-      "recommended_course_ids",
-      current.includes(courseId)
-        ? current.filter((value) => value !== courseId)
-        : [...current, courseId],
-    )
-  }
-
-  return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold">Recommended Course &amp; Semester</h2>
-      <p className="mt-1 text-sm text-[#6b7280]">
-        Optional soft tags to help faculty find this case when browsing by course or semester.
-        These do not restrict who can be assigned this case.
-      </p>
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <div>
-          <p className="text-sm font-semibold text-[#111827]">Recommended Semesters</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {recommendableSemesters.map((semester) => (
-              <button
-                key={semester}
-                type="button"
-                onClick={() => toggleSemester(semester)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  recommendation.recommended_semesters.includes(semester)
-                    ? "border-[#c9a227] bg-[#fff7df] text-[#92702a]"
-                    : "border-[#e6e8eb] text-[#6b7280] hover:border-[#c9a227]"
-                }`}
-              >
-                Sem {semester}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-[#111827]">Recommended Courses</p>
-          <div className="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-md border border-[#e6e8eb] p-3">
-            {courses.length === 0 ? (
-              <p className="text-sm text-[#6b7280]">No courses configured yet.</p>
-            ) : (
-              courses.map((course) => (
-                <label key={course.id} className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={recommendation.recommended_course_ids.includes(course.id)}
-                    onChange={() => toggleCourse(course.id)}
-                    className="size-4"
-                  />
-                  <span>
-                    {course.name} ({course.code})
-                  </span>
-                </label>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
   )
 }
 
@@ -1223,11 +1269,13 @@ function TimingPanel({ timing, durationMinutes, onTimingChange }: TimingPanelPro
         <NumberField
           label="Reading Time (min)"
           value={timing.reading_time_minutes}
+          placeholder="e.g. 8"
           onChange={(value) => onTimingChange("reading_time_minutes", value)}
         />
         <NumberField
           label="Rapid Fire Time (min)"
           value={timing.rapid_fire_time_minutes}
+          placeholder="e.g. 8"
           onChange={(value) => onTimingChange("rapid_fire_time_minutes", value)}
         />
         <label className="grid gap-2 text-sm font-semibold text-[#111827]">
@@ -1268,41 +1316,49 @@ function InstructionsPanel({ instructions, onChange }: InstructionsPanelProps) {
         <TextAreaField
           label="Student Instructions - Before Reading"
           value={instructions.student_instructions_before ?? ""}
+          placeholder="What students should do before they start reading (e.g. read carefully, identify both parties' interests, don't assume facts not given)."
           onChange={(value) => onChange("student_instructions_before", value)}
         />
         <TextAreaField
           label="Student Instructions - While Answering"
           value={instructions.student_instructions_during ?? ""}
+          placeholder="How they should answer (e.g. support every point with case facts, write full sentences, stay within the word limit)."
           onChange={(value) => onChange("student_instructions_during", value)}
         />
         <TextAreaField
           label="Student Instructions - Submission"
           value={instructions.student_instructions_submission ?? ""}
+          placeholder="Submission rules (e.g. finish within the time limit; Rapid Fire starts right after; 70% completion needed to be evaluated)."
           onChange={(value) => onChange("student_instructions_submission", value)}
         />
         <TextAreaField
           label="Company Background"
           value={instructions.company_background ?? ""}
+          placeholder="The company profile — name, location, business, size, turnover."
           onChange={(value) => onChange("company_background", value)}
         />
         <TextAreaField
           label="Industry Background"
           value={instructions.industry_background ?? ""}
+          placeholder="The market/industry context relevant to the case."
           onChange={(value) => onChange("industry_background", value)}
         />
         <TextAreaField
           label="Faculty Notes - Common Mistakes"
           value={instructions.faculty_common_mistakes ?? ""}
+          placeholder="Typical errors students make on this case (faculty-only)."
           onChange={(value) => onChange("faculty_common_mistakes", value)}
         />
         <TextAreaField
           label="Faculty Notes - Discussion Points"
           value={instructions.faculty_discussion_points ?? ""}
+          placeholder="Prompts for classroom discussion (faculty-only)."
           onChange={(value) => onChange("faculty_discussion_points", value)}
         />
         <TextAreaField
           label="Key Learning Points"
           value={instructions.key_learning_points ?? ""}
+          placeholder="The main takeaways students should leave with."
           onChange={(value) => onChange("key_learning_points", value)}
         />
       </div>
@@ -1363,6 +1419,7 @@ function QuestionsPanel({
           <NumberField
             label="Total Marks"
             value={totalMarks}
+            placeholder="e.g. 10"
             onChange={(value) => onTotalMarksChange(value)}
           />
         </div>
@@ -1398,12 +1455,14 @@ function QuestionsPanel({
               <TextAreaField
                 label="Question Text"
                 value={question.question_text}
+                placeholder="The question the student must answer (e.g. Identify the main negotiation challenge faced by the company)."
                 onChange={(value) => onChange(index, "question_text", value)}
               />
               <div className="grid gap-4 sm:grid-cols-4">
                 <NumberField
                   label="Marks"
                   value={question.marks}
+                  placeholder="e.g. 2"
                   onChange={(value) => onChange(index, "marks", value ?? 0)}
                 />
                 <SelectField
@@ -1415,32 +1474,38 @@ function QuestionsPanel({
                 <NumberField
                   label="Word Limit (Min)"
                   value={question.word_limit_min}
+                  placeholder="e.g. 80"
                   onChange={(value) => onChange(index, "word_limit_min", value)}
                 />
                 <NumberField
                   label="Word Limit (Max)"
                   value={question.word_limit_max}
+                  placeholder="e.g. 100"
                   onChange={(value) => onChange(index, "word_limit_max", value)}
                 />
               </div>
               <TextAreaField
                 label="Per-Question Instructions"
                 value={question.instructions ?? ""}
+                placeholder="Guidance for this question (e.g. clearly identify the challenge; use at least two case facts; don't suggest solutions here)."
                 onChange={(value) => onChange(index, "instructions", value)}
               />
               <TextAreaField
                 label="Model Answer"
                 value={question.model_answer ?? ""}
+                placeholder="The ideal answer, used by the AI to grade against."
                 onChange={(value) => onChange(index, "model_answer", value)}
               />
               <TextAreaField
                 label="Alternative Answers (one per line)"
                 value={(question.alternative_answers ?? []).join("\n")}
+                placeholder={"Other acceptable answers — one per line.\ne.g. Trade negotiation challenge\nChannel partnership negotiation"}
                 onChange={(value) => onChange(index, "alternative_answers", linesToList(value))}
               />
               <TextAreaField
                 label="Marking Scheme"
                 value={question.marking_scheme ?? ""}
+                placeholder="How marks are split (e.g. Correct identification 1.0; Use of case facts 0.5; Logical explanation 0.5)."
                 onChange={(value) => onChange(index, "marking_scheme", value)}
               />
             </div>
@@ -1549,7 +1614,25 @@ interface SectionEditorProps {
   onGenerate: () => void
 }
 
+const SECTION_HINTS: Record<CaseSectionKey, string> = {
+  situation:
+    "Describe the core business situation and the decision to be made — what's happening, who is involved, and what the student must decide.",
+  background:
+    "Company and industry context relevant to the case (size, turnover, market, history).",
+  data: "Key facts and figures students should use — numbers, prices, percentages, dates.",
+  characters:
+    "The people in the case and their roles/interests (e.g. the decision-maker, stakeholders, the student's role).",
+  constraints:
+    "Limits and pressures the student must work within — budget, time, policy, resources.",
+  objectives: "What the student is expected to analyse, achieve, or decide. State the task clearly.",
+  timeline: "The sequence of events, meetings, or deadlines relevant to the decision.",
+  reflection_questions: "One question per line — open-ended prompts for the student to reflect on.",
+  learning_outcomes:
+    "One outcome per line — what students should be able to do after completing this case.",
+}
+
 function SectionEditor({
+  sectionKey,
   label,
   required,
   value,
@@ -1574,9 +1657,10 @@ function SectionEditor({
       </div>
       <textarea
         value={value}
+        placeholder={SECTION_HINTS[sectionKey]}
         onChange={(event) => onChange(event.target.value)}
         rows={7}
-        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
       />
     </article>
   )

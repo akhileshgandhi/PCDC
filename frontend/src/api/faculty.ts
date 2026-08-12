@@ -343,6 +343,15 @@ export async function generateFacultyCaseQuestions(caseId: number, summary: stri
   return response.data.questions
 }
 
+// TEST: one-brief full-case autofill (fills every field + rubric in one call).
+export async function aiFillFacultyCase(caseId: number, brief: string, subject?: string) {
+  const response = await api.post<FacultyCaseEditor>(
+    `/faculty/cases/${caseId}/ai-fill`,
+    { brief, subject },
+  )
+  return response.data
+}
+
 export async function generateFacultyRapidFireQuestions(caseId: number, summary: string) {
   const response = await api.post<{ questions: FacultyRapidFireQuestion[] }>(
     `/faculty/cases/${caseId}/generate-rapid-fire`,

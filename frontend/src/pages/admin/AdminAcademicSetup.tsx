@@ -9,8 +9,12 @@ import {
   createAdminInstitution,
   createAdminSection,
   createAdminSubject,
+  deleteAdminBatch,
+  deleteAdminCourse,
   deleteAdminDepartment,
   deleteAdminInstitution,
+  deleteAdminSection,
+  deleteAdminSemester,
   deleteAdminSubject,
   getAdminAcademicSummary,
   getAdminAllBatches,
@@ -143,10 +147,10 @@ export default function AdminAcademicSetup() {
         <div key={`${activeTab}-${refreshKey}`}>
           {activeTab === "institutions" ? <InstitutionsTab onChanged={handleChanged} /> : null}
           {activeTab === "departments" ? <DepartmentsTab onChanged={handleChanged} /> : null}
-          {activeTab === "courses" ? <CoursesTab /> : null}
-          {activeTab === "batches" ? <BatchesTab /> : null}
-          {activeTab === "semesters" ? <SemestersTab /> : null}
-          {activeTab === "sections" ? <SectionsTab /> : null}
+          {activeTab === "courses" ? <CoursesTab onChanged={handleChanged} /> : null}
+          {activeTab === "batches" ? <BatchesTab onChanged={handleChanged} /> : null}
+          {activeTab === "semesters" ? <SemestersTab onChanged={handleChanged} /> : null}
+          {activeTab === "sections" ? <SectionsTab onChanged={handleChanged} /> : null}
           {activeTab === "subjects" ? <SubjectsTab onChanged={handleChanged} /> : null}
         </div>
       </div>
@@ -853,7 +857,7 @@ function SubjectForm({
 
 /* ---------------------------------- Courses --------------------------------- */
 
-function CoursesTab() {
+function CoursesTab({ onChanged }: { onChanged: () => void }) {
   const [items, setItems] = useState<AdminCourse[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -862,6 +866,12 @@ function CoursesTab() {
       .then((data) => setItems(data.items))
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleDelete(course: AdminCourse) {
+    if (!window.confirm(`Delete course "${course.name}"? This removes its semesters, batches, and sections.`)) return
+    await deleteAdminCourse(course.id)
+    onChanged()
+  }
 
   return (
     <Card title="Courses" description="Programs within a department. Manage batches, semesters and sections from a course.">
@@ -894,10 +904,13 @@ function CoursesTab() {
                   <td className="px-5 py-4 text-[#475467]">{course.total_semesters}</td>
                   <td className="px-5 py-4 text-[#475467]">{course.section_count}</td>
                   <td className="px-5 py-4"><StatusBadge status={course.status} /></td>
-                  <td className="px-5 py-4 text-right">
-                    <Link to="/admin/courses" className="text-sm font-semibold text-[#0b5fff] hover:underline">
-                      Manage
-                    </Link>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center justify-end gap-3">
+                      <Link to="/admin/courses" className="text-sm font-semibold text-[#0b5fff] hover:underline">
+                        Manage
+                      </Link>
+                      <IconButton label="Delete" danger onClick={() => handleDelete(course)}><Trash2 size={15} /></IconButton>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -996,12 +1009,17 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
 
 /* -------------------------- Batches / Semesters / Sections ------------------- */
 
-function BatchesTab() {
+function BatchesTab({ onChanged }: { onChanged: () => void }) {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getAdminAllBatches>>["items"]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     getAdminAllBatches().then((d) => setItems(d.items)).finally(() => setLoading(false))
   }, [])
+  async function handleDelete(b: { id: number; name: string }) {
+    if (!window.confirm(`Delete batch "${b.name}"? Its sections and enrolments will be removed.`)) return
+    await deleteAdminBatch(b.id)
+    onChanged()
+  }
   return (
     <Card title="Batches" description="Student cohorts within a course. Add batches from a course's page.">
       {loading ? <Loading /> : items.length === 0 ? <Empty text="No batches yet." /> : (
@@ -1014,6 +1032,7 @@ function BatchesTab() {
                 <th className="px-5 py-3">Years</th>
                 <th className="px-5 py-3">Sections</th>
                 <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
@@ -1024,6 +1043,11 @@ function BatchesTab() {
                   <td className="px-5 py-4 text-[#475467]">{b.start_year}–{b.end_year}</td>
                   <td className="px-5 py-4 text-[#475467]">{b.section_count}</td>
                   <td className="px-5 py-4"><StatusBadge status={b.status} /></td>
+                  <td className="px-5 py-4">
+                    <div className="flex justify-end">
+                      <IconButton label="Delete" danger onClick={() => handleDelete(b)}><Trash2 size={15} /></IconButton>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1109,12 +1133,17 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
   )
 }
 
-function SemestersTab() {
+function SemestersTab({ onChanged }: { onChanged: () => void }) {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getAdminAllSemesters>>["items"]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     getAdminAllSemesters().then((d) => setItems(d.items)).finally(() => setLoading(false))
   }, [])
+  async function handleDelete(s: { id: number; name: string }) {
+    if (!window.confirm(`Delete "${s.name}"? Its sections and subjects will be removed.`)) return
+    await deleteAdminSemester(s.id)
+    onChanged()
+  }
   return (
     <Card
       title="Semesters"
@@ -1130,6 +1159,7 @@ function SemestersTab() {
                 <th className="px-5 py-3">Sections</th>
                 <th className="px-5 py-3">Subjects</th>
                 <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
@@ -1142,6 +1172,11 @@ function SemestersTab() {
                   <td className="px-5 py-4 text-[#475467]">{s.section_count}</td>
                   <td className="px-5 py-4 text-[#475467]">{s.subject_count}</td>
                   <td className="px-5 py-4"><StatusBadge status="active" /></td>
+                  <td className="px-5 py-4">
+                    <div className="flex justify-end">
+                      <IconButton label="Delete" danger onClick={() => handleDelete(s)}><Trash2 size={15} /></IconButton>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1152,12 +1187,17 @@ function SemestersTab() {
   )
 }
 
-function SectionsTab() {
+function SectionsTab({ onChanged }: { onChanged: () => void }) {
   const [items, setItems] = useState<Awaited<ReturnType<typeof getAdminSections>>["items"]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     getAdminSections().then((d) => setItems(d.items)).finally(() => setLoading(false))
   }, [])
+  async function handleDelete(s: { id: number; name: string }) {
+    if (!window.confirm(`Delete section "${s.name}"? Its enrolments and faculty links will be removed.`)) return
+    await deleteAdminSection(s.id)
+    onChanged()
+  }
   return (
     <Card title="Sections" description="Class sections. Assign faculty and enroll students from the Sections manager.">
       {loading ? <Loading /> : items.length === 0 ? <Empty text="No sections yet." /> : (
@@ -1181,10 +1221,13 @@ function SectionsTab() {
                   <td className="px-5 py-4 text-[#475467]">{s.semester_name}</td>
                   <td className="px-5 py-4 text-[#475467]">{s.batch_name}</td>
                   <td className="px-5 py-4"><StatusBadge status={s.status} /></td>
-                  <td className="px-5 py-4 text-right">
-                    <Link to="/admin/sections" className="text-sm font-semibold text-[#0b5fff] hover:underline">
-                      Manage
-                    </Link>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center justify-end gap-3">
+                      <Link to="/admin/sections" className="text-sm font-semibold text-[#0b5fff] hover:underline">
+                        Manage
+                      </Link>
+                      <IconButton label="Delete" danger onClick={() => handleDelete(s)}><Trash2 size={15} /></IconButton>
+                    </div>
                   </td>
                 </tr>
               ))}

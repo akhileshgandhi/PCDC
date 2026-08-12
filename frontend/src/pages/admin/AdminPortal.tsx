@@ -7,6 +7,7 @@ import AdminFaculty from "./AdminFaculty"
 import AdminTeachingApprovals from "./AdminTeachingApprovals"
 import AdminModulePlaceholder from "./AdminModulePlaceholder"
 import AdminSections from "./AdminSections"
+import AdminStudents from "./AdminStudents"
 import AdminUserDetail from "./AdminUserDetail"
 import AdminUsers from "./AdminUsers"
 
@@ -18,6 +19,7 @@ export default function AdminPortal() {
       <Route path="/academic" element={<Navigate to="/admin/academic/institutions" replace />} />
       <Route path="/academic/:tab" element={<AdminAcademicSetup />} />
       <Route path="/people/faculty" element={<AdminFaculty />} />
+      <Route path="/people/students" element={<AdminStudents />} />
       <Route path="/people/teaching-approvals" element={<AdminTeachingApprovals />} />
       <Route path="/users" element={<AdminUsers />} />
       <Route path="/user/:id" element={<AdminUserDetail />} />

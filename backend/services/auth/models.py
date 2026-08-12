@@ -24,7 +24,7 @@ class GoogleAuthRequest(BaseModel):
 class UserResponse(BaseModel):
     id: int
     name: str
-    email: EmailStr
+    email: Optional[str] = None  # students added by scholar number may have no email
     role: str
     created_at: str
 

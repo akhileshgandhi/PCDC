@@ -540,6 +540,21 @@ export async function deleteAdminCourse(courseId: number) {
   return response.data
 }
 
+export async function deleteAdminBatch(batchId: number) {
+  const response = await api.delete<{ status: string; name: string }>(`/admin/batches/${batchId}`)
+  return response.data
+}
+
+export async function deleteAdminSemester(semesterId: number) {
+  const response = await api.delete<{ status: string; name: string }>(`/admin/semesters/${semesterId}`)
+  return response.data
+}
+
+export async function deleteAdminSection(sectionId: number) {
+  const response = await api.delete<{ status: string; name: string }>(`/admin/sections/${sectionId}`)
+  return response.data
+}
+
 export async function getAdminCourseSemesters(courseId: number) {
   const response = await api.get<{ items: AdminSemester[] }>(
     `/admin/courses/${courseId}/semesters`,
@@ -594,6 +609,42 @@ export async function getAdminSections(filters: AdminSectionFilters = {}) {
 
 export async function getAdminSection(sectionId: number) {
   const response = await api.get<AdminSectionDetail>(`/admin/sections/${sectionId}`)
+  return response.data
+}
+
+// Admin creates a new student login and enrolls them into a section.
+export interface AdminAddStudentResult {
+  name: string
+  email: string | null
+  password: string
+  scholar_number: string
+}
+
+export async function adminAddStudent(payload: {
+  section_id: number
+  name: string
+  scholar_number: string
+  email?: string
+}) {
+  const response = await api.post<AdminAddStudentResult>("/admin/students/add", payload)
+  return response.data
+}
+
+export interface AdminStudentBulkImportResult {
+  created: AdminAddStudentResult[]
+  skipped: Array<{ row: number; name: string; reason: string }>
+  created_count: number
+  skipped_count: number
+}
+
+export async function adminBulkImportStudents(sectionId: number, file: File) {
+  const form = new FormData()
+  form.append("file", file)
+  const response = await api.post<AdminStudentBulkImportResult>(
+    `/admin/students/bulk-import?section_id=${sectionId}`,
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  )
   return response.data
 }
 

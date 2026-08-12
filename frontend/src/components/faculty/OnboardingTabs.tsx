@@ -7,7 +7,6 @@ interface OnboardingTabsProps {
 const tabs = [
   { label: "My Teaching", to: "/faculty/onboarding/my-teaching" },
   { label: "Students", to: "/faculty/students", showCount: true },
-  { label: "Add Students", to: "/faculty/onboarding/add-students" },
 ]
 
 export default function OnboardingTabs({ studentCount }: OnboardingTabsProps) {

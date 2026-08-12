@@ -1,47 +1,42 @@
 import { AlertTriangle, Download, GraduationCap, KeyRound, Upload, UserPlus } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import {
-  facultyAddStudent,
-  facultyBulkImportStudents,
-  getFacultySections,
-  getFacultyStudents,
-  type FacultyAddStudentResult,
-  type FacultySection,
-} from "../../api/faculty"
-import OnboardingTabs from "../../components/faculty/OnboardingTabs"
-import FacultyLayout from "../../layouts/FacultyLayout"
+  adminAddStudent,
+  adminBulkImportStudents,
+  getAdminSections,
+  type AdminAddStudentResult,
+  type AdminSectionListItem,
+} from "../../api/admin"
+import AdminLayout from "../../layouts/AdminLayout"
 
-export default function FacultyAddStudents() {
-  const navigate = useNavigate()
-  const [sections, setSections] = useState<FacultySection[]>([])
-  const [studentCount, setStudentCount] = useState<number | undefined>(undefined)
+export default function AdminStudents() {
+  const [sections, setSections] = useState<AdminSectionListItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  // form
   const [sectionId, setSectionId] = useState("")
   const [name, setName] = useState("")
   const [scholar, setScholar] = useState("")
   const [email, setEmail] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const [added, setAdded] = useState<FacultyAddStudentResult[]>([])
+  const [added, setAdded] = useState<AdminAddStudentResult[]>([])
 
-  // bulk import
   const fileRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [skipped, setSkipped] = useState<Array<{ row: number; name: string; reason: string }>>([])
 
   useEffect(() => {
-    Promise.all([getFacultySections(), getFacultyStudents()])
-      .then(([sec, studs]) => {
-        setSections(sec.items)
-        setStudentCount(studs.items.length)
-      })
+    getAdminSections()
+      .then((d) => setSections(d.items))
       .catch(() => undefined)
       .finally(() => setLoading(false))
   }, [])
+
+  const selectedSection = useMemo(
+    () => sections.find((s) => String(s.id) === sectionId),
+    [sections, sectionId],
+  )
 
   async function submit() {
     if (!sectionId || !name.trim() || !scholar.trim()) {
@@ -51,7 +46,7 @@ export default function FacultyAddStudents() {
     setSaving(true)
     setError("")
     try {
-      const result = await facultyAddStudent({
+      const result = await adminAddStudent({
         section_id: Number(sectionId),
         name: name.trim(),
         scholar_number: scholar.trim(),
@@ -61,7 +56,6 @@ export default function FacultyAddStudents() {
       setName("")
       setScholar("")
       setEmail("")
-      setStudentCount((c) => (c ?? 0) + 1)
     } catch {
       setError("Could not add this student. The email or scholar number may already exist.")
     } finally {
@@ -88,10 +82,9 @@ export default function FacultyAddStudents() {
     setImporting(true)
     setError("")
     try {
-      const res = await facultyBulkImportStudents(Number(sectionId), file)
+      const res = await adminBulkImportStudents(Number(sectionId), file)
       setAdded((a) => [...res.created, ...a])
       setSkipped(res.skipped)
-      setStudentCount((c) => (c ?? 0) + res.created_count)
     } catch {
       setError("Import failed. Check the file format and try again.")
     } finally {
@@ -101,49 +94,43 @@ export default function FacultyAddStudents() {
   }
 
   const field =
-    "h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-  const label = "grid gap-1.5 text-sm font-semibold text-[#111827]"
+    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+  const label = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
+
+  function sectionLabel(s: AdminSectionListItem) {
+    return `${s.name} · ${s.course_name} · Sem ${s.semester_number} · ${s.batch_name} (${s.student_count})`
+  }
 
   return (
-    <FacultyLayout>
+    <AdminLayout>
       <div className="space-y-5">
         <div>
-          <h1 className="text-3xl font-semibold text-[#111827]">Add Students</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
-            Create logins for your sections and hand out credential slips. Newly added students
-            appear under Students.
+          <h1 className="text-3xl font-semibold text-[#17202a]">Students</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
+            Add students to the sections you created in Academic Setup. Create a single login, or
+            import many at once, and hand out the credential slips.
           </p>
         </div>
 
-        <OnboardingTabs studentCount={studentCount} />
-
         {loading ? (
-          <section className="rounded-lg border border-[#e6e8eb] bg-white p-8 text-center text-sm font-medium text-[#6b7280] shadow-sm">
+          <section className="rounded-lg border border-[#eef2f7] bg-white p-8 text-center text-sm font-medium text-[#667085] shadow-sm">
             Loading…
           </section>
         ) : sections.length === 0 ? (
-          <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-            <div className="rounded-lg border border-dashed border-[#e6e8eb] px-5 py-12 text-center">
-              <h3 className="text-base font-semibold text-[#111827]">Tell us what you teach first</h3>
-              <p className="mx-auto mt-1 max-w-md text-sm text-[#6b7280]">
-                Students are added to a section, so you need at least one approved section before you
-                can add anyone.
+          <section className="rounded-lg border border-[#eef2f7] bg-white p-5 shadow-sm">
+            <div className="rounded-lg border border-dashed border-[#dde4ec] px-5 py-12 text-center">
+              <h3 className="text-base font-semibold text-[#17202a]">No sections yet</h3>
+              <p className="mx-auto mt-1 max-w-md text-sm text-[#667085]">
+                Create sections under Academic Setup first — students are always enrolled into a
+                section.
               </p>
-              <button
-                type="button"
-                onClick={() => navigate("/faculty/onboarding/my-teaching")}
-                className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17315c]"
-              >
-                <GraduationCap size={16} aria-hidden="true" />
-                Choose my sections
-              </button>
             </div>
           </section>
         ) : (
           <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-            <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-[#111827]">Add a student</h2>
-              <p className="mt-1 text-sm text-[#6b7280]">
+            <section className="rounded-lg border border-[#eef2f7] bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-[#17202a]">Add a student</h2>
+              <p className="mt-1 text-sm text-[#667085]">
                 A login is created and the student is enrolled into the chosen section.
               </p>
               <div className="mt-4 grid gap-4">
@@ -153,8 +140,7 @@ export default function FacultyAddStudents() {
                     <option value="">Select section</option>
                     {sections.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} · {s.course_name}
-                        {s.subjects ? ` · ${s.subjects}` : ""}
+                        {sectionLabel(s)}
                       </option>
                     ))}
                   </select>
@@ -169,25 +155,25 @@ export default function FacultyAddStudents() {
                 </label>
                 <label className={label}>
                   Email (optional)
-                  <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Defaults to scholar-number login" />
+                  <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional — students log in with their scholar number" />
                 </label>
                 {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
                 <button
                   type="button"
                   onClick={submit}
                   disabled={saving}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#102033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-60"
                 >
                   {saving ? "Adding…" : <><UserPlus size={16} aria-hidden="true" /> Add student</>}
                 </button>
               </div>
 
               {/* Bulk import */}
-              <div className="mt-6 border-t border-[#e6e8eb] pt-5">
+              <div className="mt-6 border-t border-[#eef2f7] pt-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-[#111827]">Or import many</h3>
-                    <p className="mt-0.5 text-xs text-[#6b7280]">
+                    <h3 className="text-sm font-semibold text-[#17202a]">Or import many</h3>
+                    <p className="mt-0.5 text-xs text-[#667085]">
                       Upload a CSV to add students to the section selected above.
                     </p>
                   </div>
@@ -214,21 +200,23 @@ export default function FacultyAddStudents() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={!sectionId || importing}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#102033] px-4 py-2.5 text-sm font-semibold text-[#102033] transition hover:bg-[#102033] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Upload size={15} aria-hidden="true" />
                   {importing ? "Importing…" : "Import CSV"}
                 </button>
                 {!sectionId ? (
-                  <p className="mt-1.5 text-xs text-[#9ca3af]">Select a section first.</p>
+                  <p className="mt-1.5 text-xs text-[#98a2b3]">Select a section first.</p>
                 ) : null}
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-[#111827]">Credential slips</h2>
-              <p className="mt-1 text-sm text-[#6b7280]">
-                Hand these to students. Shown once — copy them now.
+            <section className="rounded-lg border border-[#eef2f7] bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-[#17202a]">Credential slips</h2>
+              <p className="mt-1 text-sm text-[#667085]">
+                {selectedSection
+                  ? `${selectedSection.name} currently has ${selectedSection.student_count} student(s). New logins below use the scholar number as the first password.`
+                  : "Hand these to students. The scholar number is the first password; students set a new one on first sign-in."}
               </p>
               {skipped.length > 0 ? (
                 <div className="mt-3 rounded-md border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-sm text-[#92702a]">
@@ -247,28 +235,30 @@ export default function FacultyAddStudents() {
                 </div>
               ) : null}
               {added.length === 0 ? (
-                <p className="py-10 text-center text-sm text-[#9ca3af]">
+                <p className="py-10 text-center text-sm text-[#98a2b3]">
                   Students you add in this session appear here with their login.
                 </p>
               ) : (
                 <div className="mt-4 grid gap-2">
                   {added.map((s, i) => (
-                    <div key={i} className="rounded-md border border-[#e6e8eb] bg-[#f9fafb] p-3">
+                    <div key={i} className="rounded-md border border-[#eef2f7] bg-[#f9fafb] p-3">
                       <div className="flex items-center gap-2">
-                        <KeyRound size={15} className="text-[#c9a227]" aria-hidden="true" />
-                        <p className="text-sm font-semibold text-[#111827]">{s.name}</p>
-                        <span className="text-xs text-[#9ca3af]">· {s.scholar_number}</span>
+                        <KeyRound size={15} className="text-[#34c6a3]" aria-hidden="true" />
+                        <p className="text-sm font-semibold text-[#17202a]">{s.name}</p>
+                        <span className="text-xs text-[#98a2b3]">· {s.scholar_number}</span>
                       </div>
                       <p className="mt-1 text-sm text-[#475467]">
-                        Login: <span className="font-medium text-[#111827]">{s.email}</span>
+                        Login: <span className="font-medium text-[#17202a]">{s.scholar_number}</span>
+                        <span className="text-[#98a2b3]"> (scholar number)</span>
                       </p>
                       <p className="text-sm text-[#475467]">
-                        Password: <span className="font-mono font-medium text-[#111827]">{s.password}</span>
-                        <span className="text-[#9ca3af]"> (scholar number)</span>
+                        Temporary password: <span className="font-mono font-medium text-[#17202a]">{s.password}</span>
                       </p>
-                      <p className="mt-1 text-xs text-[#9ca3af]">
-                        The student sets a new password on first sign-in.
-                      </p>
+                      {s.email ? (
+                        <p className="text-sm text-[#475467]">
+                          Email: <span className="font-medium text-[#17202a]">{s.email}</span>
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -277,6 +267,6 @@ export default function FacultyAddStudents() {
           </div>
         )}
       </div>
-    </FacultyLayout>
+    </AdminLayout>
   )
 }

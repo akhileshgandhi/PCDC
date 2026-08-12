@@ -2108,6 +2108,260 @@ def generate_faculty_case_questions(
     return {"questions": questions}
 
 
+class AiFillRequest(BaseModel):
+    brief: str
+    subject: Optional[str] = None
+
+
+AI_FILL_SYSTEM_PROMPT = """You are an expert business-school case-study author for PCDC Case Studio.
+From a short brief you write a COMPLETE, classroom-ready case study for assessment.
+
+Guidelines:
+- Invent a plausible fictional company, people, and SPECIFIC numeric data (figures, %, prices, dates).
+- Calibrate depth and Bloom's levels to the given difficulty level.
+- Focus the evidence, questions, and model answers on the target capability.
+- Produce EXACTLY 3 written questions of increasing depth.
+
+Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
+{
+  "title": string — a compelling case title,
+  "capability": string — the single primary capability the case assesses (e.g. "Negotiation", "Decision Making", "Critical Thinking"),
+  "difficulty": integer 1-7 — 1-2 easy, 3-4 moderate, 5-7 hard,
+  "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
+  "subject": string — e.g. "Marketing Management",
+  "functional_area": string — e.g. "Channel Management & Negotiation",
+  "company_background": string — company name, location, business, size, turnover,
+  "industry_background": string — the market/industry context,
+  "situation": string — the core business situation and the decision to be made (the main scenario),
+  "background": string — brief additional context/framing,
+  "data": string — key facts and figures students should use,
+  "characters": string — the people involved and their roles/interests (include the student's role),
+  "constraints": string — limits/pressures the student must work within,
+  "objectives": string — what the student must analyse, achieve, or decide,
+  "timeline": string — the sequence of events/deadlines,
+  "reflection_questions": array of strings — 2-3 open-ended reflection prompts,
+  "learning_outcomes": array of strings — 3-5 outcomes,
+  "student_instructions_before": string,
+  "student_instructions_during": string,
+  "student_instructions_submission": string,
+  "faculty_common_mistakes": string,
+  "faculty_discussion_points": string,
+  "key_learning_points": string,
+  "reading_time_minutes": integer,
+  "questions": array of EXACTLY 3 objects, each with keys:
+      "question_text": string,
+      "blooms_level": string (Remember/Understand/Apply/Analyze/Evaluate/Create),
+      "word_limit_min": integer,
+      "word_limit_max": integer,
+      "instructions": string,
+      "model_answer": string,
+      "alternative_answers": array of strings,
+      "marking_scheme": string,
+  "case_specific_criteria": array of up to 2 short strings
+}
+Do not include markdown, comments, or any keys other than those listed."""
+
+
+def _ai_fill_schema() -> Dict[str, Any]:
+    q = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "question_text": {"type": "string"},
+            "blooms_level": {"type": "string"},
+            "word_limit_min": {"type": "integer"},
+            "word_limit_max": {"type": "integer"},
+            "instructions": {"type": "string"},
+            "model_answer": {"type": "string"},
+            "alternative_answers": {"type": "array", "items": {"type": "string"}},
+            "marking_scheme": {"type": "string"},
+        },
+        "required": ["question_text", "blooms_level", "word_limit_min", "word_limit_max",
+                     "instructions", "model_answer", "alternative_answers", "marking_scheme"],
+    }
+    str_keys = [
+        "title", "subject", "functional_area", "company_background", "industry_background",
+        "situation", "background", "data", "characters", "constraints", "objectives", "timeline",
+        "student_instructions_before", "student_instructions_during",
+        "student_instructions_submission", "faculty_common_mistakes",
+        "faculty_discussion_points", "key_learning_points",
+    ]
+    props: Dict[str, Any] = {k: {"type": "string"} for k in str_keys}
+    props["capability"] = {"type": "string"}
+    props["difficulty"] = {"type": "integer"}
+    props["industry"] = {"type": "string"}
+    props["reflection_questions"] = {"type": "array", "items": {"type": "string"}}
+    props["learning_outcomes"] = {"type": "array", "items": {"type": "string"}}
+    props["reading_time_minutes"] = {"type": "integer"}
+    props["questions"] = {"type": "array", "minItems": 3, "maxItems": 3, "items": q}
+    props["case_specific_criteria"] = {"type": "array", "items": {"type": "string"}}
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": props,
+        "required": str_keys + ["capability", "difficulty", "industry", "reflection_questions",
+                                "learning_outcomes", "reading_time_minutes", "questions"],
+    }
+
+
+def _distribute_marks(total_written: int, n: int = 3) -> List[int]:
+    base = max(0, total_written) // n
+    remainder = max(0, total_written) - base * n
+    return [base + (1 if i >= n - remainder else 0) for i in range(n)]
+
+
+@faculty_router.post("/cases/{case_id}/ai-fill")
+def ai_fill_faculty_case(
+    case_id: int,
+    data: AiFillRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """TEST: from a one-line brief, generate and apply the ENTIRE case study
+    (sections, instructions, questions, timing, marks, rubric) in one shot."""
+    require_faculty(current_user)
+    row = get_owned_case_row(db, case_id, current_user)
+    if not data.brief.strip():
+        raise HTTPException(status_code=400, detail="A brief is required")
+
+    capabilities = get_capability_tags(db, case_id)
+    difficulty = row.difficulty or 2
+    duration = row.estimated_minutes or 28
+
+    user_prompt = (
+        f"Brief: {data.brief.strip()}\n"
+        f"Target capability(ies): {', '.join(capabilities) or 'general management'}\n"
+        f"Difficulty: {difficulty_label_for(difficulty)} (level {difficulty})\n"
+        f"Subject/area (optional hint): {data.subject or 'infer from the brief'}\n"
+        f"Total duration: {duration} minutes (reading + writing + 8 min rapid fire).\n"
+        "Write the full case now as JSON."
+    )
+
+    try:
+        client = get_llm_client()
+        response = client.chat.completions.create(
+            model=get_llm_model(CASE_GENERATION_MODEL),
+            messages=[
+                {"role": "system", "content": AI_FILL_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format=json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
+            max_tokens=16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
+            timeout=180,
+        )
+        parsed = parse_json_content(response.choices[0].message.content)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"AI full-case generation failed: {exc}")
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=502, detail="AI returned an unexpected response")
+
+    # --- Sanitize + assemble a CaseUpdateRequest ---
+    def _s(key: str) -> str:
+        return str(parsed.get(key) or "").strip()
+
+    def _list(key: str) -> List[str]:
+        val = parsed.get(key)
+        return [str(x).strip() for x in val if str(x).strip()] if isinstance(val, list) else []
+
+    sections = {
+        "situation": _s("situation"),
+        "background": _s("background"),
+        "data": _s("data"),
+        "characters": _s("characters"),
+        "constraints": _s("constraints"),
+        "objectives": _s("objectives"),
+        "timeline": _s("timeline"),
+        "reflection_questions": _list("reflection_questions"),
+        "learning_outcomes": _list("learning_outcomes"),
+    }
+    section_meta = {key: "ai_generated" for key in sections}
+
+    # Marks: platform total is 10 (3 rapid fire), so written = 7 split across 3.
+    written_marks = _distribute_marks(TOTAL_MARKS - RAPID_FIRE_MARKS)
+    raw_questions = parsed.get("questions")
+    raw_questions = raw_questions if isinstance(raw_questions, list) else []
+    questions = []
+    for i in range(3):
+        q = raw_questions[i] if i < len(raw_questions) and isinstance(raw_questions[i], dict) else {}
+        questions.append({
+            "question_number": i + 1,
+            "question_text": str(q.get("question_text") or "").strip(),
+            "marks": written_marks[i],
+            "blooms_level": str(q.get("blooms_level") or "").strip(),
+            "word_limit_min": q.get("word_limit_min"),
+            "word_limit_max": q.get("word_limit_max"),
+            "instructions": str(q.get("instructions") or "").strip(),
+            "model_answer": str(q.get("model_answer") or "").strip(),
+            "alternative_answers": [str(x).strip() for x in (q.get("alternative_answers") or []) if str(x).strip()],
+            "marking_scheme": str(q.get("marking_scheme") or "").strip(),
+        })
+
+    reading = parsed.get("reading_time_minutes")
+    try:
+        reading = int(reading)
+    except (TypeError, ValueError):
+        reading = 8
+    reading = max(1, reading)
+    writing = 12  # default written-answer time; total duration derives from the parts
+    duration = reading + writing + RAPID_FIRE_TIME_MINUTES
+    answer_writing = writing
+
+    # AI-inferred core fields (so the faculty needn't fill them). Fall back to the
+    # draft's existing values if the AI omits or returns something invalid.
+    try:
+        ai_difficulty = int(parsed.get("difficulty"))
+        difficulty = max(1, min(7, ai_difficulty))
+    except (TypeError, ValueError):
+        pass
+    try:
+        industry = normalize_domain(_s("industry"))
+    except HTTPException:
+        industry = row.domain or "business"
+    ai_capability = _s("capability")
+    capabilities_out = [ai_capability] if ai_capability else (capabilities or None)
+
+    req = CaseUpdateRequest(
+        title=_s("title") or row.title,
+        industry=industry,
+        difficulty=difficulty,
+        duration_minutes=duration,
+        capabilities=capabilities_out,
+        sections=sections,
+        section_meta=section_meta,
+        metadata={"subject": _s("subject"), "functional_area": _s("functional_area")},
+        timing={"reading_time_minutes": reading, "answer_writing_time_minutes": answer_writing},
+        marks={"total_marks": TOTAL_MARKS},
+        instructions={
+            "student_instructions_before": _s("student_instructions_before"),
+            "student_instructions_during": _s("student_instructions_during"),
+            "student_instructions_submission": _s("student_instructions_submission"),
+            "company_background": _s("company_background"),
+            "industry_background": _s("industry_background"),
+            "faculty_common_mistakes": _s("faculty_common_mistakes"),
+            "faculty_discussion_points": _s("faculty_discussion_points"),
+            "key_learning_points": _s("key_learning_points"),
+        },
+        questions=questions,
+    )
+    # Persist everything except the rubric via the normal update path.
+    update_faculty_case(case_id, req, db, current_user)
+
+    # Rubric: keep the platform's default weights (always valid, total 100) and
+    # attach up to 2 AI-suggested case-specific criteria.
+    criteria = _list("case_specific_criteria")[:2]
+    rubric = validate_rubric(RubricRequest(weights=dict(DEFAULT_RUBRIC_WEIGHTS), case_specific_criteria=criteria))
+    result = db.execute(
+        text(
+            "UPDATE case_studies SET evaluation_rubric = :r, updated_at = NOW() "
+            "WHERE id = :cid AND created_by = :fid RETURNING " + CASE_EDITOR_COLUMNS
+        ),
+        {"r": json.dumps(rubric), "cid": case_id, "fid": current_user["id"]},
+    )
+    updated = result.fetchone()
+    db.commit()
+    return case_editor_response(db, updated)
+
+
 @faculty_router.post("/cases/{case_id}/generate-rapid-fire")
 def generate_faculty_case_rapid_fire(
     case_id: int,
@@ -2251,7 +2505,8 @@ def faculty_students_roster(
 
     rows = db.execute(
         text(f"""
-            SELECT DISTINCT s.id AS student_id, u.id AS user_id, u.name, u.email,
+            SELECT DISTINCT s.id AS student_id, u.id AS user_id, u.name,
+                   COALESCE(u.email, u.college_id, '') AS email,
                    cs.id AS section_id, cs.name AS section_name,
                    avg_scores.average_score,
                    last_activity.last_activity_at,
@@ -2609,11 +2864,17 @@ def _create_and_enroll_student(
     scholar = scholar.strip()
     if not name or not scholar:
         raise ValueError("Name and scholar number are required")
-    resolved_email = (email or f"{scholar}@pcdc.local").strip().lower()
-    if db.execute(
+    # Email is optional and NOT fabricated. Students log in with their scholar
+    # number (stored on users.college_id). Only store an email if one is given.
+    resolved_email = (email or "").strip().lower() or None
+    if resolved_email and db.execute(
         text("SELECT id FROM users WHERE LOWER(email) = :e"), {"e": resolved_email}
     ).fetchone():
         raise ValueError(f"Email {resolved_email} already exists")
+    if db.execute(
+        text("SELECT id FROM users WHERE college_id = :c AND role = 'student'"), {"c": scholar}
+    ).fetchone():
+        raise ValueError(f"Scholar number {scholar} already exists")
     # First-time password IS the scholar number; the student is forced to set a
     # new one on first login (must_change_password = TRUE).
     password = scholar

@@ -2028,6 +2028,85 @@ def delete_admin_course(
     return {"status": "deleted", "name": course.name}
 
 
+@admin_router.delete("/batches/{batch_id}")
+def delete_admin_batch(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    batch = db.execute(text("SELECT id, name FROM batches WHERE id = :id"), {"id": batch_id}).fetchone()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    # Unlink students, then delete the batch's sections and their enrolments.
+    db.execute(
+        text("UPDATE students SET batch_id = NULL WHERE batch_id = :id"), {"id": batch_id}
+    )
+    db.execute(
+        text("DELETE FROM faculty_sections WHERE section_id IN (SELECT id FROM class_sections WHERE batch_id = :id)"),
+        {"id": batch_id},
+    )
+    db.execute(
+        text("DELETE FROM student_sections WHERE section_id IN (SELECT id FROM class_sections WHERE batch_id = :id)"),
+        {"id": batch_id},
+    )
+    db.execute(text("DELETE FROM class_sections WHERE batch_id = :id"), {"id": batch_id})
+    db.execute(text("DELETE FROM batches WHERE id = :id"), {"id": batch_id})
+    record_system_event(db, current_user["id"], "batch_deleted", f"Deleted batch {batch.name}")
+    db.commit()
+    return {"status": "deleted", "name": batch.name}
+
+
+@admin_router.delete("/semesters/{semester_id}")
+def delete_admin_semester(
+    semester_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    sem = db.execute(text("SELECT id, name FROM semesters WHERE id = :id"), {"id": semester_id}).fetchone()
+    if not sem:
+        raise HTTPException(status_code=404, detail="Semester not found")
+    # Remove sections + subjects that hang off this semester, then the semester.
+    db.execute(
+        text("DELETE FROM faculty_sections WHERE section_id IN (SELECT id FROM class_sections WHERE semester_id = :id)"),
+        {"id": semester_id},
+    )
+    db.execute(
+        text("DELETE FROM student_sections WHERE section_id IN (SELECT id FROM class_sections WHERE semester_id = :id)"),
+        {"id": semester_id},
+    )
+    db.execute(text("DELETE FROM class_sections WHERE semester_id = :id"), {"id": semester_id})
+    db.execute(text("DELETE FROM subjects WHERE semester_id = :id"), {"id": semester_id})
+    db.execute(text("DELETE FROM semesters WHERE id = :id"), {"id": semester_id})
+    record_system_event(db, current_user["id"], "semester_deleted", f"Deleted semester {sem.name}")
+    db.commit()
+    return {"status": "deleted", "name": sem.name}
+
+
+@admin_router.delete("/sections/{section_id}")
+def delete_admin_section(
+    section_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    section = ensure_section(db, section_id)
+    section_name = getattr(section, "name", str(section_id))
+    # Unlink students whose current section is this one, then drop links + section.
+    db.execute(
+        text("UPDATE students SET current_section_id = NULL, current_semester_number = NULL WHERE current_section_id = :id"),
+        {"id": section_id},
+    )
+    db.execute(text("DELETE FROM faculty_sections WHERE section_id = :id"), {"id": section_id})
+    db.execute(text("DELETE FROM student_sections WHERE section_id = :id"), {"id": section_id})
+    db.execute(text("DELETE FROM case_section_assignments WHERE section_id = :id"), {"id": section_id})
+    db.execute(text("DELETE FROM class_sections WHERE id = :id"), {"id": section_id})
+    record_system_event(db, current_user["id"], "section_deleted", f"Deleted section {section_name}")
+    db.commit()
+    return {"status": "deleted", "name": section_name}
+
+
 @admin_router.get("/courses/{course_id}/semesters")
 def list_admin_course_semesters(
     course_id: int,
@@ -2627,6 +2706,105 @@ async def bulk_enroll_admin_section_students(
         "enrolled_count": len(enrolled),
         "errors": errors,
         "error_count": len(errors),
+    }
+
+
+class AdminAddStudent(BaseModel):
+    section_id: int
+    name: str
+    scholar_number: str
+    email: Optional[str] = None
+
+
+@admin_router.post("/students/add", status_code=201)
+def admin_add_student(
+    data: AdminAddStudent,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Create a student login and enroll them into a section (admin-driven).
+    The initial password is the scholar number; the student is forced to change
+    it on first login."""
+    require_admin(current_user)
+    ensure_section(db, data.section_id)
+    name = data.name.strip()
+    scholar = data.scholar_number.strip()
+    if not name or not scholar:
+        raise HTTPException(status_code=400, detail="Name and scholar number are required")
+
+    # Reuse the faculty create+enroll helper (lazy import avoids any import cycle).
+    from services.faculty.router import _create_and_enroll_student
+
+    try:
+        result = _create_and_enroll_student(
+            db, current_user["id"], data.section_id, name, scholar, data.email
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    record_system_event(
+        db,
+        current_user["id"],
+        "student_added_section",
+        f"Added student {name} to section {data.section_id}",
+    )
+    db.commit()
+    return result
+
+
+@admin_router.post("/students/bulk-import")
+async def admin_bulk_import_students(
+    section_id: int = Query(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Create + enroll many students into a section from a CSV
+    (columns: name, scholar_number, email — email optional)."""
+    require_admin(current_user)
+    ensure_section(db, section_id)
+    raw = await file.read()
+    try:
+        decoded = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded CSV")
+
+    from services.faculty.router import _create_and_enroll_student
+
+    reader = csv.DictReader(io.StringIO(decoded))
+    created: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+    for i, raw_row in enumerate(reader, start=2):
+        row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw_row.items()}
+        name = row.get("name", "")
+        scholar = row.get("scholar_number") or row.get("scholar") or row.get("roll_number", "")
+        email = row.get("email") or None
+        if not name and not scholar:
+            continue
+        try:
+            created.append(
+                _create_and_enroll_student(db, current_user["id"], section_id, name, scholar, email)
+            )
+            db.commit()
+        except (ValueError, HTTPException) as exc:
+            db.rollback()
+            reason = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            skipped.append({"row": i, "name": name or scholar, "reason": reason})
+
+    if created:
+        record_system_event(
+            db,
+            current_user["id"],
+            "students_bulk_added_section",
+            f"Added {len(created)} student(s) to section {section_id} via CSV "
+            f"({len(skipped)} skipped)",
+        )
+        db.commit()
+    return {
+        "created": created,
+        "skipped": skipped,
+        "created_count": len(created),
+        "skipped_count": len(skipped),
     }
 
 

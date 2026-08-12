@@ -43,7 +43,6 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "My Teaching", to: "/faculty/onboarding/my-teaching" },
       { label: "Students", to: "/faculty/students" },
-      { label: "Add Students", to: "/faculty/onboarding/add-students" },
     ],
   },
   {
