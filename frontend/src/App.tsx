@@ -5,6 +5,7 @@ import { AuthProvider } from "./context/AuthContext"
 import Achievements from "./pages/achievements/Achievements"
 import AdminPortal from "./pages/admin/AdminPortal"
 import ChangePassword from "./pages/auth/ChangePassword"
+import ForgotPassword from "./pages/auth/ForgotPassword"
 import Login from "./pages/auth/Login"
 import Register from "./pages/auth/Register"
 import SetPassword from "./pages/auth/SetPassword"
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/set-password" element={<SetPassword />} />
           <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           <Route

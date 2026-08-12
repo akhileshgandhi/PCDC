@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from .service import (
@@ -9,7 +9,9 @@ from .service import (
     validate_setup_token,
     set_password_with_token,
     change_password,
+    send_password_reset,
 )
+from shared.email import app_base_url
 from .models import UserRegister, UserLogin, GoogleAuthRequest, UserResponse, Token
 from shared.database import get_db
 
@@ -23,6 +25,10 @@ class SetPasswordRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str  # email or scholar number
 
 @auth_router.post("/register", response_model=UserResponse)
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -43,6 +49,18 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
 @auth_router.post("/google", response_model=Token)
 async def google_login(payload: GoogleAuthRequest, db: Session = Depends(get_db)):
     return login_with_google(db, payload.credential)
+
+@auth_router.post("/forgot-password")
+async def post_forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Public: email a reset link to the matching account. Always returns a
+    generic success so account existence is never revealed."""
+    base = (request.headers.get("origin") or "").rstrip("/") or app_base_url()
+    return send_password_reset(db, payload.identifier, base)
+
 
 @auth_router.get("/set-password")
 async def get_set_password(token: str = Query(...), db: Session = Depends(get_db)):

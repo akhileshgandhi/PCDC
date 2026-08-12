@@ -95,6 +95,16 @@ export default function Login() {
           </div>
         </div>
 
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => navigate("/forgot-password")}
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+          >
+            Forgot password?
+          </button>
+        </div>
+
         {error ? (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}

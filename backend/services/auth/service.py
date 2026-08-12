@@ -288,6 +288,37 @@ def set_password_with_token(db: Session, raw_token: str, password: str) -> dict:
     return {"access_token": token, "token_type": "bearer"}
 
 
+def send_password_reset(db: Session, identifier: str, base_url: str) -> dict:
+    """Email a password-reset link to the account matching `identifier` (email
+    or scholar number). Always returns a generic result so we never reveal which
+    accounts exist or have an email on file."""
+    from shared.email import password_reset_email, send_email
+
+    ident = (identifier or "").strip()
+    generic = {"status": "ok"}
+    if not ident:
+        return generic
+    user = db.execute(
+        text(
+            """
+            SELECT id, name, email FROM users
+            WHERE LOWER(email) = LOWER(:ident) OR college_id = :ident
+            ORDER BY (LOWER(email) = LOWER(:ident)) DESC
+            LIMIT 1
+            """
+        ),
+        {"ident": ident},
+    ).fetchone()
+    # Only accounts with an email on file can receive a link.
+    if user and user.email:
+        raw = create_setup_token(db, user.id, purpose="reset")
+        reset_url = f"{base_url.rstrip('/')}/set-password?token={raw}"
+        subject, text_body, html_body = password_reset_email(user.name, user.email, reset_url)
+        send_email(user.email, subject, text_body, html_body)
+        db.commit()
+    return generic
+
+
 def change_password(db: Session, user_id: int, new_password: str) -> dict:
     """Set a new password for an authenticated user, clear the
     must_change_password flag, and return a fresh (flag-free) login token."""
