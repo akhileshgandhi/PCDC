@@ -10,6 +10,7 @@ import {
   type AdminUser,
   type AdminUserDetail as AdminUserDetailData,
 } from "../../api/admin"
+import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 import { EditUserDialog, StatusBadge, formatDate, titleCase } from "./AdminUsers"
 
@@ -22,6 +23,7 @@ export default function AdminUserDetail() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [notice, setNotice] = useState("")
   const [error, setError] = useState("")
 
@@ -73,12 +75,13 @@ export default function AdminUserDetail() {
 
   async function handleDelete() {
     if (!user) return
-    if (!window.confirm(`Are you sure you want to delete ${user.name}? This cannot be undone.`)) return
     try {
       await deleteAdminUser(user.id)
       navigate("/admin/users")
     } catch {
       setError("Unable to delete user.")
+    } finally {
+      setConfirmingDelete(false)
     }
   }
 
@@ -131,6 +134,9 @@ export default function AdminUserDetail() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h1 className="text-2xl font-semibold text-[#17202a]">{user.name}</h1>
                       <StatusBadge status={user.status} />
+                      <span className="text-[10px] font-medium uppercase text-[#98a2b3]" title="This is the account's enabled/disabled status, separate from any onboarding status shown elsewhere (e.g. People > Faculty).">
+                        account
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-[#667085]">{user.email}</p>
                     <p className="mt-1 text-sm font-medium text-[#0f766e]">{titleCase(user.role)}</p>
@@ -168,7 +174,7 @@ export default function AdminUserDetail() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleDelete}
+                    onClick={() => setConfirmingDelete(true)}
                     className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-3 py-2 text-sm font-semibold text-[#b42318] transition hover:border-[#f3c4c4] hover:bg-[#fff5f5]"
                   >
                     <Trash2 size={15} aria-hidden="true" />
@@ -252,6 +258,15 @@ export default function AdminUserDetail() {
 
         {editing && user ? (
           <EditUserDialog user={user} onClose={() => setEditing(false)} onSaved={handleSaved} />
+        ) : null}
+
+        {confirmingDelete && user ? (
+          <ConfirmDialog
+            title="Delete user?"
+            message={`Are you sure you want to delete ${user.name}? This cannot be undone.`}
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmingDelete(false)}
+          />
         ) : null}
       </div>
     </AdminLayout>

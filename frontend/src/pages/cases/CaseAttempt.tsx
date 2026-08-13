@@ -24,8 +24,12 @@ import Screen2Analysis from "../../components/attempt/Screen2Analysis"
 import Screen3AIChat, { type ChatMessage } from "../../components/attempt/Screen3AIChat"
 import Screen6Evaluation, { type EvaluationData } from "../../components/attempt/Screen6Evaluation"
 
+// "analysis_submitted" deliberately has no entry here — it's the pre-submit
+// status covering BOTH Reading and Analysis, so it can't map to a single
+// fixed stage. It must fall through to fallbackScreen below, which is why
+// this map previously (wrongly) hardcoding it to 1 silently defeated that
+// fallback for every attempt that hadn't submitted yet.
 const STATUS_STAGE: Record<string, number> = {
-  analysis_submitted: 1,
   ai_discussion: 3,
   solution_submitted: 3,
   defense_complete: 4,
@@ -181,11 +185,13 @@ export default function CaseAttempt() {
         }
         setNeedsReflection(status === "defense_complete")
         // "analysis_submitted" is the pre-submit status (oddly named — it means
-        // the analysis step is still pending). It has no entry in STATUS_STAGE,
-        // so it used to always fall back to screen 1 even if the student had
-        // already moved past Reading into Analysis. writing_started_at is
-        // stamped the moment they enter Analysis, so use it to resume there.
-        const fallbackScreen = attemptDetail.writing_started_at ? 2 : 1
+        // the analysis step is still pending) and has no entry in STATUS_STAGE,
+        // so it always falls through to fallbackScreen. writing_started_at is
+        // stamped the moment the student enters Analysis, but that network
+        // call and the draft autosave race independently — checking for
+        // either one (whichever landed first) is more robust than either
+        // alone against a reload in that narrow window.
+        const fallbackScreen = attemptDetail.writing_started_at || attemptDetail.analysis_draft ? 2 : 1
         setCurrentScreen(STATUS_STAGE[status || "analysis_submitted"] || fallbackScreen)
         setLoadError("")
       } catch {
@@ -300,7 +306,14 @@ export default function CaseAttempt() {
       // Only send the ungraded initial analysis when structured questions exist
       // (in the fallback path the single textarea already IS the analysis).
       const summaryToSend = writtenQuestions.length > 0 ? initialSummary : undefined
-      const result = await submitInitialAnalysis(attemptId, submissionText, summaryToSend)
+      const answersToSend =
+        writtenQuestions.length > 0
+          ? writtenQuestions.map((q, i) => ({
+              question_number: q.question_number,
+              answer_text: writtenAnswers[i] || "",
+            }))
+          : undefined
+      const result = await submitInitialAnalysis(attemptId, submissionText, summaryToSend, answersToSend)
       if (result.opening_message) {
         setChatMessages([{ role: "ai", text: result.opening_message }])
       }

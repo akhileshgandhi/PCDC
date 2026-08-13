@@ -51,7 +51,9 @@ export default function Screen2Analysis({
     const summaryWords = countWords(initialSummary)
     const summaryReady = summaryWords >= INITIAL_ANALYSIS_MIN
     const questionsReady = questions.every(
-      (q, i) => wordCounts[i] >= (q.word_limit_min ?? DEFAULT_MIN),
+      (q, i) =>
+        wordCounts[i] >= (q.word_limit_min ?? DEFAULT_MIN) &&
+        (q.word_limit_max == null || wordCounts[i] <= q.word_limit_max),
     )
     const isReady = summaryReady && questionsReady
     const summaryProgress = Math.min((summaryWords / INITIAL_ANALYSIS_MIN) * 100, 100)

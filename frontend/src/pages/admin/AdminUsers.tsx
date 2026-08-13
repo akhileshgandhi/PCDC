@@ -26,6 +26,7 @@ import {
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../api/admin"
+import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 import { DESIGNATION_OPTIONS } from "../../constants/designations"
 
@@ -58,6 +59,7 @@ export default function AdminUsers() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null)
+  const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showingStart = total === 0 ? 0 : (page - 1) * pageSize + 1
@@ -122,10 +124,9 @@ export default function AdminUsers() {
     setNotice(`${updated.name} updated successfully.`)
   }
 
-  async function handleDeleteUser(user: AdminUser) {
-    if (!window.confirm(`Are you sure you want to delete ${user.name}? This cannot be undone.`)) {
-      return
-    }
+  async function confirmDeleteUser() {
+    if (!deletingUser) return
+    const user = deletingUser
     try {
       await deleteAdminUser(user.id)
       setUsers((current) => current.filter((item) => item.id !== user.id))
@@ -133,6 +134,8 @@ export default function AdminUsers() {
       setNotice(`${user.name} has been deleted.`)
     } catch {
       setError("Unable to delete user.")
+    } finally {
+      setDeletingUser(null)
     }
   }
 
@@ -215,7 +218,14 @@ export default function AdminUsers() {
   }
   const statusColumn: UserColumn = {
     label: "Status",
-    render: (user) => <StatusBadge status={user.status} />,
+    render: (user) => (
+      <span className="inline-flex items-center gap-1.5">
+        <StatusBadge status={user.status} />
+        <span className="text-[10px] font-medium uppercase text-[#98a2b3]" title="This is the account's enabled/disabled status, separate from any onboarding status shown elsewhere (e.g. People > Faculty).">
+          account
+        </span>
+      </span>
+    ),
   }
   const lastLoginColumn: UserColumn = {
     label: "Last Login",
@@ -379,7 +389,7 @@ export default function AdminUsers() {
                   onStatusToggle={handleStatusToggle}
                   onPasswordReset={handlePasswordReset}
                   onEdit={setEditingUser}
-                  onDelete={handleDeleteUser}
+                  onDelete={setDeletingUser}
                 />
               ))}
             </div>
@@ -423,6 +433,15 @@ export default function AdminUsers() {
           user={editingUser}
           onClose={() => setEditingUser(null)}
           onSaved={handleUserUpdated}
+        />
+      ) : null}
+
+      {deletingUser ? (
+        <ConfirmDialog
+          title="Delete user?"
+          message={`Are you sure you want to delete ${deletingUser.name}? This cannot be undone.`}
+          onConfirm={confirmDeleteUser}
+          onCancel={() => setDeletingUser(null)}
         />
       ) : null}
     </AdminLayout>

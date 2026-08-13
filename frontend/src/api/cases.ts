@@ -251,6 +251,7 @@ export async function submitInitialAnalysis(
   attemptId: number,
   initialAnalysis: string,
   initialSummary?: string,
+  answers?: Array<{ question_number: number; answer_text: string }>,
 ) {
   const response = await api.post<{
     ai_unlocked: boolean
@@ -260,6 +261,7 @@ export async function submitInitialAnalysis(
     attempt_id: attemptId,
     initial_analysis: initialAnalysis,
     initial_summary: initialSummary,
+    answers,
   })
   return response.data
 }

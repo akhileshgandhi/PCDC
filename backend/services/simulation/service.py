@@ -694,6 +694,7 @@ def submit_initial_analysis(
     initial_analysis: str,
     current_user: Dict[str, Any],
     initial_summary: Optional[str] = None,
+    answers: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     require_role(current_user, ["student"], "Only students can submit analysis")
     attempt = get_student_attempt(db, attempt_id, current_user["id"])
@@ -710,6 +711,42 @@ def submit_initial_analysis(
             status_code=400,
             detail=f"Minimum 200 words required. Current: {word_count} words",
         )
+    # Per-question min/max were previously only enforced (min) or merely
+    # displayed as a warning (max) in the UI — a determined caller could
+    # submit any length. Re-check each answer against the case's own
+    # per-question limits here, since the frontend can't be trusted alone.
+    if answers:
+        limits = db.execute(
+            text("""
+                SELECT question_number, word_limit_min, word_limit_max
+                FROM case_questions
+                WHERE case_study_id = :case_study_id
+            """),
+            {"case_study_id": attempt.case_study_id},
+        ).fetchall()
+        limit_by_number = {row.question_number: row for row in limits}
+        for answer in answers:
+            qn = answer.get("question_number")
+            limit = limit_by_number.get(qn)
+            if not limit:
+                continue
+            answer_words = count_words(answer.get("answer_text") or "")
+            if limit.word_limit_max and answer_words > limit.word_limit_max:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Question {qn} is over its {limit.word_limit_max}-word limit "
+                        f"({answer_words} words). Trim it before submitting."
+                    ),
+                )
+            if limit.word_limit_min and answer_words < limit.word_limit_min:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Question {qn} needs at least {limit.word_limit_min} words "
+                        f"(currently {answer_words})."
+                    ),
+                )
     # Ungraded pre-analysis. The frontend enforces the 200-word minimum for a
     # normal submit; we store whatever is provided (e.g. on a timer auto-submit)
     # rather than hard-rejecting, since it carries no marks.

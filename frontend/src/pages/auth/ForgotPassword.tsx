@@ -18,7 +18,10 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!identifier.trim()) return
+    if (!identifier.trim()) {
+      setError("Enter your email or scholar number.")
+      return
+    }
     if (looksLikeScholar && !studentEmail.trim()) {
       setError("Enter your email — we'll send the reset link there.")
       return

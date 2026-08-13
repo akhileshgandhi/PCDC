@@ -2930,13 +2930,14 @@ def _create_and_enroll_student(
             """),
             {"sid": student.id, "cid": cap.id},
         )
-    db.execute(
-        text("""
-            INSERT INTO student_sections (student_id, section_id, enrolled_by, status)
-            VALUES (:sid, :sec, :by, 'active')
-        """),
-        {"sid": student.id, "sec": section_id, "by": fid},
-    )
+    # Route through the same enrollment helper admin uses when moving a student
+    # between sections, rather than a standalone INSERT — that helper also
+    # sets students.course_id/batch_id/current_section_id/current_semester_number,
+    # which a plain student_sections insert leaves NULL forever (breaking the
+    # student's own Profile page, which reads those denormalized columns).
+    from services.admin.router import enroll_student_in_section
+
+    enroll_student_in_section(db, student.id, section_id, fid)
     return {"name": name, "email": resolved_email, "password": password, "scholar_number": scholar}
 
 

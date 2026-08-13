@@ -9,6 +9,7 @@ import {
   setTeachingApprovalSetting,
   type TeachingApprovalPending,
 } from "../../api/admin"
+import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 
 export default function AdminTeachingApprovals() {
@@ -18,6 +19,7 @@ export default function AdminTeachingApprovals() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState("")
+  const [revoking, setRevoking] = useState<{ id: number; faculty_name: string; subject: string } | null>(null)
 
   function apply(data: { require_approval: boolean; pending: TeachingApprovalPending[]; approved: TeachingApprovalPending[] }) {
     setRequireApproval(data.require_approval)
@@ -41,8 +43,10 @@ export default function AdminTeachingApprovals() {
     reload()
   }
 
-  async function revoke(id: number) {
-    await removeTeachingSelection(id)
+  async function confirmRevoke() {
+    if (!revoking) return
+    await removeTeachingSelection(revoking.id)
+    setRevoking(null)
     reload()
   }
 
@@ -221,7 +225,7 @@ export default function AdminTeachingApprovals() {
                           </span>
                           <button
                             type="button"
-                            onClick={() => revoke(it.id)}
+                            onClick={() => setRevoking({ id: it.id, faculty_name: person.faculty_name, subject: it.subject })}
                             className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-1.5 text-sm font-semibold text-[#b42318] transition hover:bg-[#fff5f5]"
                           >
                             <X size={15} aria-hidden="true" />
@@ -237,6 +241,16 @@ export default function AdminTeachingApprovals() {
           )}
         </section>
       </div>
+
+      {revoking ? (
+        <ConfirmDialog
+          title="Revoke teaching access?"
+          message={`Revoke ${revoking.faculty_name}'s access to teach "${revoking.subject}"? They'll lose this section/subject assignment immediately.`}
+          confirmLabel="Revoke"
+          onConfirm={confirmRevoke}
+          onCancel={() => setRevoking(null)}
+        />
+      ) : null}
     </AdminLayout>
   )
 }

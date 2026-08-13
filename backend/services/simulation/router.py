@@ -128,7 +128,12 @@ def submit_analysis(
 ) -> Dict[str, Any]:
     try:
         return submit_initial_analysis(
-            db, data.attempt_id, data.initial_analysis, current_user, data.initial_summary
+            db,
+            data.attempt_id,
+            data.initial_analysis,
+            current_user,
+            data.initial_summary,
+            data.answers,
         )
     except HTTPException:
         raise

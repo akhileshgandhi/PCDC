@@ -145,7 +145,9 @@ export default function Dashboard() {
   const [activeEngagements, setActiveEngagements] = useState<StudentActiveEngagements>(
     defaultActiveEngagements,
   )
-  const [activeMatrixFilter, setActiveMatrixFilter] = useState<MatrixFilter>("case_study")
+  // Simulations/Concepts browsing isn't built yet (see the "Coming soon" cards
+  // below), so the matrix never actually filters to anything but case studies.
+  const activeMatrixFilter: MatrixFilter = "case_study"
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [recentEvaluations, setRecentEvaluations] = useState<StudentRecentEvaluation[]>([])
@@ -329,43 +331,28 @@ export default function Dashboard() {
               )}
             </Card>
 
-            <Card title="Simulations" className="border-teal-100 bg-teal-50">
+            <Card title="Simulations" className="border-teal-100 bg-teal-50" comingSoon>
               <p className="flex-1 text-sm font-medium text-[#6b7280]">
                 Practice high-stakes decisions in realistic simulated scenarios.
               </p>
-              <MatrixFilterButton
-                label="Browse Simulations"
-                filterValue="simulation"
-                activeFilter={activeMatrixFilter}
-                onSelect={setActiveMatrixFilter}
-              />
+              <ComingSoonButton label="Browse Simulations" />
             </Card>
 
-            <Card title="Academic Fundamentals" className="border-rose-100 bg-rose-50">
+            <Card title="Academic Fundamentals" className="border-rose-100 bg-rose-50" comingSoon>
               <p className="flex-1 text-sm font-medium text-[#6b7280]">
                 Strengthen your grasp of core business concepts.
               </p>
-              <MatrixFilterButton
-                label="Browse Concepts"
-                filterValue="concept_study"
-                activeFilter={activeMatrixFilter}
-                onSelect={setActiveMatrixFilter}
-              />
+              <ComingSoonButton label="Browse Concepts" />
             </Card>
 
-            <Card title="Career Compass" className="border-orange-100 bg-orange-50">
+            <Card title="Career Compass" className="border-orange-100 bg-orange-50" comingSoon>
               <div className="flex-1 py-2 text-center">
                 <Compass size={28} aria-hidden="true" className="mx-auto text-[#92702a]" />
                 <p className="mt-3 text-sm font-medium text-[#6b7280]">
                   Explore roles and pathways aligned to your strengths.
                 </p>
               </div>
-              <Link
-                to="/student/career-pathway"
-                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
-              >
-                Explore Career Compass
-              </Link>
+              <ComingSoonButton label="Explore Career Compass" />
             </Card>
           </div>
         </section>
@@ -377,20 +364,6 @@ export default function Dashboard() {
               <p className="mt-1 text-sm text-[#6b7280]">
                 Real-time performance across core executive competencies.
               </p>
-              {activeMatrixFilter !== "case_study" ? (
-                <p className="mt-1 text-xs font-semibold text-[#92702a]">
-                  Showing:{" "}
-                  {activeMatrixFilter === "simulation" ? "Simulations" : "Academic Fundamentals"}{" "}
-                  only —{" "}
-                  <button
-                    type="button"
-                    onClick={() => setActiveMatrixFilter("case_study")}
-                    className="underline"
-                  >
-                    Clear filter
-                  </button>
-                </p>
-              ) : null}
             </div>
             <button
               type="button"
@@ -622,46 +595,37 @@ interface CardProps {
   title: string
   children: ReactNode
   className?: string
+  comingSoon?: boolean
 }
 
-function Card({ title, children, className }: CardProps) {
+function Card({ title, children, className, comingSoon }: CardProps) {
   return (
     <article className={`flex h-full flex-col rounded-lg border p-5 shadow-sm ${className ?? "border-[#e6e8eb] bg-white"}`}>
-      <h2 className="mb-4 text-lg font-semibold">{title}</h2>
+      <div className="mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {comingSoon ? (
+          <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
+            Coming soon
+          </span>
+        ) : null}
+      </div>
       <div className="flex flex-1 flex-col">{children}</div>
     </article>
   )
 }
 
-interface MatrixFilterButtonProps {
-  label: string
-  filterValue: MatrixFilter
-  activeFilter: MatrixFilter
-  onSelect: (filter: MatrixFilter) => void
-}
-
-function MatrixFilterButton({
-  label,
-  filterValue,
-  activeFilter,
-  onSelect,
-}: MatrixFilterButtonProps) {
-  const isActive = filterValue === activeFilter
+// Simulations/Concepts/Career Compass have no module built yet — rather than
+// link somewhere fake or silently do nothing, this is a disabled, clearly
+// "not yet available" action instead of a real navigation target.
+function ComingSoonButton({ label }: { label: string }) {
   return (
     <button
       type="button"
-      aria-pressed={isActive}
-      onClick={() => {
-        onSelect(isActive ? "case_study" : filterValue)
-        document.getElementById("capability-matrix")?.scrollIntoView({ behavior: "smooth" })
-      }}
-      className={`mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition ${
-        isActive
-          ? "bg-[#081d3a] text-white"
-          : "border border-[#081d3a] text-[#081d3a] hover:bg-[#081d3a] hover:text-white"
-      }`}
+      disabled
+      title="This module isn't available yet."
+      className="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-md border border-[#d0d5dd] px-4 py-3 text-sm font-semibold text-[#98a2b3]"
     >
-      {label}
+      {label} — Coming soon
     </button>
   )
 }

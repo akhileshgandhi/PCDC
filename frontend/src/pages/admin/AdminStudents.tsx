@@ -141,7 +141,17 @@ export default function AdminStudents() {
               <div className="mt-4 grid gap-4">
                 <label className={label}>
                   <span>Section <span className="text-[#d92d20]">*</span></span>
-                  <select className={field} value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+                  <select
+                    // Some browsers don't repaint a closed <select>'s displayed
+                    // label when only an <option>'s text content changes (the
+                    // student count in sectionLabel) without the value itself
+                    // changing. Keying on the counts forces a clean remount so
+                    // the visible label is never stale after adding students.
+                    key={sections.map((s) => `${s.id}:${s.student_count}`).join(",")}
+                    className={field}
+                    value={sectionId}
+                    onChange={(e) => setSectionId(e.target.value)}
+                  >
                     <option value="">Select section</option>
                     {sections.map((s) => (
                       <option key={s.id} value={s.id}>

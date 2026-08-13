@@ -65,6 +65,10 @@ class SubmitAnalysisRequest(BaseModel):
     initial_analysis: str
     # Ungraded free-text pre-analysis written before the structured questions.
     initial_summary: Optional[str] = None
+    # Per-question answers ({question_number, answer_text}), used to enforce
+    # each question's own word_limit_min/word_limit_max server-side. Optional
+    # for backward compatibility with the single-textarea fallback path.
+    answers: Optional[List[Dict[str, Any]]] = None
 
 
 class SaveDraftRequest(BaseModel):

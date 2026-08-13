@@ -24,14 +24,18 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "needs_attention", label: "Needs attention" },
 ]
 
+// Label includes an explicit "(onboarding)" qualifier rather than relying on
+// the hover-only `hint` tooltip alone — a tooltip is invisible on touch
+// devices and easy to miss, and this status was being read as the same
+// "Active/Inactive" account status shown on the Users page, which it isn't.
 const STATE_BADGE: Record<FacultyState, { label: string; className: string; hint: string }> = {
   active: {
-    label: "Active",
+    label: "Active (onboarding)",
     className: "bg-[#ecfdf3] text-[#027a48]",
     hint: "Onboarding status: has signed in and claimed teaching sections.",
   },
   awaiting: {
-    label: "Awaiting",
+    label: "Awaiting (onboarding)",
     className: "bg-[#fff7df] text-[#92702a]",
     hint: "Onboarding status: invited but hasn't signed in for the first time yet. Unrelated to the account Active/Inactive toggle on Users.",
   },
