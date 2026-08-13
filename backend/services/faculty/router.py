@@ -1387,6 +1387,7 @@ def faculty_analytics_summary(
                 (
                     SELECT COUNT(*) FROM case_section_assignments seca
                     WHERE seca.section_id = cs.id AND seca.assigned_by = :faculty_id
+                          AND seca.status = 'active'
                 ) AS cases_assigned,
                 (
                     SELECT COUNT(*) FROM assigned_cases ac

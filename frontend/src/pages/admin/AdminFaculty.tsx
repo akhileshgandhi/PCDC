@@ -24,10 +24,22 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "needs_attention", label: "Needs attention" },
 ]
 
-const STATE_BADGE: Record<FacultyState, { label: string; className: string }> = {
-  active: { label: "Active", className: "bg-[#ecfdf3] text-[#027a48]" },
-  awaiting: { label: "Awaiting", className: "bg-[#fff7df] text-[#92702a]" },
-  needs_attention: { label: "Needs attention", className: "bg-[#fff5f5] text-[#b42318]" },
+const STATE_BADGE: Record<FacultyState, { label: string; className: string; hint: string }> = {
+  active: {
+    label: "Active",
+    className: "bg-[#ecfdf3] text-[#027a48]",
+    hint: "Onboarding status: has signed in and claimed teaching sections.",
+  },
+  awaiting: {
+    label: "Awaiting",
+    className: "bg-[#fff7df] text-[#92702a]",
+    hint: "Onboarding status: invited but hasn't signed in for the first time yet. Unrelated to the account Active/Inactive toggle on Users.",
+  },
+  needs_attention: {
+    label: "Needs attention",
+    className: "bg-[#fff5f5] text-[#b42318]",
+    hint: "Onboarding status: signed in but hasn't claimed any teaching sections yet.",
+  },
 }
 
 export default function AdminFaculty() {
@@ -186,6 +198,7 @@ export default function AdminFaculty() {
                       {f.subject_count} {f.subject_count === 1 ? "subject" : "subjects"}
                     </span>
                     <span
+                      title={STATE_BADGE[f.state].hint}
                       className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATE_BADGE[f.state].className}`}
                     >
                       {STATE_BADGE[f.state].label}
@@ -234,6 +247,7 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
   const [shown, setShown] = useState(false)
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [institutionsLoading, setInstitutionsLoading] = useState(true)
 
   useEffect(() => {
     setShown(true)
@@ -243,6 +257,7 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
         setDepartments(dept.items)
       })
       .catch(() => undefined)
+      .finally(() => setInstitutionsLoading(false))
   }, [])
 
   function toggleInstitution(id: number) {
@@ -270,6 +285,10 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
       setError("Name and email are required.")
       return
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Enter a valid email address.")
+      return
+    }
     setSaving(true)
     setError("")
     try {
@@ -287,8 +306,8 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
         department_ids: selectedDepartments,
       })
       onInvited()
-    } catch {
-      setError("Could not invite faculty. The email may already be registered.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not invite faculty. The email may already be registered.")
     } finally {
       setSaving(false)
     }
@@ -324,14 +343,16 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
           </label>
           <label className={label}>
             <span>Email <span className="text-[#d92d20]">*</span></span>
-            <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="anand.iyer@pcdc.example" />
+            <input type="email" className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="anand.iyer@pcdc.example" />
           </label>
           <div className={label}>
             <span>Institution(s)</span>
             <p className="-mt-0.5 text-xs font-normal text-[#667085]">
               Pick one or more; their departments appear below.
             </p>
-            {institutions.length === 0 ? (
+            {institutionsLoading ? (
+              <p className="text-sm text-[#98a2b3]">Loading…</p>
+            ) : institutions.length === 0 ? (
               <p className="text-sm text-[#98a2b3]">No institutions yet.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">

@@ -15,11 +15,13 @@ import { Link, useSearchParams } from "react-router-dom"
 
 import {
   deleteAdminUser,
+  getAdminDepartments,
   getAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
   updateAdminUserRole,
   updateAdminUserStatus,
+  type AdminDepartment,
   type AdminUser,
   type AdminUserRole,
   type AdminUserStatus,
@@ -566,6 +568,11 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
   const [collegeId, setCollegeId] = useState(user.college_id || "")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [departments, setDepartments] = useState<AdminDepartment[]>([])
+
+  useEffect(() => {
+    getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
+  }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -654,11 +661,21 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
             {user.role === "faculty" ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Department">
-                  <input
+                  <select
                     value={department}
                     onChange={(event) => setDepartment(event.target.value)}
                     className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
+                  >
+                    <option value="">Select department</option>
+                    {department && !departments.some((d) => d.name === department) ? (
+                      <option value={department}>{department} (unlisted)</option>
+                    ) : null}
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Designation">
                   <select
@@ -693,11 +710,21 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
             {user.role === "student" ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Department">
-                  <input
+                  <select
                     value={department}
                     onChange={(event) => setDepartment(event.target.value)}
                     className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  />
+                  >
+                    <option value="">Select department</option>
+                    {department && !departments.some((d) => d.name === department) ? (
+                      <option value={department}>{department} (unlisted)</option>
+                    ) : null}
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.name}>
+                        {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="College ID">
                   <input

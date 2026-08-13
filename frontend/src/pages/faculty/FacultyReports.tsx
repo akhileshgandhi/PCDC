@@ -86,7 +86,7 @@ export default function FacultyReports() {
           "Course",
           "Semester",
           "Students",
-          "Avg Score",
+          "Avg Capability Score",
           "Cases Assigned",
           "Completed",
           "Total Assigned",
@@ -111,7 +111,7 @@ export default function FacultyReports() {
           "Name",
           "Email",
           "Section",
-          "Avg Score",
+          "Avg Capability Score",
           "Cases Completed",
           "Cases Assigned",
           "Status",
@@ -252,7 +252,7 @@ export default function FacultyReports() {
                 head={[
                   "Section",
                   "Students",
-                  "Avg Score",
+                  "Avg Capability Score",
                   "Cases Assigned",
                   "Completion",
                 ]}
@@ -265,7 +265,7 @@ export default function FacultyReports() {
                   </div>,
                   s.student_count,
                   <span key="avg" style={{ color: scoreTone(s.average_score) }} className="font-semibold">
-                    {s.average_score}
+                    {s.average_score}<span className="text-xs font-medium text-[#9ca3af]">/100</span>
                   </span>,
                   s.cases_assigned,
                   `${s.completed_count}/${s.total_assigned} (${s.completion_rate}%)`,
@@ -273,7 +273,7 @@ export default function FacultyReports() {
               />
             ) : (
               <ReportTable
-                head={["Name", "Section", "Avg Score", "Completed", "Status", "Last Active"]}
+                head={["Name", "Section", "Avg Capability Score", "Completed", "Status", "Last Active"]}
                 rows={filteredStudents.map((s) => [
                   <div key="name">
                     <p className="font-semibold text-[#111827]">{s.name}</p>
@@ -282,7 +282,7 @@ export default function FacultyReports() {
                   s.section_name,
                   s.last_activity_at ? (
                     <span key="avg" style={{ color: scoreTone(s.average_score) }} className="font-semibold">
-                      {s.average_score}
+                      {s.average_score}<span className="text-xs font-medium text-[#9ca3af]">/100</span>
                     </span>
                   ) : (
                     <span key="avg" className="text-[#9ca3af]">—</span>

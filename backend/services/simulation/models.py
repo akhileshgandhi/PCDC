@@ -67,6 +67,13 @@ class SubmitAnalysisRequest(BaseModel):
     initial_summary: Optional[str] = None
 
 
+class SaveDraftRequest(BaseModel):
+    attempt_id: int
+    # JSON-encoded {summary, answers} from the frontend — stored and returned
+    # opaquely; the backend never parses it.
+    draft: str
+
+
 class SubmitAnalysisResponse(BaseModel):
     ai_unlocked: bool
     attempt_id: int
@@ -121,6 +128,20 @@ class EvaluationResult(BaseModel):
     blind_spots: str
     improvement_areas: str
     next_recommended_case_id: Optional[int] = None
+    # These were missing from this response model, which silently stripped
+    # them from the JSON sent back right after rapid-fire/defense submission
+    # (declaring response_model= on a route makes Pydantic drop any field not
+    # listed here, even though the underlying dict has it). The student's very
+    # first render of the Evaluation screen therefore had no marks data and
+    # fell back to the 0-100 capability score, while faculty's report (a
+    # loosely-typed Dict[str, Any] endpoint) and any later reload of this same
+    # attempt showed the correct marks-based score — same data, two different
+    # numbers depending on which response model happened to touch it.
+    question_scores: List[Dict[str, Any]] = Field(default_factory=list)
+    rapid_fire_score: int = 0
+    rapid_fire_feedback: str = ""
+    overall_grade: str = ""
+    grade_comment: str = ""
 
 
 class FinalEvaluation(EvaluationResult):
@@ -135,6 +156,8 @@ class CaseAttemptResponse(BaseModel):
     initial_analysis: Optional[str] = None
     initial_summary: Optional[str] = None
     initial_word_count: int
+    analysis_draft: Optional[str] = None
+    writing_started_at: Optional[str] = None
     final_solution: Optional[str] = None
     defense_responses: Optional[str] = None
     reflection_text: Optional[str] = None

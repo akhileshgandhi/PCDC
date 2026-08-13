@@ -28,10 +28,17 @@ export default function AdminModulePlaceholder({
               <Construction size={22} aria-hidden="true" />
             </span>
             <div>
-              <h1 className="text-3xl font-semibold tracking-normal text-[#17202a]">
-                {title}
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-[#667085]">{description}</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl font-semibold tracking-normal text-[#17202a]">
+                  {title}
+                </h1>
+                <span className="rounded-full bg-[#fff7df] px-3 py-1 text-xs font-semibold text-[#92702a]">
+                  Coming soon
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[#667085]">
+                This module isn't available yet. {description}
+              </p>
             </div>
           </div>
         </section>

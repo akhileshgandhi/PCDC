@@ -608,6 +608,14 @@ export async function createAdminBatch(
   return response.data
 }
 
+export async function updateAdminBatch(
+  batchId: number,
+  payload: { name?: string; start_year?: number; end_year?: number; status?: string },
+) {
+  const response = await api.patch<AdminBatch>(`/admin/batches/${batchId}`, payload)
+  return response.data
+}
+
 export async function getAdminCourseSections(courseId: number) {
   const response = await api.get<{ items: AdminSection[]; total: number }>(
     `/admin/courses/${courseId}/sections`,

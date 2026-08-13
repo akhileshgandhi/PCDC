@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 
 import {
   createAdminBatch,
+  updateAdminBatch,
   createAdminCourse,
   createAdminDepartment,
   createAdminInstitution,
@@ -553,8 +554,8 @@ function InstitutionForm({
         await createAdminInstitution({ name: name.trim(), code: code.trim().toUpperCase() })
       }
       onSaved()
-    } catch {
-      setError("Could not save. The code may already exist.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not save institution.")
     } finally {
       setSaving(false)
     }
@@ -758,8 +759,8 @@ function DepartmentForm({
         })
       }
       onSaved()
-    } catch {
-      setError("Could not save. The code may already exist.")
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not save department.")
     } finally {
       setSaving(false)
     }
@@ -1146,6 +1147,7 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   const [code, setCode] = useState("")
   const [totalSemesters, setTotalSemesters] = useState("2")
   const [durationYears, setDurationYears] = useState("1")
+  const [semestersTouched, setSemestersTouched] = useState(false)
   const [departmentId, setDepartmentId] = useState("")
   const [departments, setDepartments] = useState<AdminDepartment[]>([])
   const [error, setError] = useState("")
@@ -1155,13 +1157,20 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
   }, [])
 
-  // Every existing program follows 2 semesters per academic year — enforce that
-  // relationship so a course can't be created with an inconsistent combination
-  // (e.g. 2 semesters over a 2-year duration).
+  function handleSemestersChange(value: string) {
+    setSemestersTouched(true)
+    setTotalSemesters(value)
+  }
+
+  // Every existing program follows 2 semesters per academic year, so default
+  // to that as duration changes — but only until the admin manually edits
+  // semesters themselves. Once touched, we never overwrite it again;
+  // otherwise a deliberately-entered value gets silently discarded and the
+  // admin has no idea their input didn't stick.
   function handleDurationChange(value: string) {
     setDurationYears(value)
     const years = Number(value)
-    if (years > 0) setTotalSemesters(String(years * 2))
+    if (years > 0 && !semestersTouched) setTotalSemesters(String(years * 2))
   }
 
   const expectedSemesters = Number(durationYears) > 0 ? Number(durationYears) * 2 : null
@@ -1221,7 +1230,9 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           <select className={fieldClass} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
             <option value="">Select department</option>
             {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
+              </option>
             ))}
           </select>
         </label>
@@ -1237,7 +1248,7 @@ function CourseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
           <div className="grid grid-cols-2 gap-3">
             <label className={labelClass}>
               <ReqLabel>Total semesters</ReqLabel>
-              <input type="number" min={1} className={fieldClass} value={totalSemesters} onChange={(e) => setTotalSemesters(e.target.value)} />
+              <input type="number" min={1} className={fieldClass} value={totalSemesters} onChange={(e) => handleSemestersChange(e.target.value)} />
             </label>
             <label className={labelClass}>
               <ReqLabel>Duration (years)</ReqLabel>
@@ -1276,6 +1287,7 @@ function BatchesTab({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null)
+  const [editing, setEditing] = useState<Awaited<ReturnType<typeof getAdminAllBatches>>["items"][number] | null>(null)
   const visible = institutionFilter
     ? items.filter((b) => String(courseToInstitution[b.course_id]) === institutionFilter)
     : items
@@ -1320,7 +1332,8 @@ function BatchesTab({
                   <td className="px-5 py-4 text-[#475467]">{b.section_count}</td>
                   <td className="px-5 py-4"><StatusBadge status={b.status} /></td>
                   <td className="px-5 py-4">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-1.5">
+                      <IconButton label="Edit" onClick={() => setEditing(b)}><Pencil size={15} /></IconButton>
                       <IconButton label="Delete" danger onClick={() => setDeleting(b)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
@@ -1330,6 +1343,17 @@ function BatchesTab({
           </table>
         </div>
       )}
+      {editing ? (
+        <EditBatchDialog
+          batch={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            load()
+            onChanged()
+          }}
+        />
+      ) : null}
       {deleting ? (
         <ConfirmDialog
           title="Delete batch?"
@@ -1342,17 +1366,106 @@ function BatchesTab({
   )
 }
 
+function EditBatchDialog({
+  batch,
+  onClose,
+  onSaved,
+}: {
+  batch: { id: number; name: string; course_name: string; start_year: number; end_year: number; status: string }
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState(batch.name)
+  const [startYear, setStartYear] = useState(String(batch.start_year))
+  const [endYear, setEndYear] = useState(String(batch.end_year))
+  const [status, setStatus] = useState(batch.status)
+  const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    if (!name.trim() || !startYear || !endYear) {
+      setError("Batch name, start year and end year are required.")
+      return
+    }
+    if (
+      !/^\d{4}$/.test(startYear) ||
+      !/^\d{4}$/.test(endYear) ||
+      Number(startYear) < 1900 ||
+      Number(startYear) > 2100 ||
+      Number(endYear) < 1900 ||
+      Number(endYear) > 2100
+    ) {
+      setError("Start and end year must be realistic 4-digit calendar years (1900–2100).")
+      return
+    }
+    if (Number(endYear) < Number(startYear)) {
+      setError("End year must not be before start year.")
+      return
+    }
+    setSaving(true)
+    setError("")
+    try {
+      await updateAdminBatch(batch.id, {
+        name: name.trim(),
+        start_year: Number(startYear),
+        end_year: Number(endYear),
+        status,
+      })
+      onSaved()
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not update batch.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Drawer title="Edit batch" subtitle={batch.course_name} onClose={onClose}>
+      <div className="grid gap-4">
+        <label className={labelClass}>
+          <ReqLabel>Batch name</ReqLabel>
+          <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className={labelClass}>
+            <ReqLabel>Start year</ReqLabel>
+            <input type="number" min={1900} max={2100} className={fieldClass} value={startYear} onChange={(e) => setStartYear(e.target.value)} />
+          </label>
+          <label className={labelClass}>
+            <ReqLabel>End year</ReqLabel>
+            <input type="number" min={1900} max={2100} className={fieldClass} value={endYear} onChange={(e) => setEndYear(e.target.value)} />
+          </label>
+        </div>
+        <label className={labelClass}>
+          Status
+          <select className={fieldClass} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="active">Active</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="completed">Completed</option>
+          </select>
+        </label>
+        {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
+        <DrawerSubmit label="Save changes" saving={saving} onClick={submit} />
+      </div>
+    </Drawer>
+  )
+}
+
 function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [courseId, setCourseId] = useState("")
   const [name, setName] = useState("")
   const [startYear, setStartYear] = useState("")
   const [endYear, setEndYear] = useState("")
   const [courses, setCourses] = useState<AdminCourse[]>([])
+  const [coursesLoading, setCoursesLoading] = useState(true)
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    getAdminCourses().then((c) => setCourses(c.items)).catch(() => undefined)
+    getAdminCourses()
+      .then((c) => setCourses(c.items))
+      .catch(() => undefined)
+      .finally(() => setCoursesLoading(false))
   }, [])
 
   async function submit() {
@@ -1404,8 +1517,13 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
       <div className="grid gap-4">
         <label className={labelClass}>
           <ReqLabel>Course</ReqLabel>
-          <select className={fieldClass} value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-            <option value="">Select course</option>
+          <select
+            className={`${fieldClass} disabled:cursor-not-allowed disabled:bg-[#f5f7fa] disabled:text-[#98a2b3]`}
+            value={courseId}
+            onChange={(e) => setCourseId(e.target.value)}
+            disabled={coursesLoading}
+          >
+            <option value="">{coursesLoading ? "Loading…" : "Select course"}</option>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}

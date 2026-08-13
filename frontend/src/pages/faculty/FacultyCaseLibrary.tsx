@@ -571,6 +571,10 @@ function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDi
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError("")
+    if (dueDate && dueDate < todayDateString()) {
+      setError("Due date can't be in the past.")
+      return
+    }
     if (mode === "sections") {
       if (selectedSectionIds.length === 0) {
         setError("Select at least one section.")
@@ -747,6 +751,7 @@ function AssignToClassDialog({ caseStudy, onClose, onAssigned }: AssignToClassDi
               Due Date (optional)
               <input
                 type="date"
+                min={todayDateString()}
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
                 className="h-11 rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
@@ -837,12 +842,22 @@ function titleCase(value: string) {
     .join(" ")
 }
 
+function todayDateString() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+const MONTH_ABBR = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
 function formatDate(value: string) {
-  // Date-only values (e.g. "2026-08-12") parse as UTC midnight — render in UTC too,
-  // otherwise browsers west of UTC show the previous day.
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(value))
+  // The backend sends this as a bare calendar date (e.g. "2026-08-12", sometimes
+  // with a trailing " 00:00:00"). Parsing that through `new Date()` is timezone-
+  // dependent — a date-time string with no offset gets parsed as LOCAL time, which
+  // shifts the displayed day by one for any timezone ahead of UTC. Read the
+  // year/month/day digits directly instead of ever constructing a Date from it.
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return value
+  const [, , month, day] = match
+  return `${MONTH_ABBR[Number(month) - 1]} ${Number(day)}`
 }

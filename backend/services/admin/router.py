@@ -111,6 +111,13 @@ class AdminBatchCreate(BaseModel):
     end_year: int
 
 
+class AdminBatchUpdate(BaseModel):
+    name: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
+    status: Optional[str] = None
+
+
 class AdminSectionCreate(BaseModel):
     semester_id: int
     batch_id: int
@@ -2302,6 +2309,78 @@ def create_admin_batch(
         "end_year": row.end_year,
         "status": row.status,
         "created_at": str(row.created_at),
+    }
+
+
+@admin_router.patch("/batches/{batch_id}")
+def update_admin_batch(
+    batch_id: int,
+    data: AdminBatchUpdate,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    row = db.execute(
+        text("""
+            SELECT b.id, b.course_id, b.name, b.start_year, b.end_year, b.status,
+                   c.name AS course_name, c.duration_years
+            FROM batches b
+            JOIN courses c ON c.id = b.course_id
+            WHERE b.id = :batch_id
+        """),
+        {"batch_id": batch_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    name = data.name.strip() if data.name is not None else row.name
+    start_year = data.start_year if data.start_year is not None else row.start_year
+    end_year = data.end_year if data.end_year is not None else row.end_year
+    status = data.status.strip().lower() if data.status is not None else row.status
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Batch name is required")
+    if not (1900 <= start_year <= 2100) or not (1900 <= end_year <= 2100):
+        raise HTTPException(status_code=400, detail="Start and end year must be realistic calendar years (1900–2100).")
+    if end_year < start_year:
+        raise HTTPException(status_code=400, detail="End year must not be before start year")
+    span = end_year - start_year
+    if row.duration_years and span != row.duration_years:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This batch spans {span} year(s), but \"{row.course_name}\" runs for "
+                f"{row.duration_years} year(s). Adjust the start/end year."
+            ),
+        )
+    if status not in {"active", "completed", "upcoming"}:
+        raise HTTPException(status_code=400, detail="Invalid batch status")
+
+    updated = db.execute(
+        text("""
+            UPDATE batches
+            SET name = :name, start_year = :start_year, end_year = :end_year, status = :status
+            WHERE id = :batch_id
+            RETURNING id, course_id, name, start_year, end_year, status, created_at
+        """),
+        {
+            "batch_id": batch_id,
+            "name": name,
+            "start_year": start_year,
+            "end_year": end_year,
+            "status": status,
+        },
+    ).fetchone()
+    record_system_event(db, current_user["id"], "batch_updated", f"Updated batch {name}")
+    db.commit()
+    return {
+        "id": updated.id,
+        "course_id": updated.course_id,
+        "name": updated.name,
+        "start_year": updated.start_year,
+        "end_year": updated.end_year,
+        "status": updated.status,
+        "created_at": str(updated.created_at),
     }
 
 

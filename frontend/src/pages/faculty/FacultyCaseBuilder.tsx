@@ -1668,6 +1668,15 @@ function SectionEditor({
           ) : null}
           <MetaBadge meta={meta} />
         </div>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={generationDisabled}
+          className="inline-flex items-center gap-1.5 rounded-md border border-[#e6e8eb] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#c9a227] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Bot size={14} />}
+          {isGenerating ? "Generating…" : "Generate with AI"}
+        </button>
       </div>
       <textarea
         value={value}

@@ -26,11 +26,14 @@ export default function AdminStudents() {
   const [importing, setImporting] = useState(false)
   const [skipped, setSkipped] = useState<Array<{ row: number; name: string; reason: string }>>([])
 
-  useEffect(() => {
-    getAdminSections()
+  function loadSections() {
+    return getAdminSections()
       .then((d) => setSections(d.items))
       .catch(() => undefined)
-      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadSections().finally(() => setLoading(false))
   }, [])
 
   const selectedSection = useMemo(
@@ -56,6 +59,7 @@ export default function AdminStudents() {
       setName("")
       setScholar("")
       setEmail("")
+      await loadSections()
     } catch {
       setError("Could not add this student. The email or scholar number may already exist.")
     } finally {
@@ -85,6 +89,7 @@ export default function AdminStudents() {
       const res = await adminBulkImportStudents(Number(sectionId), file)
       setAdded((a) => [...res.created, ...a])
       setSkipped(res.skipped)
+      await loadSections()
     } catch {
       setError("Import failed. Check the file format and try again.")
     } finally {

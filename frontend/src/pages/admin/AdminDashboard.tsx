@@ -151,8 +151,7 @@ export default function AdminDashboard() {
             value={summary.active_today}
             icon={ShieldCheck}
             isLoading={isLoading}
-            to="/admin/users?status=active"
-            linkLabel="View active users"
+            description="Accounts with at least one login in the last 24 hours."
           />
           <SummaryCard
             label="Pending Case Imports"

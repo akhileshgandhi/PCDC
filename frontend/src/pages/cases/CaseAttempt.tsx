@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import {
   getAttemptDetail,
   getCaseDetail,
+  saveAnalysisDraft,
   submitInitialAnalysis,
   submitRapidFireAnswers,
   submitAttemptReflection,
@@ -147,14 +148,17 @@ export default function CaseAttempt() {
 
         const storedAnalysis = attemptDetail.initial_analysis || ""
         setAnalysisText(storedAnalysis)
-        setInitialSummary(attemptDetail.initial_summary || "")
-        // Pre-fill per-question answers if returning to an existing attempt
         const qs2 = detail.case.written_questions || []
-        if (storedAnalysis && qs2.length > 0) {
-          setWrittenAnswers(qs2.map(() => ""))
-        } else {
-          setWrittenAnswers(qs2.map(() => ""))
+        let draft: { summary?: string; answers?: string[] } | null = null
+        if (attemptDetail.analysis_draft) {
+          try {
+            draft = JSON.parse(attemptDetail.analysis_draft)
+          } catch {
+            draft = null
+          }
         }
+        setInitialSummary(draft?.summary || attemptDetail.initial_summary || "")
+        setWrittenAnswers(qs2.map((_, i) => draft?.answers?.[i] || ""))
         const discussionMessages = attemptDetail.conversations
           .filter((entry) => entry.stage === "discussion")
           .map((entry) => ({ role: entry.role, text: entry.message }))
@@ -176,7 +180,13 @@ export default function CaseAttempt() {
           setExpired(true)
         }
         setNeedsReflection(status === "defense_complete")
-        setCurrentScreen(STATUS_STAGE[status || "analysis_submitted"] || 1)
+        // "analysis_submitted" is the pre-submit status (oddly named — it means
+        // the analysis step is still pending). It has no entry in STATUS_STAGE,
+        // so it used to always fall back to screen 1 even if the student had
+        // already moved past Reading into Analysis. writing_started_at is
+        // stamped the moment they enter Analysis, so use it to resume there.
+        const fallbackScreen = attemptDetail.writing_started_at ? 2 : 1
+        setCurrentScreen(STATUS_STAGE[status || "analysis_submitted"] || fallbackScreen)
         setLoadError("")
       } catch {
         if (isMounted) {
@@ -248,6 +258,18 @@ export default function CaseAttempt() {
       active = false
     }
   }, [currentScreen, attemptId])
+
+  // Autosave the in-progress analysis draft so a reload never wipes typed
+  // work again — debounced so it doesn't fire on every keystroke.
+  useEffect(() => {
+    if (currentScreen !== 2 || !attemptId) return
+    const timer = window.setTimeout(() => {
+      saveAnalysisDraft(attemptId, { summary: initialSummary, answers: writtenAnswers }).catch(
+        () => undefined,
+      )
+    }, 2000)
+    return () => window.clearTimeout(timer)
+  }, [currentScreen, attemptId, initialSummary, writtenAnswers])
 
   function goBack() {
     if (window.history.length > 1) {

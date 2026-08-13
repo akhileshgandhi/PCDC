@@ -730,7 +730,8 @@ def submit_initial_analysis(
                 initial_summary = :initial_summary,
                 initial_word_count = :word_count,
                 ai_unlocked_at = NOW(),
-                status = 'ai_discussion'
+                status = 'ai_discussion',
+                analysis_draft = NULL
             WHERE id = :attempt_id
         """),
         {
@@ -757,6 +758,26 @@ def submit_initial_analysis(
         log_conversation(db, attempt.id, "ai", "discussion", opening_message)
     db.commit()
     return {"ai_unlocked": True, "attempt_id": attempt_id, "opening_message": opening_message}
+
+
+def save_analysis_draft(
+    db: Session, attempt_id: int, draft: str, current_user: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Lightweight, frequent autosave of in-progress Initial Analysis text
+    (JSON-encoded {summary, answers} from the frontend) so a reload before
+    the real submit never loses typed work. No AI calls, no validation
+    beyond ownership — this must stay fast and never fail loudly."""
+    require_role(current_user, ["student"], "Only students can save a draft")
+    attempt = get_student_attempt(db, attempt_id, current_user["id"])
+    if attempt.status != "analysis_submitted":
+        # Already past this stage (or expired) — nothing meaningful to save.
+        return {"saved": False}
+    db.execute(
+        text("UPDATE case_study_attempts SET analysis_draft = :draft WHERE id = :attempt_id"),
+        {"attempt_id": attempt.id, "draft": draft},
+    )
+    db.commit()
+    return {"saved": True}
 
 
 def get_student_attempt(db: Session, attempt_id: int, student_id: int) -> Any:
@@ -1743,6 +1764,8 @@ def attempt_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
         "initial_analysis": row.initial_analysis,
         "initial_summary": getattr(row, "initial_summary", None),
         "initial_word_count": row.initial_word_count,
+        "analysis_draft": getattr(row, "analysis_draft", None),
+        "writing_started_at": str(row.writing_started_at) if getattr(row, "writing_started_at", None) else None,
         "final_solution": row.final_solution,
         "defense_responses": row.defense_responses,
         "reflection_text": row.reflection_text,

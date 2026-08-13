@@ -199,6 +199,8 @@ export interface AttemptDetail {
   initial_analysis: string | null
   initial_summary: string | null
   initial_word_count: number
+  analysis_draft: string | null
+  writing_started_at: string | null
   final_solution: string | null
   defense_responses: string | null
   reflection_text: string | null
@@ -258,6 +260,22 @@ export async function submitInitialAnalysis(
     attempt_id: attemptId,
     initial_analysis: initialAnalysis,
     initial_summary: initialSummary,
+  })
+  return response.data
+}
+
+export interface AnalysisDraft {
+  summary: string
+  answers: string[]
+}
+
+// Fire-and-forget autosave of in-progress analysis text, so a reload before
+// the real submit doesn't lose typed work. Failures are non-fatal — this is
+// a convenience layer on top of a still-fully-functional submit flow.
+export async function saveAnalysisDraft(attemptId: number, draft: AnalysisDraft) {
+  const response = await api.post<{ saved: boolean }>("/cases/attempt/save-draft", {
+    attempt_id: attemptId,
+    draft: JSON.stringify(draft),
   })
   return response.data
 }

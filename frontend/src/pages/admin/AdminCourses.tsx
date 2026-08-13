@@ -817,16 +817,23 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
   const [code, setCode] = useState("")
   const [totalSemesters, setTotalSemesters] = useState("4")
   const [durationYears, setDurationYears] = useState("2")
+  const [semestersTouched, setSemestersTouched] = useState(false)
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
-  // Every existing program follows 2 semesters per academic year — enforce that
-  // relationship so a course can't be created with an inconsistent combination
-  // (e.g. 2 semesters over a 2-year duration).
+  function handleSemestersChange(value: string) {
+    setSemestersTouched(true)
+    setTotalSemesters(value)
+  }
+
+  // Every existing program follows 2 semesters per academic year, so default
+  // to that as duration changes — but only until the admin manually edits
+  // semesters themselves, so a deliberately-entered value never gets
+  // silently discarded by a later duration edit.
   function handleDurationChange(value: string) {
     setDurationYears(value)
     const years = Number(value)
-    if (years > 0) setTotalSemesters(String(years * 2))
+    if (years > 0 && !semestersTouched) setTotalSemesters(String(years * 2))
   }
 
   const expectedSemesters = Number(durationYears) > 0 ? Number(durationYears) * 2 : null
@@ -884,7 +891,7 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
               type="number"
               min={1}
               value={totalSemesters}
-              onChange={(event) => setTotalSemesters(event.target.value)}
+              onChange={(event) => handleSemestersChange(event.target.value)}
               className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
             />
           </DialogField>
@@ -977,7 +984,9 @@ function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
           >
             <option value="">No department</option>
             {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
+              <option key={d.id} value={d.id}>
+                {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
+              </option>
             ))}
           </select>
         </DialogField>

@@ -16,6 +16,7 @@ from .models import (
     EvaluationResult,
     FinalEvaluation,
     PhaseStartRequest,
+    SaveDraftRequest,
     StartAttemptRequest,
     StartAttemptResponse,
     SubmitAnalysisRequest,
@@ -32,6 +33,7 @@ from .service import (
     get_student_attempts_for_mentor,
     get_thinking_path_for_mentor,
     list_case_studies,
+    save_analysis_draft,
     send_ai_message,
     start_attempt_phase,
     start_case_attempt,
@@ -132,6 +134,21 @@ def submit_analysis(
         raise
     except Exception as error:
         print(f"SUBMIT ANALYSIS ERROR: {error}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@simulation_router.post("/attempt/save-draft")
+def save_draft(
+    data: SaveDraftRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    try:
+        return save_analysis_draft(db, data.attempt_id, data.draft, current_user)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print(f"SAVE DRAFT ERROR: {error}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

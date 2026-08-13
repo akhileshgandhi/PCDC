@@ -61,7 +61,7 @@ export default function FacultyAnalytics() {
             <Stat label="Sections" value={summary.totals.section_count} />
             <Stat label="Students" value={summary.totals.student_count} />
             <Stat
-              label="Avg Score"
+              label="Avg Capability Score"
               value={summary.totals.average_score}
               suffix="/100"
               tone={scoreTone(summary.totals.average_score)}
@@ -112,7 +112,7 @@ export default function FacultyAnalytics() {
                         color: "#111827",
                       }}
                     />
-                    <Bar dataKey="average_score" name="Avg Score" radius={[4, 4, 0, 0]}>
+                    <Bar dataKey="average_score" name="Avg Capability Score" radius={[4, 4, 0, 0]}>
                       {summary.sections.map((section) => (
                         <Cell key={section.section_id} fill={scoreTone(section.average_score)} />
                       ))}
@@ -133,7 +133,7 @@ export default function FacultyAnalytics() {
               <div className="hidden grid-cols-[1.4fr_0.8fr_0.9fr_0.9fr_1.2fr] gap-4 border-b border-[#e6e8eb] bg-[#f6f7fb] px-5 py-3 text-xs font-semibold uppercase text-[#6b7280] lg:grid">
                 <span>Section</span>
                 <span>Students</span>
-                <span>Avg Score</span>
+                <span>Avg Capability Score</span>
                 <span>Cases Assigned</span>
                 <span>Completion</span>
               </div>
@@ -159,6 +159,7 @@ export default function FacultyAnalytics() {
                       style={{ color: scoreTone(section.average_score) }}
                     >
                       {section.average_score}
+                      <span className="text-xs font-medium text-[#9ca3af]">/100</span>
                     </span>
                     <span className="text-sm font-medium text-[#111827]">
                       {section.cases_assigned}
