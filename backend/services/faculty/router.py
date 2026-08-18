@@ -17,6 +17,7 @@ from services.auth.service import get_current_user, hash_password
 from shared.cache import cache_get, cache_set
 from shared.database import SessionLocal, get_db
 from shared.llm import (
+    create_with_retry,
     get_llm_client,
     get_llm_model,
     json_response_format,
@@ -882,9 +883,9 @@ def call_openai_case_generation(
     requested_sections: List[str],
 ) -> Dict[str, Any]:
     client = get_llm_client()
-    response = client.chat.completions.create(
-        model=get_llm_model(CASE_GENERATION_MODEL),
-        messages=[
+    response = create_with_retry(client, {
+        "model": get_llm_model(CASE_GENERATION_MODEL),
+        "messages": [
             {"role": "system", "content": CASE_GENERATION_PROMPT},
             {
                 "role": "user",
@@ -897,11 +898,11 @@ def call_openai_case_generation(
                 ),
             },
         ],
-        response_format=json_response_format(
+        "response_format": json_response_format(
             build_case_generation_schema(requested_sections), "faculty_case_generation"
         ),
-        timeout=60,
-    )
+        "timeout": 60,
+    })
     content = response.choices[0].message.content
     return validate_generated_sections(parse_json_content(content), requested_sections)
 
@@ -969,9 +970,9 @@ def call_openai_generate_questions(
     summary: str,
 ) -> List[Dict[str, Any]]:
     client = get_llm_client()
-    response = client.chat.completions.create(
-        model=get_llm_model(CASE_GENERATION_MODEL),
-        messages=[
+    response = create_with_retry(client, {
+        "model": get_llm_model(CASE_GENERATION_MODEL),
+        "messages": [
             {"role": "system", "content": GENERATE_QUESTIONS_PROMPT},
             {
                 "role": "user",
@@ -980,11 +981,11 @@ def call_openai_generate_questions(
                 ),
             },
         ],
-        response_format=json_response_format(
+        "response_format": json_response_format(
             build_generate_questions_schema(), "faculty_generate_questions"
         ),
-        timeout=60,
-    )
+        "timeout": 60,
+    })
     content = response.choices[0].message.content
     questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != 3:
@@ -1058,9 +1059,9 @@ def call_openai_generate_rapid_fire(
     summary: str,
 ) -> List[Dict[str, Any]]:
     client = get_llm_client()
-    response = client.chat.completions.create(
-        model=get_llm_model(CASE_GENERATION_MODEL),
-        messages=[
+    response = create_with_retry(client, {
+        "model": get_llm_model(CASE_GENERATION_MODEL),
+        "messages": [
             {"role": "system", "content": GENERATE_RAPID_FIRE_PROMPT},
             {
                 "role": "user",
@@ -1069,11 +1070,11 @@ def call_openai_generate_rapid_fire(
                 ),
             },
         ],
-        response_format=json_response_format(
+        "response_format": json_response_format(
             build_generate_rapid_fire_schema(), "faculty_generate_rapid_fire"
         ),
-        timeout=60,
-    )
+        "timeout": 60,
+    })
     content = response.choices[0].message.content
     questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != RAPID_FIRE_GENERATION_COUNT:
@@ -2270,18 +2271,24 @@ def ai_fill_faculty_case(
 
     try:
         client = get_llm_client()
-        response = client.chat.completions.create(
-            model=get_llm_model(CASE_GENERATION_MODEL),
-            messages=[
+        response = create_with_retry(client, {
+            "model": get_llm_model(CASE_GENERATION_MODEL),
+            "messages": [
                 {"role": "system", "content": AI_FILL_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            response_format=json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
-            max_tokens=16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
-            timeout=180,
-        )
+            "response_format": json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
+            "max_tokens": 16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
+            "timeout": 180,
+        })
         parsed = parse_json_content(response.choices[0].message.content)
     except Exception as exc:  # noqa: BLE001
+        status = getattr(exc, "status_code", None)
+        if status == 503:
+            raise HTTPException(
+                status_code=503,
+                detail="The AI model is under heavy load right now. Please try again in a minute.",
+            )
         raise HTTPException(status_code=502, detail=f"AI full-case generation failed: {exc}")
     if not isinstance(parsed, dict):
         raise HTTPException(status_code=502, detail="AI returned an unexpected response")

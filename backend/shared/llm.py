@@ -7,6 +7,7 @@ use Gemini; anything else defaults to OpenAI.
 
 import json
 import os
+import time
 from typing import Any, Dict, Optional
 
 from openai import OpenAI
@@ -46,6 +47,23 @@ def get_llm_model(default: Optional[str] = None) -> str:
     return os.getenv("OPENAI_MODEL", default or OPENAI_DEFAULT_MODEL)
 
 
+def get_fallback_llm_client() -> Optional[OpenAI]:
+    """A secondary provider to fall back to when the primary is down. Only
+    meaningful when Gemini is primary (its free-tier "high demand" 503s are
+    the main reason this exists) and a real OPENAI_API_KEY is configured —
+    returns None otherwise so callers can skip the fallback cleanly."""
+    if not is_gemini():
+        return None
+    key = os.getenv("OPENAI_API_KEY")
+    if not key or not key.startswith("sk-"):
+        return None
+    return OpenAI(api_key=key)
+
+
+def get_fallback_llm_model() -> str:
+    return os.getenv("OPENAI_MODEL", OPENAI_DEFAULT_MODEL)
+
+
 def json_response_format(schema: Dict[str, Any], name: str) -> Dict[str, Any]:
     """Provider-appropriate response_format for forced-JSON generation.
 
@@ -59,6 +77,44 @@ def json_response_format(schema: Dict[str, Any], name: str) -> Dict[str, Any]:
         "type": "json_schema",
         "json_schema": {"name": name, "strict": True, "schema": schema},
     }
+
+
+# Free-tier models (Gemini especially) intermittently return 429 (rate/quota)
+# and 503 (high demand — "This model is currently experiencing high demand").
+# Retry transient failures a few times with backoff so a temporary spike
+# doesn't fail the whole request; every direct chat.completions.create call
+# in the app should go through this rather than calling the client raw.
+_TRANSIENT_STATUS = {429, 500, 503}
+
+
+def create_with_retry(client: OpenAI, kwargs: Dict[str, Any], attempts: int = 4) -> Any:
+    last_error: Optional[Exception] = None
+    for attempt in range(attempts):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as error:  # noqa: BLE001 - narrow via status_code below
+            status = getattr(error, "status_code", None)
+            if status not in _TRANSIENT_STATUS:
+                raise
+            last_error = error
+            if attempt < attempts - 1:
+                time.sleep(2 * (attempt + 1))
+
+    # Primary provider exhausted every retry on a transient error (e.g.
+    # sustained Gemini "high demand" 503s) — try a secondary provider once
+    # before giving up, if one is configured. Same prompt/schema, just a
+    # different model name; if the fallback also fails, surface the
+    # original error rather than the fallback's, since that's usually the
+    # more informative one for whoever's debugging this.
+    fallback_client = get_fallback_llm_client()
+    if fallback_client is not None:
+        try:
+            return fallback_client.chat.completions.create(
+                **{**kwargs, "model": get_fallback_llm_model()}
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    raise last_error
 
 
 def parse_json_content(content: Optional[str]) -> Any:

@@ -1,6 +1,5 @@
 import json
 import os
-import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -8,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from shared.llm import get_llm_client, get_llm_model, is_gemini
+from shared.llm import create_with_retry, get_llm_client, get_llm_model, is_gemini
 from .models import CaseStudyCreate
 
 
@@ -1912,29 +1911,8 @@ def call_llm(
     # models from wrapping the JSON in prose or markdown fences.
     if force_json:
         kwargs["response_format"] = {"type": "json_object"}
-    result = _create_with_retry(client, kwargs)
+    result = create_with_retry(client, kwargs)
     return (result.choices[0].message.content or "").strip()
-
-
-# Free-tier models (Gemini especially) intermittently return 429 (rate/quota)
-# and 503 (high demand). Retry transient failures a few times with backoff so a
-# temporary spike doesn't fail a student's attempt.
-_TRANSIENT_STATUS = {429, 500, 503}
-
-
-def _create_with_retry(client: Any, kwargs: Dict[str, Any], attempts: int = 4) -> Any:
-    last_error: Optional[Exception] = None
-    for attempt in range(attempts):
-        try:
-            return client.chat.completions.create(**kwargs)
-        except Exception as error:  # noqa: BLE001 - narrow via status_code below
-            status = getattr(error, "status_code", None)
-            if status not in _TRANSIENT_STATUS or attempt == attempts - 1:
-                raise
-            last_error = error
-            time.sleep(2 * (attempt + 1))
-    if last_error:
-        raise last_error
 
 
 def parse_json_response(response: str) -> Any:
