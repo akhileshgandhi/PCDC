@@ -2157,6 +2157,7 @@ Guidelines:
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
   "title": string — a compelling case title,
+  "description": string — a 1-2 sentence summary shown to students and on the case listing,
   "capability": string — the single primary capability the case assesses (e.g. "Negotiation", "Decision Making", "Critical Thinking"),
   "difficulty": integer 1-7 — 1-2 easy, 3-4 moderate, 5-7 hard,
   "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
@@ -2212,8 +2213,9 @@ def _ai_fill_schema() -> Dict[str, Any]:
                      "instructions", "model_answer", "alternative_answers", "marking_scheme"],
     }
     str_keys = [
-        "title", "subject", "functional_area", "company_background", "industry_background",
-        "situation", "background", "data", "characters", "constraints", "objectives", "timeline",
+        "title", "description", "subject", "functional_area", "company_background",
+        "industry_background", "situation", "background", "data", "characters",
+        "constraints", "objectives", "timeline",
         "student_instructions_before", "student_instructions_during",
         "student_instructions_submission", "faculty_common_mistakes",
         "faculty_discussion_points", "key_learning_points",
@@ -2360,6 +2362,7 @@ def ai_fill_faculty_case(
 
     req = CaseUpdateRequest(
         title=_s("title") or row.title,
+        expected_outcomes=_s("description"),
         industry=industry,
         difficulty=difficulty,
         duration_minutes=duration,
