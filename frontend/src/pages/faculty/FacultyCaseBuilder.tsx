@@ -190,18 +190,14 @@ export default function FacultyCaseBuilder() {
   const [notice, setNotice] = useState("")
   const [isLoading, setIsLoading] = useState(Boolean(caseId))
   const [isSaving, setIsSaving] = useState(false)
-  const [generatingSection, setGeneratingSection] = useState<CaseSectionKey | "full" | null>(
-    null,
-  )
+  const [generatingSection, setGeneratingSection] = useState<CaseSectionKey | null>(null)
   const [generationJob, setGenerationJob] = useState<FacultyCaseGenerationJob | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
   const [caseSummary, setCaseSummary] = useState("")
   const [showQuestionsModal, setShowQuestionsModal] = useState(false)
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false)
   const [aiBrief, setAiBrief] = useState("")
-  const [isAiFilling, setIsAiFilling] = useState(false)
   const [isAiCreating, setIsAiCreating] = useState(false)
-  const shouldOfferFullDraft = mode === "ai" && caseData && allSectionsEmpty(caseData)
 
 
   useEffect(() => {
@@ -441,26 +437,24 @@ export default function FacultyCaseBuilder() {
     })
   }
 
-  async function handleGenerate(section?: CaseSectionKey) {
+  async function handleGenerate(section: CaseSectionKey) {
     if (!caseData) {
       return
     }
-    const target = section ?? "full"
     if (
-      section &&
       caseData.section_meta[section] === "manual" &&
       sectionValueToText(caseData.sections[section]).trim() &&
       !window.confirm("This will overwrite your edits to this section. Continue?")
     ) {
       return
     }
-    setGeneratingSection(target)
+    setGeneratingSection(section)
     setNotice("")
     try {
       const job = await generateFacultyCase(caseData.id, {
-        scope: section ? "section" : "full",
-        sections: section ? [section] : undefined,
-        overwrite_manual: Boolean(section),
+        scope: "section",
+        sections: [section],
+        overwrite_manual: true,
       })
       setGenerationJob(job)
       setErrors([])
@@ -525,28 +519,6 @@ export default function FacultyCaseBuilder() {
       setErrors([describeAiFailure(error)])
     } finally {
       setIsAiCreating(false)
-    }
-  }
-
-  async function handleAiFill() {
-    if (!caseData || !aiBrief.trim()) {
-      return
-    }
-    if (!window.confirm("This fills the ENTIRE case (sections, instructions, questions, timing, marks, rubric) from your brief and overwrites current content. Continue?")) {
-      return
-    }
-    setIsAiFilling(true)
-    setNotice("")
-    try {
-      const filled = await aiFillFacultyCase(caseData.id, aiBrief.trim())
-      setCaseData(normalizeCaseData(filled))
-      setCoreForm(caseToCoreForm(filled))
-      setErrors([])
-      setNotice("Full case generated. Review every section and edit as needed before publishing.")
-    } catch (error) {
-      setErrors([`${describeAiFailure(error)} Existing content was preserved.`])
-    } finally {
-      setIsAiFilling(false)
     }
   }
 
@@ -651,7 +623,6 @@ export default function FacultyCaseBuilder() {
             mode={mode}
             coreForm={coreForm}
             publishBlockers={publishBlockers}
-            shouldOfferFullDraft={Boolean(shouldOfferFullDraft)}
             generatingSection={generatingSection}
             generationJob={generationJob}
             onFieldChange={updateCoreField}
@@ -669,10 +640,6 @@ export default function FacultyCaseBuilder() {
             onCloseQuestionsModal={() => setShowQuestionsModal(false)}
             isGeneratingQuestions={isGeneratingQuestions}
             onGenerateQuestions={handleGenerateQuestions}
-            aiBrief={aiBrief}
-            onAiBriefChange={setAiBrief}
-            isAiFilling={isAiFilling}
-            onAiFill={handleAiFill}
           />
         )}
       </div>
@@ -827,13 +794,12 @@ interface EditorStepProps {
   mode: BuilderMode
   coreForm: CoreFormState
   publishBlockers: string[]
-  shouldOfferFullDraft: boolean
-  generatingSection: CaseSectionKey | "full" | null
+  generatingSection: CaseSectionKey | null
   generationJob: FacultyCaseGenerationJob | null
   onFieldChange: (field: keyof CoreFormState, value: string) => void
   onCapabilityToggle: (capabilityName: string) => void
   onSectionChange: (section: CaseSectionKey, value: string) => void
-  onGenerate: (section?: CaseSectionKey) => void
+  onGenerate: (section: CaseSectionKey) => void
   onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
   onInstructionsChange: <K extends keyof FacultyCaseInstructions>(
     field: K,
@@ -852,10 +818,6 @@ interface EditorStepProps {
   onCloseQuestionsModal: () => void
   isGeneratingQuestions: boolean
   onGenerateQuestions: () => void
-  aiBrief: string
-  onAiBriefChange: (value: string) => void
-  isAiFilling: boolean
-  onAiFill: () => void
 }
 
 function EditorStep({
@@ -863,7 +825,6 @@ function EditorStep({
   mode,
   coreForm,
   publishBlockers,
-  shouldOfferFullDraft,
   generatingSection,
   generationJob,
   onFieldChange,
@@ -881,10 +842,6 @@ function EditorStep({
   onCloseQuestionsModal,
   isGeneratingQuestions,
   onGenerateQuestions,
-  aiBrief,
-  onAiBriefChange,
-  isAiFilling,
-  onAiFill,
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
@@ -895,48 +852,6 @@ function EditorStep({
         </div>
       ) : null}
 
-      {mode === "ai" ? (
-        <section className="rounded-lg border-2 border-dashed border-[#c9a227] bg-[#fffdf5] p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <Sparkles size={20} className="mt-0.5 shrink-0 text-[#c9a227]" aria-hidden="true" />
-            <div className="w-full">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold text-[#111827]">Full Autofill with AI</h2>
-                <span className="rounded-full bg-[#fff7df] px-2 py-0.5 text-xs font-semibold text-[#92702a]">
-                  Test
-                </span>
-              </div>
-              <p className="mt-1 text-sm leading-6 text-[#6b7280]">
-                Describe the case in one or two lines. AI fills <span className="font-semibold">everything</span> —
-                sections, company/industry background, student instructions, 3 questions (with marks,
-                word limits, model answers, marking scheme), timing, and the rubric — using this case's
-                capability and difficulty. Review and edit before publishing.
-              </p>
-              <textarea
-                value={aiBrief}
-                onChange={(event) => onAiBriefChange(event.target.value)}
-                rows={3}
-                placeholder="e.g. A regional healthy-snacks company negotiating shelf space and trade terms with a large retail chain."
-                className="mt-3 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-              />
-              <button
-                type="button"
-                onClick={onAiFill}
-                disabled={isAiFilling || !aiBrief.trim()}
-                className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isAiFilling ? (
-                  <Loader2 className="animate-spin" size={17} aria-hidden="true" />
-                ) : (
-                  <Sparkles size={17} aria-hidden="true" />
-                )}
-                {isAiFilling ? "Generating the whole case…" : "Generate entire case (Test)"}
-              </button>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -945,21 +860,6 @@ function EditorStep({
               Status: <span className="font-semibold capitalize">{caseData.status}</span>
             </p>
           </div>
-          {mode === "ai" ? (
-            <button
-              type="button"
-              onClick={() => onGenerate()}
-              disabled={generatingSection !== null}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {generatingSection === "full" ? (
-                <Loader2 className="animate-spin" size={17} />
-              ) : (
-                <Bot size={17} />
-              )}
-              {shouldOfferFullDraft ? "Generate Full Case Draft" : "Generate Full Case"}
-            </button>
-          ) : null}
         </div>
         {generationJob && ["queued", "in_progress"].includes(generationJob.status) ? (
           <div className="mb-5 flex items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-medium text-[#1d4ed8]">
@@ -1761,12 +1661,6 @@ function caseToCoreForm(caseData: FacultyCaseEditor): CoreFormState {
     duration_minutes: String(caseData.duration_minutes),
     capabilities: caseData.capabilities,
   }
-}
-
-function allSectionsEmpty(caseData: FacultyCaseEditor) {
-  return sectionDefinitions.every(
-    (section) => !sectionValueToText(caseData.sections[section.key]).trim(),
-  )
 }
 
 function sectionValueToText(value: string | string[]) {
