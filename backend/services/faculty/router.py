@@ -2151,14 +2151,14 @@ From a short brief you write a COMPLETE, classroom-ready case study for assessme
 Guidelines:
 - Invent a plausible fictional company, people, and SPECIFIC numeric data (figures, %, prices, dates).
 - Calibrate depth and Bloom's levels to the given difficulty level.
-- Focus the evidence, questions, and model answers on the target capability.
+- Focus the evidence, questions, and model answers on the target capability(ies).
 - Produce EXACTLY 3 written questions of increasing depth.
 
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
   "title": string — a compelling case title,
   "description": string — a detailed 4-6 sentence overview shown to students and on the case listing: introduce the company/context, the core situation and decision at stake, why it matters, and what the student is being asked to do — specific and informative, not a one-line teaser,
-  "capability": string — the single primary capability the case assesses (e.g. "Negotiation", "Decision Making", "Critical Thinking"),
+  "capabilities": array of 1-3 strings — the primary capability(ies) the case assesses (e.g. ["Negotiation", "Decision Making"]) — use more than one only when the case genuinely exercises multiple distinct capabilities,
   "difficulty": integer 1-7 — 1-2 easy, 3-4 moderate, 5-7 hard,
   "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
   "subject": string — e.g. "Marketing Management",
@@ -2221,7 +2221,7 @@ def _ai_fill_schema() -> Dict[str, Any]:
         "faculty_discussion_points", "key_learning_points",
     ]
     props: Dict[str, Any] = {k: {"type": "string"} for k in str_keys}
-    props["capability"] = {"type": "string"}
+    props["capabilities"] = {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string"}}
     props["difficulty"] = {"type": "integer"}
     props["industry"] = {"type": "string"}
     props["reflection_questions"] = {"type": "array", "items": {"type": "string"}}
@@ -2233,7 +2233,7 @@ def _ai_fill_schema() -> Dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": props,
-        "required": str_keys + ["capability", "difficulty", "industry", "reflection_questions",
+        "required": str_keys + ["capabilities", "difficulty", "industry", "reflection_questions",
                                 "learning_outcomes", "reading_time_minutes", "questions"],
     }
 
@@ -2357,8 +2357,8 @@ def ai_fill_faculty_case(
         industry = normalize_domain(_s("industry"))
     except HTTPException:
         industry = row.domain or "business"
-    ai_capability = _s("capability")
-    capabilities_out = [ai_capability] if ai_capability else (capabilities or None)
+    ai_capabilities = _list("capabilities")
+    capabilities_out = ai_capabilities or (capabilities or None)
 
     req = CaseUpdateRequest(
         title=_s("title") or row.title,
