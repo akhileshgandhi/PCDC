@@ -152,6 +152,24 @@ function normalizeCaseData(data: FacultyCaseEditor): FacultyCaseEditor {
   }
 }
 
+// Full-case AI generation is a large, slow model call (up to 180s server-side)
+// with no client-side timeout, so a failure here is almost always a transient
+// server/network issue, not a problem with the brief itself. Surface whatever
+// the backend actually said instead of a blanket "write a clearer brief"
+// message, which is misleading and makes the real cause hard to diagnose.
+function describeAiFailure(error: unknown): string {
+  const err = error as { response?: { status?: number; data?: { detail?: string } } }
+  const detail = err?.response?.data?.detail
+  if (detail) {
+    return detail
+  }
+  const status = err?.response?.status
+  if (status === 504 || status === undefined) {
+    return "The AI is taking longer than usual and the request timed out. This isn't about your brief — please try again in a moment."
+  }
+  return "AI generation failed. Please try again in a moment."
+}
+
 const emptyCoreForm: CoreFormState = {
   title: "",
   description: "",
@@ -474,8 +492,8 @@ export default function FacultyCaseBuilder() {
       setShowQuestionsModal(false)
       setErrors([])
       setNotice("Questions generated. Review and edit as needed.")
-    } catch {
-      setErrors(["AI question generation failed. Existing content was preserved."])
+    } catch (error) {
+      setErrors([`${describeAiFailure(error)} Existing content was preserved.`])
     } finally {
       setIsGeneratingQuestions(false)
     }
@@ -503,8 +521,8 @@ export default function FacultyCaseBuilder() {
       setCoreForm(caseToCoreForm(filled))
       setNotice("Full case generated. Review every section and edit as needed before publishing.")
       navigate(`/faculty/case-builder/${filled.id}`, { replace: true })
-    } catch {
-      setErrors(["AI could not generate the case. Please try again with a clearer brief."])
+    } catch (error) {
+      setErrors([describeAiFailure(error)])
     } finally {
       setIsAiCreating(false)
     }
@@ -525,8 +543,8 @@ export default function FacultyCaseBuilder() {
       setCoreForm(caseToCoreForm(filled))
       setErrors([])
       setNotice("Full case generated. Review every section and edit as needed before publishing.")
-    } catch {
-      setErrors(["AI full-case generation failed. Existing content was preserved."])
+    } catch (error) {
+      setErrors([`${describeAiFailure(error)} Existing content was preserved.`])
     } finally {
       setIsAiFilling(false)
     }
