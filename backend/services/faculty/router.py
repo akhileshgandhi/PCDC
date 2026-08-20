@@ -2157,7 +2157,7 @@ Guidelines:
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
   "title": string — a compelling case title,
-  "description": string — a 1-2 sentence summary shown to students and on the case listing,
+  "description": string — a detailed 4-6 sentence overview shown to students and on the case listing: introduce the company/context, the core situation and decision at stake, why it matters, and what the student is being asked to do — specific and informative, not a one-line teaser,
   "capability": string — the single primary capability the case assesses (e.g. "Negotiation", "Decision Making", "Critical Thinking"),
   "difficulty": integer 1-7 — 1-2 easy, 3-4 moderate, 5-7 hard,
   "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
