@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
 import AdminAcademicSetup from "./AdminAcademicSetup"
+import AdminCaseBank from "./AdminCaseBank"
+import AdminCaseImport from "./AdminCaseImport"
 import AdminCourses from "./AdminCourses"
 import AdminDashboard from "./AdminDashboard"
 import AdminFaculty from "./AdminFaculty"
@@ -21,19 +23,12 @@ export default function AdminPortal() {
       <Route path="/people/faculty" element={<AdminFaculty />} />
       <Route path="/people/students" element={<AdminStudents />} />
       <Route path="/people/teaching-approvals" element={<AdminTeachingApprovals />} />
+      <Route path="/case-bank" element={<AdminCaseBank />} />
       <Route path="/users" element={<AdminUsers />} />
       <Route path="/user/:id" element={<AdminUserDetail />} />
       <Route path="/courses" element={<AdminCourses />} />
       <Route path="/sections" element={<AdminSections />} />
-      <Route
-        path="/case-import"
-        element={
-          <AdminModulePlaceholder
-            title="Case Import"
-            description="External case import queue, upload, mapping, approval, rejection, and draft save flows will build on the case schema."
-          />
-        }
-      />
+      <Route path="/case-import" element={<AdminCaseImport />} />
       <Route
         path="/settings"
         element={

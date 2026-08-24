@@ -64,6 +64,7 @@ const navGroups: NavGroup[] = [
     icon: BookOpen,
     items: [
       { label: "Case Library", to: "/faculty/case-library" },
+      { label: "Case Bank", to: "/faculty/case-bank" },
       { label: "Case Builder", to: "/faculty/case-builder" },
     ],
   },

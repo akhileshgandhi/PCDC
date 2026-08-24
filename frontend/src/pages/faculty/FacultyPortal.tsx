@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom"
 import FacultyAnalytics from "./FacultyAnalytics"
 import FacultyAttemptReport from "./FacultyAttemptReport"
 import FacultyAttempts from "./FacultyAttempts"
+import FacultyCaseBank from "./FacultyCaseBank"
 import FacultyCaseBuilder from "./FacultyCaseBuilder"
 import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
@@ -18,6 +19,7 @@ export default function FacultyPortal() {
       <Route path="/onboarding/my-teaching" element={<FacultyMyTeaching />} />
       <Route path="/onboarding/add-students" element={<Navigate to="/faculty/students" replace />} />
       <Route path="/case-library" element={<FacultyCaseLibrary />} />
+      <Route path="/case-bank" element={<FacultyCaseBank />} />
       <Route path="/case-builder" element={<FacultyCaseBuilder />} />
       <Route path="/case-builder/:id" element={<FacultyCaseBuilder />} />
       <Route path="/students" element={<FacultyStudents />} />

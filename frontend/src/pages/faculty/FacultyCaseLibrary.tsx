@@ -1,4 +1,4 @@
-import { Archive, CircleX, Edit3, Eye, Plus, Search, Send, Trash2 } from "lucide-react"
+import { Archive, CircleX, Edit3, Eye, FileUp, Plus, Search, Send, Trash2 } from "lucide-react"
 import type { FormEvent } from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
@@ -17,6 +17,7 @@ import {
   type FacultySection,
   type FacultyStudent,
 } from "../../api/faculty"
+import UploadCaseDialog from "../../components/bank/UploadCaseDialog"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 const domains = [
@@ -48,6 +49,7 @@ export default function FacultyCaseLibrary() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [assigningCase, setAssigningCase] = useState<FacultyCase | null>(null)
+  const [showBankUpload, setShowBankUpload] = useState(false)
   const [assignedCases, setAssignedCases] = useState<FacultyAssignedCase[]>([])
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(true)
   const [closingAssignmentId, setClosingAssignmentId] = useState<number | null>(null)
@@ -175,13 +177,23 @@ export default function FacultyCaseLibrary() {
               </p>
             </div>
 
-            <Link
-              to="/faculty/case-builder"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e]"
-            >
-              <Plus size={17} aria-hidden="true" />
-              New Case Study
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBankUpload(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+              >
+                <FileUp size={17} aria-hidden="true" />
+                Upload case study
+              </button>
+              <Link
+                to="/faculty/case-builder"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e]"
+              >
+                <Plus size={17} aria-hidden="true" />
+                New Case Study
+              </Link>
+            </div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
@@ -388,6 +400,18 @@ export default function FacultyCaseLibrary() {
             setNotice(message)
             setError("")
             loadAssignedCases()
+          }}
+        />
+      ) : null}
+
+      {showBankUpload ? (
+        <UploadCaseDialog
+          variant="faculty"
+          onClose={() => setShowBankUpload(false)}
+          onDone={() => {
+            setShowBankUpload(false)
+            setNotice("Case study uploaded to the shared Case Bank — find it under Cases → Case Bank.")
+            setError("")
           }}
         />
       ) : null}

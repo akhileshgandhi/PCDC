@@ -68,6 +68,14 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Cases",
+    icon: BookMarked,
+    items: [
+      { label: "Case Bank", to: "/admin/case-bank", icon: BookMarked },
+      { label: "Case Import", to: "/admin/case-import", icon: BookMarked },
+    ],
+  },
+  {
     label: "People",
     icon: Users,
     items: [

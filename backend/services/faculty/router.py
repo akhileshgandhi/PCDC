@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user, hash_password
+from services.bank.service import release_used_entries, upsert_ai_bank_entry
 from shared.cache import cache_get, cache_set
 from shared.database import SessionLocal, get_db
 from shared.llm import (
@@ -1674,6 +1675,9 @@ def delete_faculty_case(
         "DELETE FROM rapid_fire_questions WHERE case_study_id = :cid",
         "DELETE FROM case_study_tags WHERE case_study_id = :cid",
         "UPDATE case_imports SET approved_case_id = NULL WHERE approved_case_id = :cid",
+        # deleting the live as-is copy returns its bank entry to the bank
+        "UPDATE case_study_bank SET status = 'available', used_case_id = NULL, updated_at = NOW() "
+        "WHERE used_case_id = :cid AND status = 'used'",
     ]
     for stmt in statements:
         db.execute(text(stmt), params)
@@ -2042,6 +2046,9 @@ def update_faculty_case(
         replace_capability_tags(db, case_id, data.capabilities)
     replace_case_questions(db, case_id, data.questions)
     replace_rapid_fire_questions(db, case_id, data.rapid_fire_questions)
+    # a bank entry hidden by an as-is publish of this case is no longer an
+    # unmodified live copy — show it in the bank again
+    release_used_entries(db, case_id)
     db.commit()
     return case_editor_response(db, row)
 
@@ -2409,6 +2416,9 @@ def ai_fill_faculty_case(
         {"r": json.dumps(rubric), "cid": case_id, "fid": current_user["id"]},
     )
     updated = result.fetchone()
+    # every faculty AI-generated case study is stored in the shared bank,
+    # tagged with the generating faculty's name
+    upsert_ai_bank_entry(db, case_id, current_user)
     db.commit()
     return case_editor_response(db, updated)
 
