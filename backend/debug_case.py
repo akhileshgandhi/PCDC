@@ -7,7 +7,7 @@ engine = create_engine(os.getenv("DATABASE_URL"))
 
 with engine.connect() as conn:
     row = conn.execute(text("""
-        SELECT id, title, content, reflection_questions, learning_outcomes
+        SELECT id, title, content
         FROM case_studies
         WHERE title ILIKE '%Growing Sales%'
         ORDER BY id DESC LIMIT 1
@@ -18,8 +18,6 @@ with engine.connect() as conn:
     else:
         print(f"Case ID: {row.id}")
         print(f"Title: {row.title}")
-        print(f"reflection_questions column: {row.reflection_questions[:200] if row.reflection_questions else 'NULL'}")
-        print(f"learning_outcomes column: {row.learning_outcomes[:200] if row.learning_outcomes else 'NULL'}")
         print()
         if row.content:
             parsed = json.loads(row.content)

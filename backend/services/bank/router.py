@@ -26,6 +26,8 @@ from services.faculty.router import (
     CASE_SECTIONS,
     DEFAULT_RUBRIC_WEIGHTS,
     _ai_fill_schema,
+    blooms_levels_for_difficulty,
+    delete_case_and_dependents,
     difficulty_label_for,
     normalize_domain,
     require_faculty,
@@ -52,7 +54,7 @@ class BankUploadRequest(BaseModel):
     content_text: Optional[str] = None          # the case body / extracted document text
     subject: Optional[str] = None
     semester_number: Optional[int] = None       # 1..8
-    difficulty: int = 1                         # 1..7
+    difficulty: int = 1                         # 1..5
     attachment_name: Optional[str] = None
     attachment_data: Optional[str] = None       # base64 of the uploaded document
 
@@ -78,7 +80,7 @@ class BankPublishRequest(BaseModel):
     industry: Optional[str] = None
     functional_area: Optional[str] = None
     capabilities: Optional[List[str]] = None
-    sections: Optional[Dict[str, Any]] = None   # full sections dict (arrays for reflection/learning)
+    sections: Optional[Dict[str, Any]] = None   # full sections dict (data, objectives)
     reading_time_minutes: Optional[int] = None
     answer_writing_time_minutes: Optional[int] = None
     questions: Optional[List[Dict[str, Any]]] = None
@@ -99,8 +101,6 @@ def _norm_list(value: Any) -> List[str]:
 
 
 def _norm_section(key: str, value: Any) -> Any:
-    if key in ("reflection_questions", "learning_outcomes"):
-        return _norm_list(value)
     return _norm_str(value)
 
 
@@ -113,7 +113,6 @@ def _norm_questions(value: Any) -> List[Dict[str, Any]]:
             continue
         out.append({
             "question_text": _norm_str(q.get("question_text")),
-            "blooms_level": _norm_str(q.get("blooms_level")),
             "word_limit_min": q.get("word_limit_min"),
             "word_limit_max": q.get("word_limit_max"),
             "instructions": _norm_str(q.get("instructions")),
@@ -126,16 +125,31 @@ def _norm_questions(value: Any) -> List[Dict[str, Any]]:
 
 INSTRUCTION_KEYS = [
     "student_instructions_before", "student_instructions_during",
-    "student_instructions_submission", "company_background", "industry_background",
-    "faculty_common_mistakes", "faculty_discussion_points", "key_learning_points",
+    "student_instructions_submission",
 ]
 
 
 def validate_mapping(semester_number: Optional[int], difficulty: int) -> None:
     if semester_number is not None and semester_number not in SEMESTER_NUMBERS:
         raise HTTPException(status_code=400, detail="Semester must be between 1 and 8")
-    if not 1 <= difficulty <= 7:
-        raise HTTPException(status_code=400, detail="Difficulty must be between 1 and 7")
+    if not 1 <= difficulty <= 5:
+        raise HTTPException(status_code=400, detail="Difficulty must be between 1 and 5")
+
+
+def _origin_semesters(raw: Optional[str], fallback: Optional[int]) -> List[int]:
+    """A case created via the Case Builder can have several recommended
+    semesters (case_studies.recommended_semesters), but the bank's own
+    semester_number is single-valued (matches the manual upload flow, which
+    only ever has one). Show all of the origin case's semesters when we have
+    them, rather than silently collapsing to whichever one landed first."""
+    try:
+        parsed = json.loads(raw or "[]")
+        semesters = [int(item) for item in parsed] if isinstance(parsed, list) else []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        semesters = []
+    if semesters:
+        return semesters
+    return [fallback] if fallback else []
 
 
 def entry_list_item(row: Any) -> Dict[str, Any]:
@@ -146,6 +160,7 @@ def entry_list_item(row: Any) -> Dict[str, Any]:
         "brief": row.brief,
         "subject": row.subject,
         "semester_number": row.semester_number,
+        "semesters": _origin_semesters(getattr(row, "origin_semesters", None), row.semester_number),
         "difficulty": row.difficulty,
         "difficulty_label": difficulty_label_for(row.difficulty or 1),
         "source": row.source,
@@ -163,7 +178,7 @@ ENTRY_COLUMNS = """
     b.id, b.title, b.brief, b.case_snapshot, b.subject, b.semester_number,
     b.difficulty, b.source, b.created_by, b.creator_name, b.status,
     b.used_case_id, b.attachment_name, b.created_at, b.updated_at,
-    u.role AS creator_role
+    u.role AS creator_role, cs2.recommended_semesters AS origin_semesters
 """
 
 
@@ -193,7 +208,7 @@ def list_bank_entries(
     if difficulty:
         clauses.append("b.difficulty = :difficulty")
         params["difficulty"] = difficulty
-    if source in ("uploaded", "ai_generated"):
+    if source in ("uploaded", "ai_generated", "case_builder"):
         clauses.append("b.source = :source")
         params["source"] = source
 
@@ -202,6 +217,7 @@ def list_bank_entries(
             SELECT {ENTRY_COLUMNS}
             FROM case_study_bank b
             LEFT JOIN users u ON u.id = b.created_by
+            LEFT JOIN case_studies cs2 ON cs2.id = b.origin_case_id
             WHERE {' AND '.join(clauses)}
             ORDER BY b.created_at DESC
         """),
@@ -229,7 +245,7 @@ def bank_meta(
         "semesters": SEMESTER_NUMBERS,
         "difficulties": [
             {"value": level, "label": f"L{level} — {difficulty_label_for(level)}"}
-            for level in range(1, 8)
+            for level in range(1, 6)
         ],
     }
 
@@ -247,9 +263,15 @@ def upload_to_bank(
     if data.attachment_data and len(data.attachment_data) > 6_000_000:
         raise HTTPException(status_code=400, detail="Attachment too large (max ~4 MB)")
 
+    # content_text (the uploaded document's extracted text) used to be aliased
+    # as sections.situation; situation no longer exists as a separate section,
+    # so it folds into the one narrative field instead.
+    description = "\n\n".join(
+        part for part in [(data.brief or "").strip(), (data.content_text or "").strip()] if part
+    )
     snapshot = {
-        "description": (data.brief or "").strip(),
-        "sections": {"situation": (data.content_text or "").strip()},
+        "description": description,
+        "sections": {},
         "metadata": {"subject": (data.subject or "").strip() or None},
         "questions": [],
         "capabilities": [],
@@ -312,7 +334,7 @@ def generate_into_bank(
             "response_format": json_response_format(_ai_fill_schema(), "bank_case_generate"),
             "max_tokens": 16000,
             "timeout": 180,
-        })
+        }, db=db)
         parsed = parse_json_content(response.choices[0].message.content)
     except Exception as exc:  # noqa: BLE001
         status = getattr(exc, "status_code", None)
@@ -338,7 +360,6 @@ def generate_into_bank(
         if isinstance(q, dict):
             questions.append({
                 "question_text": str(q.get("question_text") or "").strip(),
-                "blooms_level": str(q.get("blooms_level") or "").strip(),
                 "word_limit_min": q.get("word_limit_min"),
                 "word_limit_max": q.get("word_limit_max"),
                 "instructions": str(q.get("instructions") or "").strip(),
@@ -356,15 +377,8 @@ def generate_into_bank(
         "industry": industry,
         "capabilities": _list("capabilities"),
         "sections": {
-            "situation": _s("situation"),
-            "background": _s("background"),
             "data": _s("data"),
-            "characters": _s("characters"),
-            "constraints": _s("constraints"),
             "objectives": _s("objectives"),
-            "timeline": _s("timeline"),
-            "reflection_questions": _list("reflection_questions"),
-            "learning_outcomes": _list("learning_outcomes"),
         },
         "metadata": {"subject": _s("subject") or (data.subject or "").strip() or None,
                      "functional_area": _s("functional_area")},
@@ -374,11 +388,6 @@ def generate_into_bank(
             "student_instructions_before": _s("student_instructions_before"),
             "student_instructions_during": _s("student_instructions_during"),
             "student_instructions_submission": _s("student_instructions_submission"),
-            "company_background": _s("company_background"),
-            "industry_background": _s("industry_background"),
-            "faculty_common_mistakes": _s("faculty_common_mistakes"),
-            "faculty_discussion_points": _s("faculty_discussion_points"),
-            "key_learning_points": _s("key_learning_points"),
         },
         "questions": questions,
         "case_specific_criteria": _list("case_specific_criteria")[:2],
@@ -416,6 +425,7 @@ def get_bank_entry_row(db: Session, entry_id: int) -> Any:
             SELECT {ENTRY_COLUMNS}, b.attachment_data
             FROM case_study_bank b
             LEFT JOIN users u ON u.id = b.created_by
+            LEFT JOIN case_studies cs2 ON cs2.id = b.origin_case_id
             WHERE b.id = :bid
         """),
         {"bid": entry_id},
@@ -501,8 +511,12 @@ def publish_from_bank(
             sections[key] = _norm_section(key, sections_in.get(key))
         else:
             sections[key] = original_sections[key]
-    if data.content_text is not None and "situation" not in sections_in:
-        sections["situation"] = _norm_str(data.content_text)
+    # content_text used to be aliased as sections.situation; situation no
+    # longer exists as a section, so it folds into the narrative instead.
+    if data.content_text is not None:
+        content_text = _norm_str(data.content_text)
+        if content_text and content_text not in brief:
+            brief = "\n\n".join(part for part in [brief, content_text] if part)
 
     reading = data.reading_time_minutes if data.reading_time_minutes is not None \
         else (timing_snapshot.get("reading_time_minutes") or 8)
@@ -548,24 +562,20 @@ def publish_from_bank(
             INSERT INTO case_studies (
                 title, description, content, domain, difficulty, estimated_minutes,
                 source, status, created_by, evaluation_rubric,
-                learning_outcomes, reflection_questions,
-                subject, functional_area, difficulty_label,
+                subject, functional_area, difficulty_label, blooms_levels,
                 reading_time_minutes, answer_writing_time_minutes, rapid_fire_time_minutes,
                 total_marks, written_marks, rapid_fire_marks,
                 student_instructions_before, student_instructions_during,
-                student_instructions_submission, company_background, industry_background,
-                faculty_common_mistakes, faculty_discussion_points, key_learning_points,
+                student_instructions_submission,
                 recommended_semesters
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty, :estimated_minutes,
                 :source, 'draft', :created_by, :rubric,
-                :learning_outcomes, :reflection_questions,
-                :subject, :functional_area, :difficulty_label,
+                :subject, :functional_area, :difficulty_label, :blooms_levels,
                 :reading, :writing, 8,
                 10, 7, 3,
-                :ins_before, :ins_during, :ins_submission, :company_bg, :industry_bg,
-                :mistakes, :discussion, :key_points,
+                :ins_before, :ins_during, :ins_submission,
                 :recommended_semesters
             )
             RETURNING id
@@ -580,21 +590,15 @@ def publish_from_bank(
             "source": "ai_generated" if row.source == "ai_generated" else "faculty",
             "created_by": current_user["id"],
             "rubric": json.dumps(rubric),
-            "learning_outcomes": json.dumps(sections.get("learning_outcomes") or []),
-            "reflection_questions": json.dumps(sections.get("reflection_questions") or []),
             "subject": subject,
             "functional_area": functional_area,
             "difficulty_label": difficulty_label_for(difficulty),
+            "blooms_levels": blooms_levels_for_difficulty(difficulty),
             "reading": reading,
             "writing": writing,
             "ins_before": instructions["student_instructions_before"],
             "ins_during": instructions["student_instructions_during"],
             "ins_submission": instructions["student_instructions_submission"],
-            "company_bg": instructions["company_background"],
-            "industry_bg": instructions["industry_background"],
-            "mistakes": instructions["faculty_common_mistakes"],
-            "discussion": instructions["faculty_discussion_points"],
-            "key_points": instructions["key_learning_points"],
             "recommended_semesters": json.dumps([semester] if semester else []),
         },
     ).fetchone()
@@ -613,18 +617,17 @@ def publish_from_bank(
         db.execute(
             text("""
                 INSERT INTO case_questions (
-                    case_study_id, question_number, question_text, marks, blooms_level,
+                    case_study_id, question_number, question_text, marks,
                     word_limit_min, word_limit_max, instructions, model_answer,
                     alternative_answers, marking_scheme
                 )
-                VALUES (:cid, :num, :text, :marks, :bloom, :wmin, :wmax, :ins, :model, :alts, :scheme)
+                VALUES (:cid, :num, :text, :marks, :wmin, :wmax, :ins, :model, :alts, :scheme)
             """),
             {
                 "cid": case_id,
                 "num": i + 1,
                 "text": str(q.get("question_text") or ""),
                 "marks": FIXED_QUESTION_MARKS[i] if i < len(FIXED_QUESTION_MARKS) else 2,
-                "bloom": q.get("blooms_level"),
                 "wmin": q.get("word_limit_min"),
                 "wmax": q.get("word_limit_max"),
                 "ins": q.get("instructions"),
@@ -642,7 +645,9 @@ def publish_from_bank(
             missing_fields.append("title")
         if not capabilities:
             missing_fields.append("capabilities")
-        for section in ["situation", "objectives", "timeline", "reflection_questions"]:
+        if not brief.strip():
+            missing_fields.append("description")
+        for section in ["objectives"]:
             value = sections.get(section)
             if not (value if isinstance(value, list) else str(value or "").strip()):
                 missing_fields.append(section)
@@ -685,6 +690,15 @@ def delete_bank_entry(
             status_code=403,
             detail="Only the person who added an entry (or an admin) can delete it",
         )
+    origin_case_id = db.execute(
+        text("SELECT origin_case_id FROM case_study_bank WHERE id = :bid"), {"bid": entry_id}
+    ).scalar()
     db.execute(text("DELETE FROM case_study_bank WHERE id = :bid"), {"bid": entry_id})
+    # An admin removing a bank entry is a moderation decision on the case
+    # itself, not just its shared listing — take the case out of its
+    # creator's Library too. A faculty removing their own listing only
+    # removes it from the bank; the case stays in their own Library.
+    if current_user["role"] == "admin" and origin_case_id:
+        delete_case_and_dependents(db, origin_case_id)
     db.commit()
     return {"status": "deleted", "id": entry_id, "title": row.title}

@@ -11,6 +11,7 @@ import time
 from typing import Any, Dict, Optional
 
 from openai import OpenAI
+from sqlalchemy.orm import Session
 
 GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 GEMINI_DEFAULT_MODEL = "gemini-flash-latest"
@@ -87,7 +88,19 @@ def json_response_format(schema: Dict[str, Any], name: str) -> Dict[str, Any]:
 _TRANSIENT_STATUS = {429, 500, 503}
 
 
-def create_with_retry(client: OpenAI, kwargs: Dict[str, Any], attempts: int = 4) -> Any:
+def create_with_retry(
+    client: OpenAI, kwargs: Dict[str, Any], attempts: int = 4, db: Optional[Session] = None
+) -> Any:
+    # These calls routinely take 30s-3min+ (case generation, evaluation, full
+    # rubric-scored feedback). If a caller's DB session is still checked out
+    # from the request's connection pool while we sit here, Neon (or any
+    # idle-closing Postgres) can drop it out from under us — and since the
+    # connection was never returned to the pool, pool_pre_ping never gets a
+    # chance to validate/reconnect it before the caller's next db.execute()
+    # fails with "SSL connection has been closed unexpectedly". Releasing it
+    # now means the next checkout is fresh and pre_ping-validated.
+    if db is not None:
+        db.close()
     last_error: Optional[Exception] = None
     for attempt in range(attempts):
         try:

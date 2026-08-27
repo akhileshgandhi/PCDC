@@ -206,12 +206,12 @@ def create_case_study(
             INSERT INTO case_studies (
                 title, description, content, domain, difficulty,
                 estimated_minutes, source, status, created_by,
-                evaluation_rubric, learning_outcomes, reflection_questions
+                evaluation_rubric
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty,
                 :estimated_minutes, :source, 'draft', :created_by,
-                :evaluation_rubric, :learning_outcomes, :reflection_questions
+                :evaluation_rubric
             )
             RETURNING id, title, description, domain, difficulty,
                       estimated_minutes, source, status, created_by, created_at
@@ -226,8 +226,6 @@ def create_case_study(
             "source": data.source,
             "created_by": current_user["id"],
             "evaluation_rubric": data.evaluation_rubric,
-            "learning_outcomes": data.learning_outcomes,
-            "reflection_questions": data.reflection_questions,
         },
     )
     row = result.fetchone()
@@ -303,6 +301,7 @@ def list_assigned_case_studies(
                    CASE
                        WHEN ac.status = 'pending' THEN 'available'
                        WHEN ac.status = 'active' THEN 'in_progress'
+                       WHEN csa.status = 'expired' THEN 'expired'
                        ELSE 'completed'
                    END AS status,
                    cs.created_by, cs.case_code, cs.subject, cs.difficulty_label,
@@ -314,6 +313,7 @@ def list_assigned_case_studies(
             JOIN students s ON s.id = ac.student_id
             JOIN users u ON u.id = s.user_id
             JOIN case_studies cs ON cs.id = ac.case_study_id
+            LEFT JOIN case_study_attempts csa ON csa.id = ac.started_attempt_id
             WHERE {" AND ".join(where_clauses)}
             ORDER BY ac.assigned_at DESC
         """),
@@ -403,13 +403,21 @@ def grade_label(total_score: Optional[float]) -> Optional[str]:
     return "Needs Work"
 
 
-def parse_situation(content: Optional[str]) -> str:
-    try:
-        parsed = json.loads(content or "{}")
-    except json.JSONDecodeError:
-        return ""
-    situation = (parsed.get("sections") or {}).get("situation", "")
-    return str(situation or "")
+def marks_from_evaluation(evaluation: Dict[str, Any]) -> Optional[tuple]:
+    """Actual marks scored out of the case's total marks (written question
+    marks + rapid fire marks), mirroring Screen6Evaluation.tsx's calculation —
+    so the case detail page's summary and the full report card always agree,
+    rather than the summary falling back to the raw 0-100 rubric score."""
+    question_scores = evaluation.get("question_scores") or []
+    written_awarded = sum(float(qs.get("marks_awarded") or 0) for qs in question_scores)
+    written_total = sum(float(qs.get("marks_total") or 0) for qs in question_scores)
+    if written_total <= 0:
+        return None
+    rapid_fire_score = float(evaluation.get("rapid_fire_score") or 0)
+    rapid_marks = round(rapid_fire_score / 100 * 3, 1)
+    marks_scored = round(written_awarded + rapid_marks, 1)
+    marks_total = round(written_total + 3, 1)
+    return marks_scored, marks_total
 
 
 def parse_all_sections(content: Optional[str]) -> Dict[str, Any]:
@@ -433,8 +441,7 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
     row = db.execute(
         text("""
             SELECT cs.id, cs.title, cs.description, cs.domain, cs.difficulty,
-                   cs.difficulty_label, cs.content, cs.learning_outcomes,
-                   cs.reflection_questions, cs.reading_time_minutes,
+                   cs.difficulty_label, cs.content, cs.reading_time_minutes,
                    cs.answer_writing_time_minutes, cs.rapid_fire_time_minutes,
                    cs.estimated_minutes, cs.created_at, u.name AS created_by_name
             FROM case_studies cs
@@ -477,15 +484,8 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         "domain": row.domain,
         "difficulty": row.difficulty,
         "difficulty_label": row.difficulty_label,
-        "situation": str_section("situation"),
-        "background": str_section("background"),
         "data": str_section("data"),
-        "characters": str_section("characters"),
-        "constraints": str_section("constraints"),
         "objectives": str_section("objectives"),
-        "timeline": str_section("timeline"),
-        "learning_outcomes": split_lines(row.learning_outcomes),
-        "reflection_questions": split_lines(row.reflection_questions),
         "capabilities": [
             tag["tag_value"] for tag in get_case_tags(db, row.id) if tag["tag_type"] == "capability"
         ],
@@ -547,15 +547,21 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
 
     if not attempt_row:
         attempt = {"exists": False, "attempt_id": None, "status": None, "stage": None,
-                   "stage_label": None, "total_score": None, "grade_label": None}
+                   "stage_label": None, "total_score": None, "grade_label": None,
+                   "marks_scored": None, "marks_total": None}
         return {"case": case, "attempt": attempt}
 
     stage = ATTEMPT_STATUS_STAGE.get(attempt_row.status, 1)
     total_score = None
+    marks_scored = None
+    marks_total = None
     if attempt_row.status == "evaluated":
         evaluation = get_evaluation(db, attempt_row.id)
         if evaluation:
             total_score = evaluation["total_score"]
+            marks = marks_from_evaluation(evaluation)
+            if marks:
+                marks_scored, marks_total = marks
 
     attempt = {
         "exists": True,
@@ -564,6 +570,8 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         "stage": stage,
         "stage_label": ATTEMPT_STAGE_LABELS[stage - 1],
         "total_score": total_score,
+        "marks_scored": marks_scored,
+        "marks_total": marks_total,
         "grade_label": grade_label(total_score),
     }
     return {"case": case, "attempt": attempt}
@@ -627,7 +635,6 @@ def start_case_attempt(
         "case_study_id": case_row.id,
         "title": case_row.title,
         "content": case_row.content,
-        "reflection_questions": case_row.reflection_questions,
         "status": attempt_row.status,
     }
 
@@ -652,7 +659,7 @@ def get_startable_assignment(db: Session, student_user_id: int, case_study_id: i
 def get_published_case_content(db: Session, case_study_id: int) -> Any:
     row = db.execute(
         text("""
-            SELECT id, title, content, reflection_questions
+            SELECT id, title, content
             FROM case_studies
             WHERE id = :case_study_id AND status = 'published'
         """),
@@ -661,30 +668,6 @@ def get_published_case_content(db: Session, case_study_id: int) -> Any:
     if not row:
         raise HTTPException(status_code=404, detail="Case study not found")
     return row
-
-
-OPENING_DISCUSSION_PROMPT = """
-You are an AI business coach helping a student work through a case study.
-Challenge their thinking, ask probing questions, help them see angles they
-may have missed. Do NOT give them the answer.
-
-Start with a brief one-sentence acknowledgment of their analysis, then ask
-one sharp question that challenges an assumption or pushes them to think
-deeper. Keep the whole response to 2-4 sentences.
-"""
-
-
-def generate_opening_discussion_message(
-    db: Session, attempt_id: int, case_title: str, case_situation: str, initial_analysis: str
-) -> str:
-    prompt = (
-        f"Case: {case_title}\n"
-        f"Situation: {case_situation}\n\n"
-        f"Student's initial analysis:\n{initial_analysis}"
-    )
-    message = call_llm(OPENING_DISCUSSION_PROMPT, [{"role": "user", "content": prompt}], 300)
-    log_conversation(db, attempt_id, "ai", "discussion", message)
-    return message
 
 
 def submit_initial_analysis(
@@ -704,8 +687,13 @@ def submit_initial_analysis(
     assert_phase_not_expired(db, attempt.id, "writing")
     if attempt.status != "analysis_submitted":
         raise HTTPException(status_code=400, detail="Initial analysis already submitted")
+    # This flat floor predates per-question word limits and only still makes
+    # sense as a fallback for cases with no structured questions (where the
+    # single combined textarea IS the whole submission) — once a case has its
+    # own per-question limits, those are authoritative and can legitimately
+    # sum to well under 200 words (e.g. three 20-30 word-minimum questions).
     word_count = count_words(initial_analysis)
-    if word_count < 200:
+    if not answers and word_count < 200:
         raise HTTPException(
             status_code=400,
             detail=f"Minimum 200 words required. Current: {word_count} words",
@@ -717,7 +705,7 @@ def submit_initial_analysis(
     if answers:
         limits = db.execute(
             text("""
-                SELECT question_number, word_limit_min, word_limit_max
+                SELECT id, question_number, word_limit_min, word_limit_max
                 FROM case_questions
                 WHERE case_study_id = :case_study_id
             """),
@@ -746,19 +734,34 @@ def submit_initial_analysis(
                         f"(currently {answer_words})."
                     ),
                 )
+        # Persist each answer against its question so it survives a reload —
+        # only the flattened combined text was stored before, which meant a
+        # refresh after submit (or later, during Rapid Fire) had no way to
+        # show the student's own per-question answers back to them.
+        for answer in answers:
+            qn = answer.get("question_number")
+            limit = limit_by_number.get(qn)
+            if not limit:
+                continue
+            answer_text = answer.get("answer_text") or ""
+            db.execute(
+                text("""
+                    INSERT INTO case_question_responses (
+                        attempt_id, question_id, response_text, word_count, submitted_at
+                    )
+                    VALUES (:attempt_id, :question_id, :response_text, :word_count, NOW())
+                """),
+                {
+                    "attempt_id": attempt.id,
+                    "question_id": limit.id,
+                    "response_text": answer_text,
+                    "word_count": count_words(answer_text),
+                },
+            )
     # Ungraded pre-analysis. The frontend enforces the 200-word minimum for a
     # normal submit; we store whatever is provided (e.g. on a timer auto-submit)
     # rather than hard-rejecting, since it carries no marks.
     summary_text = (initial_summary or "").strip() or None
-    case_row = db.execute(
-        text("""
-            SELECT cs.title, cs.content
-            FROM case_study_attempts a
-            JOIN case_studies cs ON cs.id = a.case_study_id
-            WHERE a.id = :attempt_id
-        """),
-        {"attempt_id": attempt.id},
-    ).fetchone()
     db.execute(
         text("""
             UPDATE case_study_attempts
@@ -777,23 +780,12 @@ def submit_initial_analysis(
             "word_count": word_count,
         },
     )
-    # Commit the submission itself before touching the AI. A slow or failing
-    # LLM call must never take the student's submitted analysis down with it —
-    # that's what was turning transient AI hiccups into "submission failed".
     db.commit()
-    try:
-        opening_message = generate_opening_discussion_message(
-            db, attempt.id, case_row.title, parse_situation(case_row.content), initial_analysis
-        )
-    except Exception as error:  # noqa: BLE001 - any AI failure falls back, never blocks submit
-        print(f"OPENING DISCUSSION MESSAGE ERROR: {error}")
-        opening_message = (
-            "Your analysis is in. Let's dig into it — what's the single biggest risk "
-            "in your recommendation, and why?"
-        )
-        log_conversation(db, attempt.id, "ai", "discussion", opening_message)
-    db.commit()
-    return {"ai_unlocked": True, "attempt_id": attempt_id, "opening_message": opening_message}
+    # No opening AI discussion message here — the 4-stage flow (Briefing ->
+    # Analysis -> Rapid Fire -> Evaluation) has no chat screen to show it in,
+    # so generating one only added a slow, blocking LLM call to every submit
+    # for output nothing ever displayed.
+    return {"ai_unlocked": True, "attempt_id": attempt_id, "opening_message": None}
 
 
 def save_analysis_draft(
@@ -851,6 +843,16 @@ def mark_attempt_expired(db: Session, attempt_id: int) -> None:
         ),
         {"attempt_id": attempt_id},
     )
+    # An expired attempt can never be resumed or finished, so it's done as far
+    # as the student's assignment is concerned — without this, assigned_cases
+    # stays 'active' forever and the case keeps showing as an active/in-progress
+    # case study on the dashboard and "My Case Studies" even though it's dead.
+    attempt = db.execute(
+        text("SELECT student_id FROM case_study_attempts WHERE id = :attempt_id"),
+        {"attempt_id": attempt_id},
+    ).fetchone()
+    if attempt is not None:
+        mark_assignment_completed(db, attempt.student_id, attempt_id)
 
 
 def assert_phase_not_expired(db: Session, attempt_id: int, phase: str) -> None:
@@ -966,7 +968,7 @@ def send_ai_message(
     if attempt.status != "ai_discussion":
         raise HTTPException(status_code=403, detail="Please submit your initial analysis first")
     messages = build_discussion_messages(db, attempt, message)
-    response = call_llm(DISCUSSION_SYSTEM_PROMPT, messages, 900)
+    response = call_llm(DISCUSSION_SYSTEM_PROMPT, messages, 900, db=db)
     log_conversation(db, attempt_id, "student", "discussion", message)
     log_conversation(db, attempt_id, "ai", "discussion", response)
     db.commit()
@@ -1021,12 +1023,12 @@ def submit_solution(
 def generate_defense_questions(db: Session, attempt_id: int, final_solution: str) -> List[str]:
     attempt_context = get_attempt_context(db, attempt_id)
     prompt = (
-        f"Case:\n{attempt_context['case_content']}\n\n"
+        f"Case:\n{attempt_context['case_description']}\n\n{attempt_context['case_content']}\n\n"
         f"Initial analysis:\n{attempt_context['initial_analysis']}\n\n"
         f"Final solution:\n{final_solution}"
     )
     response = call_llm(
-        DEFENSE_PROMPT, [{"role": "user", "content": prompt}], 500, force_json=True
+        DEFENSE_PROMPT, [{"role": "user", "content": prompt}], 500, force_json=True, db=db
     )
     data = parse_json_response(response)
     questions = data.get("questions") if isinstance(data, dict) else data
@@ -1067,7 +1069,7 @@ def _generate_rapid_fire_questions(db: Session, attempt: Any) -> List[str]:
     the student's initial analysis AND their structured question answers."""
     row = db.execute(
         text("""
-            SELECT cs.content, a.initial_summary, a.initial_analysis
+            SELECT cs.content, cs.description, a.initial_summary, a.initial_analysis
             FROM case_study_attempts a
             JOIN case_studies cs ON cs.id = a.case_study_id
             WHERE a.id = :attempt_id
@@ -1075,15 +1077,17 @@ def _generate_rapid_fire_questions(db: Session, attempt: Any) -> List[str]:
         {"attempt_id": attempt.id},
     ).fetchone()
     case_content = (row.content if row else "") or ""
+    case_description = (row.description if row else "") or ""
     summary = (row.initial_summary if row else "") or "(no initial analysis submitted)"
     answers = (row.initial_analysis if row else "") or "(no structured answers submitted)"
     prompt = (
+        f"Case description:\n{case_description}\n\n"
         f"Case content:\n{case_content}\n\n"
         f"Student's initial analysis:\n{summary}\n\n"
         f"Student's structured question answers:\n{answers}"
     )
     response = call_llm(
-        RAPID_FIRE_GEN_PROMPT, [{"role": "user", "content": prompt}], 400, force_json=True
+        RAPID_FIRE_GEN_PROMPT, [{"role": "user", "content": prompt}], 400, force_json=True, db=db
     )
     data = parse_json_response(response)
     questions = data.get("questions") if isinstance(data, dict) else data
@@ -1166,6 +1170,21 @@ def submit_rapid_fire(
     update_capability_scores(db, current_user["id"], attempt.id, evaluation)
     mark_assignment_completed(db, current_user["id"], attempt.id)
     queue_completion_notifications(db, current_user["id"], attempt.id, evaluation)
+    # The 4-stage flow (Briefing -> Analysis -> Rapid Fire -> Evaluation) has no
+    # separate reflection step, so this is the only place a new-flow attempt is
+    # ever finalized — without this, the attempt row stays at "defense_complete"
+    # forever, and every read path that checks for "evaluated" (e.g. the case
+    # detail page's Completed vs. In Progress label) keeps treating it as active.
+    db.execute(
+        text("""
+            UPDATE case_study_attempts
+            SET status = 'evaluated',
+                end_time = NOW(),
+                time_taken_minutes = CAST(EXTRACT(EPOCH FROM (NOW() - start_time)) / 60 AS INTEGER)
+            WHERE id = :attempt_id
+        """),
+        {"attempt_id": attempt.id},
+    )
     db.commit()
     evaluation["status"] = "evaluated"
     return evaluation
@@ -1266,6 +1285,7 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
         [{"role": "user", "content": json.dumps(attempt_context)}],
         1200,
         force_json=True,
+        db=db,
     )
     evaluation = normalize_evaluation(parse_json_response(response))
     save_evaluation(db, attempt_id, evaluation)
@@ -1280,7 +1300,7 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
 def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
     row = db.execute(
         text("""
-            SELECT c.title, c.content, c.evaluation_rubric, c.learning_outcomes,
+            SELECT c.title, c.content, c.description, c.evaluation_rubric,
                    a.initial_summary, a.initial_analysis, a.final_solution,
                    a.defense_responses, a.reflection_text, a.initial_word_count,
                    a.time_taken_minutes
@@ -1318,9 +1338,9 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
 
     return {
         "case_title": row.title,
+        "case_description": row.description or "",
         "case_content": row.content,
         "evaluation_rubric": row.evaluation_rubric or "No rubric provided — use general academic standards.",
-        "learning_outcomes": row.learning_outcomes or "",
         "written_questions": [
             {
                 "question_number": qr.question_number,
@@ -1808,7 +1828,25 @@ def attempt_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
         "time_taken_minutes": row.time_taken_minutes,
         "conversations": get_conversations_for_response(db, row.id),
         "evaluation": get_evaluation(db, row.id),
+        "question_answers": get_question_answers_for_response(db, row.id),
     }
+
+
+def get_question_answers_for_response(db: Session, attempt_id: int) -> List[Dict[str, Any]]:
+    rows = db.execute(
+        text("""
+            SELECT cq.question_number, r.response_text
+            FROM case_question_responses r
+            JOIN case_questions cq ON cq.id = r.question_id
+            WHERE r.attempt_id = :attempt_id
+            ORDER BY cq.question_number
+        """),
+        {"attempt_id": attempt_id},
+    ).fetchall()
+    return [
+        {"question_number": row.question_number, "answer_text": row.response_text}
+        for row in rows
+    ]
 
 
 def get_conversations_for_response(db: Session, attempt_id: int) -> List[Dict[str, Any]]:
@@ -1886,6 +1924,7 @@ def call_llm(
     messages: List[Dict[str, str]],
     max_tokens: int,
     force_json: bool = False,
+    db: Optional[Session] = None,
 ) -> str:
     try:
         client = get_llm_client()
@@ -1911,7 +1950,7 @@ def call_llm(
     # models from wrapping the JSON in prose or markdown fences.
     if force_json:
         kwargs["response_format"] = {"type": "json_object"}
-    result = create_with_retry(client, kwargs)
+    result = create_with_retry(client, kwargs, db=db)
     return (result.choices[0].message.content or "").strip()
 
 

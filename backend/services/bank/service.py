@@ -29,9 +29,7 @@ def build_snapshot_from_case(db: Session, case_id: int) -> Optional[Dict[str, An
                    estimated_minutes, subject, functional_area,
                    reading_time_minutes, answer_writing_time_minutes,
                    student_instructions_before, student_instructions_during,
-                   student_instructions_submission, company_background,
-                   industry_background, faculty_common_mistakes,
-                   faculty_discussion_points, key_learning_points,
+                   student_instructions_submission,
                    evaluation_rubric, recommended_semesters
             FROM case_studies WHERE id = :cid
         """),
@@ -43,7 +41,7 @@ def build_snapshot_from_case(db: Session, case_id: int) -> Optional[Dict[str, An
     try:
         content = json.loads(row.content or "{}")
     except json.JSONDecodeError:
-        content = {"sections": {"situation": row.content or ""}}
+        content = {}
     sections = content.get("sections") or {}
 
     capabilities = [
@@ -101,11 +99,6 @@ def build_snapshot_from_case(db: Session, case_id: int) -> Optional[Dict[str, An
             "student_instructions_before": row.student_instructions_before,
             "student_instructions_during": row.student_instructions_during,
             "student_instructions_submission": row.student_instructions_submission,
-            "company_background": row.company_background,
-            "industry_background": row.industry_background,
-            "faculty_common_mistakes": row.faculty_common_mistakes,
-            "faculty_discussion_points": row.faculty_discussion_points,
-            "key_learning_points": row.key_learning_points,
         },
         "questions": questions,
         "case_specific_criteria": (rubric.get("case_specific_criteria") or [])[:2],
@@ -120,11 +113,27 @@ def _first_semester(recommended_semesters: Optional[str]) -> Optional[int]:
         return None
 
 
-def upsert_ai_bank_entry(db: Session, case_id: int, current_user: Dict[str, Any]) -> None:
-    """Store (or refresh) an AI-generated case in the shared bank.
+def _subject_area_tags(db: Session, case_id: int) -> List[str]:
+    return [
+        r.tag_value
+        for r in db.execute(
+            text("""
+                SELECT tag_value FROM case_study_tags
+                WHERE case_study_id = :cid AND tag_type = 'subject_area'
+                ORDER BY tag_value
+            """),
+            {"cid": case_id},
+        ).fetchall()
+    ]
 
-    Called after a successful faculty AI-fill: every faculty's AI-generated
-    case study lands in the bank automatically, tagged with their name.
+
+def upsert_ai_bank_entry(
+    db: Session, case_id: int, current_user: Dict[str, Any], source: str = "ai_generated"
+) -> None:
+    """Store (or refresh) a faculty-created case in the shared bank so any
+    faculty can find and publish it, not just its creator — called after
+    case creation regardless of how the case was authored (AI-fill, bulk
+    upload, or manual "Start from Scratch"), tagged with the creator's name.
     One bank entry per origin case (unique partial index on origin_case_id)."""
     snapshot = build_snapshot_from_case(db, case_id)
     if not snapshot:
@@ -135,6 +144,12 @@ def upsert_ai_bank_entry(db: Session, case_id: int, current_user: Dict[str, Any]
     ).fetchone()
     if not row:
         return
+    # "Start from Scratch"/taxonomy-driven cases store their subject(s) as
+    # tags (a case can have more than one), not in the single case_studies.subject
+    # column — that column is only ever set by the older AI-fill/bulk-upload
+    # paths. Prefer the tags so the bank actually shows what was picked.
+    subject_areas = _subject_area_tags(db, case_id)
+    subject = ", ".join(subject_areas) if subject_areas else row.subject
     db.execute(
         text("""
             INSERT INTO case_study_bank (
@@ -143,7 +158,7 @@ def upsert_ai_bank_entry(db: Session, case_id: int, current_user: Dict[str, Any]
             )
             VALUES (
                 :title, :brief, :snapshot, :subject, :semester, :difficulty,
-                'ai_generated', :uid, :uname, :cid, 'available'
+                :source, :uid, :uname, :cid, 'available'
             )
             ON CONFLICT (origin_case_id) WHERE origin_case_id IS NOT NULL
             DO UPDATE SET
@@ -153,15 +168,17 @@ def upsert_ai_bank_entry(db: Session, case_id: int, current_user: Dict[str, Any]
                 subject = EXCLUDED.subject,
                 semester_number = EXCLUDED.semester_number,
                 difficulty = EXCLUDED.difficulty,
+                source = EXCLUDED.source,
                 updated_at = NOW()
         """),
         {
             "title": row.title,
             "brief": snapshot.get("description") or "",
             "snapshot": json.dumps(snapshot),
-            "subject": row.subject,
+            "subject": subject,
             "semester": _first_semester(row.recommended_semesters),
             "difficulty": row.difficulty or 1,
+            "source": source,
             "uid": current_user["id"],
             "uname": current_user.get("name"),
             "cid": case_id,

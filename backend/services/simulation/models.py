@@ -17,8 +17,6 @@ class CaseStudyCreate(BaseModel):
     estimated_minutes: int = 45
     source: str = "faculty"
     evaluation_rubric: Optional[str] = None
-    learning_outcomes: Optional[str] = None
-    reflection_questions: Optional[str] = None
     tags: List[CaseStudyTagInput] = Field(default_factory=list)
 
 
@@ -56,7 +54,6 @@ class StartAttemptResponse(BaseModel):
     case_study_id: int
     title: str
     content: str
-    reflection_questions: Optional[str] = None
     status: str
 
 
@@ -168,3 +165,4 @@ class CaseAttemptResponse(BaseModel):
     time_taken_minutes: Optional[int] = None
     conversations: List[Dict[str, Any]] = Field(default_factory=list)
     evaluation: Optional[Dict[str, Any]] = None
+    question_answers: List[Dict[str, Any]] = Field(default_factory=list)

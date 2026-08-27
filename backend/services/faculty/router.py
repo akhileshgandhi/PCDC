@@ -39,18 +39,11 @@ VALID_DOMAINS = {
 }
 
 CASE_SECTIONS = [
-    "situation",
-    "background",
     "data",
-    "characters",
-    "constraints",
     "objectives",
-    "timeline",
-    "reflection_questions",
-    "learning_outcomes",
 ]
 
-ARRAY_SECTIONS = {"reflection_questions", "learning_outcomes"}
+ARRAY_SECTIONS: set = set()
 
 DEFAULT_CAPABILITIES = [
     "Communication",
@@ -100,14 +93,39 @@ DIFFICULTY_LABELS = ["Foundation", "Regular", "Pro", "Expert", "Champion"]
 FIXED_QUESTION_MARKS = [2, 2, 3]
 RAPID_FIRE_GENERATION_COUNT = 3
 
+# Bloom's Taxonomy is a case-level property, not an independently-editable
+# per-question field — every case targets the same cognitive level across all
+# its questions. Faculty/admin pick it explicitly from BLOOM_LEVELS at the
+# case level; BLOOMS_BY_DIFFICULTY only supplies a sensible starting value
+# (e.g. when a case is first created) rather than forcing the value.
+BLOOM_LEVELS: List[str] = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
+
+BLOOMS_BY_DIFFICULTY: Dict[int, List[str]] = {
+    1: ["Remember", "Understand"],
+    2: ["Apply"],
+    3: ["Analyze"],
+    4: ["Evaluate"],
+    5: ["Create"],
+}
+
+
+def blooms_levels_for_difficulty(difficulty: int) -> str:
+    return json.dumps(BLOOMS_BY_DIFFICULTY.get(difficulty, []))
+
+
+def normalize_blooms_levels(value: Any) -> Optional[str]:
+    if not value:
+        return None
+    items = value if isinstance(value, list) else [value]
+    cleaned = [str(item).strip() for item in items if str(item).strip() in BLOOM_LEVELS]
+    return json.dumps(cleaned) if cleaned else None
+
+
 GENERATE_QUESTIONS_PROMPT = """
 You are generating Structured Written Questions for an MBA/PGDM business
 case study simulation. Given the case's core fields and a short case summary,
 produce exactly 3 written questions with model answers and a marking scheme,
-calibrated to the stated difficulty and targeted capabilities. Follow a
-Bloom's taxonomy progression across the 3 questions: question 1 should test
-lower-order thinking (Remember/Understand), question 2 middle-order
-(Apply/Analyze), and question 3 higher-order thinking (Evaluate/Create).
+calibrated to the stated difficulty and targeted capabilities.
 Output must match the provided JSON schema exactly.
 """
 
@@ -132,7 +150,12 @@ class CaseCoreFields(BaseModel):
     difficulty: int
     duration_minutes: int
     capabilities: List[str] = Field(default_factory=list)
+    subject_areas: List[str] = Field(default_factory=list)
     expected_outcomes: Optional[str] = ""
+    sections: Optional[Dict[str, Any]] = None
+    section_meta: Optional[Dict[str, str]] = None
+    questions: Optional[List[Dict[str, Any]]] = None
+    rubric: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
     timing: Optional[Dict[str, Any]] = None
     marks: Optional[Dict[str, Any]] = None
@@ -146,6 +169,7 @@ class CaseUpdateRequest(BaseModel):
     difficulty: Optional[int] = None
     duration_minutes: Optional[int] = None
     capabilities: Optional[List[str]] = None
+    subject_areas: Optional[List[str]] = None
     expected_outcomes: Optional[str] = None
     sections: Optional[Dict[str, Any]] = None
     section_meta: Optional[Dict[str, str]] = None
@@ -203,6 +227,14 @@ def require_faculty(current_user: Dict[str, Any]) -> None:
         raise HTTPException(status_code=403, detail="Faculty access required")
 
 
+def require_admin(current_user: Dict[str, Any]) -> None:
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="This case can only be edited by an admin.",
+        )
+
+
 def normalize_domain(value: str) -> str:
     normalized = value.strip().lower().replace(" ", "_")
     if normalized not in VALID_DOMAINS:
@@ -214,8 +246,8 @@ def validate_core_fields(data: CaseCoreFields) -> None:
     if not data.title.strip():
         raise HTTPException(status_code=400, detail="Title is required")
     normalize_domain(data.industry)
-    if data.difficulty < 1 or data.difficulty > 7:
-        raise HTTPException(status_code=400, detail="Difficulty must be between 1 and 7")
+    if data.difficulty < 1 or data.difficulty > 5:
+        raise HTTPException(status_code=400, detail="Difficulty must be between 1 and 5")
     if data.duration_minutes < 1:
         raise HTTPException(status_code=400, detail="Duration must be at least 1 minute")
     if not data.capabilities:
@@ -308,18 +340,13 @@ def json_text(value: Any) -> Optional[str]:
 
 def normalize_case_metadata(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     data = data or {}
-    blooms = data.get("blooms_levels")
-    if isinstance(blooms, list):
-        blooms_value = json.dumps([str(item).strip() for item in blooms if str(item).strip()])
-    else:
-        blooms_value = text_value(blooms)
     return {
         "case_code": text_value(data.get("case_code")),
         "volume": text_value(data.get("volume")),
         "subject": text_value(data.get("subject")),
         "functional_area": text_value(data.get("functional_area")),
         "capability_category": text_value(data.get("capability_category")),
-        "blooms_levels": blooms_value,
+        "blooms_levels": normalize_blooms_levels(data.get("blooms_levels")),
         "target_learners": text_value(data.get("target_learners")),
         "difficulty_label": text_value(data.get("difficulty_label")),
     }
@@ -370,11 +397,6 @@ def normalize_case_instructions(data: Optional[Dict[str, Any]]) -> Dict[str, Any
         "student_instructions_submission": text_value(
             data.get("student_instructions_submission")
         ),
-        "company_background": text_value(data.get("company_background")),
-        "industry_background": text_value(data.get("industry_background")),
-        "faculty_common_mistakes": text_value(data.get("faculty_common_mistakes")),
-        "faculty_discussion_points": text_value(data.get("faculty_discussion_points")),
-        "key_learning_points": text_value(data.get("key_learning_points")),
     }
 
 
@@ -448,11 +470,6 @@ def instructions_from_row(row: Any) -> Dict[str, Any]:
         "student_instructions_before": values.get("student_instructions_before"),
         "student_instructions_during": values.get("student_instructions_during"),
         "student_instructions_submission": values.get("student_instructions_submission"),
-        "company_background": values.get("company_background"),
-        "industry_background": values.get("industry_background"),
-        "faculty_common_mistakes": values.get("faculty_common_mistakes"),
-        "faculty_discussion_points": values.get("faculty_discussion_points"),
-        "key_learning_points": values.get("key_learning_points"),
     }
 
 
@@ -516,6 +533,43 @@ def get_capability_tags(db: Session, case_id: int) -> List[str]:
         {"case_id": case_id},
     ).fetchall()
     return [row.tag_value for row in rows]
+
+
+def get_subject_area_tags(db: Session, case_id: int) -> List[str]:
+    rows = db.execute(
+        text("""
+            SELECT tag_value
+            FROM case_study_tags
+            WHERE case_study_id = :case_id AND tag_type = 'subject_area'
+            ORDER BY tag_value
+        """),
+        {"case_id": case_id},
+    ).fetchall()
+    return [row.tag_value for row in rows]
+
+
+def replace_subject_area_tags(db: Session, case_id: int, subject_areas: List[str]) -> None:
+    # Subjects are whatever the faculty teaches (from My Teachings), not a
+    # fixed taxonomy — same lenient handling as capability tags.
+    db.execute(
+        text("""
+            DELETE FROM case_study_tags
+            WHERE case_study_id = :case_id AND tag_type = 'subject_area'
+        """),
+        {"case_id": case_id},
+    )
+    for area in subject_areas:
+        tag_value = area.strip()
+        if not tag_value:
+            continue
+        db.execute(
+            text("""
+                INSERT INTO case_study_tags (case_study_id, tag_type, tag_value)
+                VALUES (:case_id, 'subject_area', :tag_value)
+                ON CONFLICT (case_study_id, tag_type, tag_value) DO NOTHING
+            """),
+            {"case_id": case_id, "tag_value": tag_value},
+        )
 
 
 def get_active_attempts_count(db: Session, case_id: int) -> int:
@@ -635,14 +689,13 @@ def replace_capability_tags(db: Session, case_id: int, capabilities: List[str]) 
 
 CASE_EDITOR_COLUMNS = """
     id, title, description, content, domain, difficulty, estimated_minutes,
-    status, evaluation_rubric, reflection_questions, learning_outcomes,
+    status, evaluation_rubric, created_by,
     case_code, volume, subject, functional_area, capability_category,
     blooms_levels, target_learners, difficulty_label, reading_time_minutes,
     answer_writing_time_minutes, rapid_fire_time_minutes, total_marks,
     written_marks, rapid_fire_marks, student_instructions_before,
     student_instructions_during, student_instructions_submission,
-    company_background, industry_background, faculty_common_mistakes,
-    faculty_discussion_points, key_learning_points, recommended_semesters,
+    recommended_semesters,
     recommended_course_ids, created_at, updated_at
 """
 
@@ -784,7 +837,9 @@ def case_editor_response(db: Session, row: Any) -> Dict[str, Any]:
         "questions": get_case_questions(db, row.id),
         "rapid_fire_questions": get_rapid_fire_questions(db, row.id),
         "status": row.status,
+        "created_by": row.created_by,
         "capabilities": get_capability_tags(db, row.id),
+        "subject_areas": get_subject_area_tags(db, row.id),
         "expected_outcomes": parsed_content["expected_outcomes"],
         "sections": parsed_content["sections"],
         "section_meta": parsed_content["section_meta"],
@@ -807,6 +862,51 @@ def get_owned_case_row(db: Session, case_id: int, current_user: Dict[str, Any]) 
     if not row:
         raise HTTPException(status_code=404, detail="Case study not found")
     return row
+
+
+def get_case_row_for_read(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
+    """Admin can read any case; faculty can only read their own (any status)."""
+    if current_user["role"] == "admin":
+        row = db.execute(
+            text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
+            {"case_id": case_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Case study not found")
+        return row
+    return get_owned_case_row(db, case_id, current_user)
+
+
+def get_case_row_for_mutation(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
+    """Only an admin may mutate an existing case study — faculty cannot edit,
+    delete, or regenerate a case once it exists (even their own), regardless
+    of status. Publish is the one exception — see get_case_row_for_publish."""
+    require_admin(current_user)
+    row = db.execute(
+        text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
+        {"case_id": case_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case study not found")
+    return row
+
+
+def get_case_row_for_publish(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
+    """Admin can publish any case; faculty can publish only their own — the
+    one exception to the admin-only mutation rule. Faculty still can't edit
+    the case beforehand (only view it), but since "Start from Scratch" and
+    "Generate with AI" already collect the complete case in one shot, its
+    own creator publishing it doesn't bypass any review of content they
+    didn't already fully author themselves."""
+    if current_user["role"] == "admin":
+        row = db.execute(
+            text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
+            {"case_id": case_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Case study not found")
+        return row
+    return get_owned_case_row(db, case_id, current_user)
 
 
 def validate_sections(sections: List[str]) -> List[str]:
@@ -853,9 +953,7 @@ def build_case_generation_prompt(
         "existing_sections_for_consistency": existing_sections,
         "requested_sections": requested_sections,
         "section_contract": {
-            "reflection_questions": "array of analysis-focused question strings",
-            "learning_outcomes": "array of learning outcome strings",
-            "all_other_sections": "polished faculty-editable text strings",
+            "all_sections": "polished faculty-editable text strings",
         },
     }
     return json.dumps(prompt)
@@ -882,6 +980,7 @@ def call_openai_case_generation(
     expected_outcomes: str,
     existing_sections: Dict[str, Any],
     requested_sections: List[str],
+    db: Optional[Session] = None,
 ) -> Dict[str, Any]:
     client = get_llm_client()
     response = create_with_retry(client, {
@@ -903,7 +1002,7 @@ def call_openai_case_generation(
             build_case_generation_schema(requested_sections), "faculty_case_generation"
         ),
         "timeout": 60,
-    })
+    }, db=db)
     content = response.choices[0].message.content
     return validate_generated_sections(parse_json_content(content), requested_sections)
 
@@ -922,7 +1021,6 @@ def build_generate_questions_schema() -> Dict[str, Any]:
                     "additionalProperties": False,
                     "properties": {
                         "question_text": {"type": "string"},
-                        "blooms_level": {"type": "string"},
                         "word_limit_min": {"type": "integer"},
                         "word_limit_max": {"type": "integer"},
                         "instructions": {"type": "string"},
@@ -932,7 +1030,6 @@ def build_generate_questions_schema() -> Dict[str, Any]:
                     },
                     "required": [
                         "question_text",
-                        "blooms_level",
                         "word_limit_min",
                         "word_limit_max",
                         "instructions",
@@ -997,7 +1094,6 @@ def call_openai_generate_questions(
             "question_number": index + 1,
             "question_text": str(question.get("question_text", "")).strip(),
             "marks": FIXED_QUESTION_MARKS[index],
-            "blooms_level": text_value(question.get("blooms_level")),
             "word_limit_min": int_value(question.get("word_limit_min")),
             "word_limit_max": int_value(question.get("word_limit_max")),
             "instructions": text_value(question.get("instructions")),
@@ -1058,6 +1154,7 @@ def call_openai_generate_rapid_fire(
     capabilities: List[str],
     difficulty_label: str,
     summary: str,
+    db: Optional[Session] = None,
 ) -> List[Dict[str, Any]]:
     client = get_llm_client()
     response = create_with_retry(client, {
@@ -1075,7 +1172,7 @@ def call_openai_generate_rapid_fire(
             build_generate_rapid_fire_schema(), "faculty_generate_rapid_fire"
         ),
         "timeout": 60,
-    })
+    }, db=db)
     content = response.choices[0].message.content
     questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != RAPID_FIRE_GENERATION_COUNT:
@@ -1131,11 +1228,11 @@ def run_case_generation_job(
             text("""
                 SELECT id, title, description, content, domain, difficulty,
                        estimated_minutes, status, evaluation_rubric,
-                       reflection_questions, learning_outcomes, created_at, updated_at
+                       created_at, updated_at
                 FROM case_studies
-                WHERE id = :case_id AND created_by = :faculty_id
+                WHERE id = :case_id
             """),
-            {"case_id": case_id, "faculty_id": faculty_id},
+            {"case_id": case_id},
         ).fetchone()
         if not row:
             raise RuntimeError("Case study not found")
@@ -1149,6 +1246,7 @@ def run_case_generation_job(
             parsed_content["expected_outcomes"],
             sections,
             requested_sections,
+            db=db,
         )
 
         for section, value in generated.items():
@@ -1159,22 +1257,17 @@ def run_case_generation_job(
             text("""
                 UPDATE case_studies
                 SET content = :content,
-                    reflection_questions = :reflection_questions,
-                    learning_outcomes = :learning_outcomes,
                     updated_at = NOW()
-                WHERE id = :case_id AND created_by = :faculty_id
+                WHERE id = :case_id
                 RETURNING id, title, description, content, domain, difficulty,
-                          estimated_minutes, status, evaluation_rubric,
-                          reflection_questions, learning_outcomes, created_at, updated_at
+                          estimated_minutes, status, evaluation_rubric, created_by,
+                          created_at, updated_at
             """),
             {
                 "case_id": case_id,
-                "faculty_id": faculty_id,
                 "content": serialize_case_content(
                     parsed_content["expected_outcomes"], sections, section_meta
                 ),
-                "reflection_questions": section_to_text(sections.get("reflection_questions")),
-                "learning_outcomes": section_to_text(sections.get("learning_outcomes")),
             },
         )
         updated_row = result.fetchone()
@@ -1306,8 +1399,11 @@ def faculty_cases(
 ) -> List[Dict[str, Any]]:
     require_faculty(current_user)
 
-    where_clauses = ["cs.created_by = :faculty_id"]
-    params: Dict[str, Any] = {"faculty_id": current_user["id"]}
+    where_clauses: List[str] = []
+    params: Dict[str, Any] = {}
+    if current_user["role"] != "admin":
+        where_clauses.append("cs.created_by = :faculty_id")
+        params["faculty_id"] = current_user["id"]
 
     if domain:
         where_clauses.append("cs.domain = :domain")
@@ -1335,7 +1431,7 @@ def faculty_cases(
                 COUNT(csa.id) AS attempts_count
             FROM case_studies cs
             LEFT JOIN case_study_attempts csa ON csa.case_study_id = cs.id
-            WHERE {" AND ".join(where_clauses)}
+            {"WHERE " + " AND ".join(where_clauses) if where_clauses else ""}
             GROUP BY cs.id
             ORDER BY cs.updated_at DESC, cs.created_at DESC
         """),
@@ -1527,10 +1623,26 @@ def create_faculty_case(
     validate_core_fields(data)
     domain = normalize_domain(data.industry)
     sections = empty_sections()
+    if data.sections:
+        for section, value in data.sections.items():
+            if section in CASE_SECTIONS:
+                sections[section] = normalize_section_value(section, value)
     section_meta = empty_section_meta()
+    if data.section_meta:
+        for section, value in data.section_meta.items():
+            if section in CASE_SECTIONS:
+                section_meta[section] = value
+    else:
+        for section in CASE_SECTIONS:
+            if section_has_content(sections.get(section)):
+                section_meta[section] = "manual"
     expected_outcomes = data.expected_outcomes or ""
     content = serialize_case_content(expected_outcomes, sections, section_meta)
     metadata = normalize_case_metadata(data.metadata)
+    if not metadata["blooms_levels"]:
+        # Sensible starting value only — faculty/admin can pick a different
+        # level explicitly; this does not override an explicit selection.
+        metadata["blooms_levels"] = blooms_levels_for_difficulty(data.difficulty)
     timing = normalize_case_timing(data.timing)
     marks = normalize_case_marks(data.marks)
     instructions = normalize_case_instructions(data.instructions)
@@ -1541,29 +1653,25 @@ def create_faculty_case(
             INSERT INTO case_studies (
                 title, description, content, domain, difficulty,
                 estimated_minutes, source, status, created_by,
-                learning_outcomes, reflection_questions, case_code, volume,
+                case_code, volume,
                 subject, functional_area, capability_category, blooms_levels,
                 target_learners, difficulty_label, reading_time_minutes,
                 answer_writing_time_minutes, rapid_fire_time_minutes,
                 total_marks, written_marks, rapid_fire_marks,
                 student_instructions_before, student_instructions_during,
-                student_instructions_submission, company_background,
-                industry_background, faculty_common_mistakes,
-                faculty_discussion_points, key_learning_points,
+                student_instructions_submission,
                 recommended_semesters, recommended_course_ids
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty,
                 :estimated_minutes, 'faculty', 'draft', :created_by,
-                '', '', :case_code, :volume, :subject, :functional_area,
+                :case_code, :volume, :subject, :functional_area,
                 :capability_category, :blooms_levels, :target_learners,
                 :difficulty_label, :reading_time_minutes,
                 :answer_writing_time_minutes, :rapid_fire_time_minutes,
                 :total_marks, :written_marks, :rapid_fire_marks,
                 :student_instructions_before, :student_instructions_during,
-                :student_instructions_submission, :company_background,
-                :industry_background, :faculty_common_mistakes,
-                :faculty_discussion_points, :key_learning_points,
+                :student_instructions_submission,
                 :recommended_semesters, :recommended_course_ids
             )
             RETURNING """ + CASE_EDITOR_COLUMNS + """
@@ -1584,9 +1692,345 @@ def create_faculty_case(
         },
     )
     row = result.fetchone()
-    replace_capability_tags(db, row.id, data.capabilities)
+    case_id = row.id
+    replace_capability_tags(db, case_id, data.capabilities)
+    replace_subject_area_tags(db, case_id, data.subject_areas)
+    replace_case_questions(db, case_id, data.questions)
+    # Rapid Fire questions are always AI-generated live per student attempt —
+    # faculty never author them, so there's no rapid_fire_questions input here.
+    # Use the faculty-provided rubric if given; otherwise default weights so
+    # a fully-filled-in draft is already publish-ready without an extra step
+    # — same default AI-fill and bulk-upload already apply.
+    if data.rubric:
+        rubric_payload = validate_rubric(RubricRequest(**data.rubric))
+    else:
+        rubric_payload = validate_rubric(
+            RubricRequest(weights=dict(DEFAULT_RUBRIC_WEIGHTS), case_specific_criteria=[])
+        )
+    updated = db.execute(
+        text(f"""
+            UPDATE case_studies SET evaluation_rubric = :r WHERE id = :cid
+            RETURNING {CASE_EDITOR_COLUMNS}
+        """),
+        {"r": json.dumps(rubric_payload), "cid": case_id},
+    ).fetchone()
+    # Every faculty-created case lands in the shared Case Bank, regardless of
+    # how it was created — same as AI-fill and bulk-upload — so any faculty
+    # can find and publish it into their own sections, not just its creator.
+    # This one was manually authored via the Case Builder ("Start from
+    # Scratch"), not uploaded as a document or AI-generated, so label it
+    # distinctly — "uploaded" specifically means the Bank's own upload-a-
+    # document flow and would be misleading here.
+    upsert_ai_bank_entry(db, case_id, current_user, source="case_builder")
     db.commit()
-    return case_editor_response(db, row)
+    return case_editor_response(db, updated)
+
+
+def extract_text_from_upload(filename: str, content: bytes) -> str:
+    lower = (filename or "").lower()
+    if lower.endswith(".docx"):
+        from docx import Document
+
+        document = Document(io.BytesIO(content))
+        return "\n".join(p.text for p in document.paragraphs if p.text.strip())
+    if lower.endswith(".pdf"):
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(content))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    if lower.endswith(".txt") or lower.endswith(".md"):
+        return content.decode("utf-8", errors="ignore")
+    raise ValueError("Unsupported file type — upload a .docx or .pdf file")
+
+
+BULK_SPLIT_PROMPT = """
+You are given the raw text extracted from a faculty-uploaded document that
+may contain ONE OR MORE separate business case studies concatenated together.
+Identify each distinct case study and return each one's full original text
+as a separate array element, in document order. Copy the original text
+verbatim into each element (do not summarize, translate, or rewrite it),
+including its title and all its content. If the document contains only one
+case study, return an array with exactly one element containing the entire
+relevant text. Ignore boilerplate such as a cover page, table of contents,
+or footer that isn't part of any case's content.
+"""
+
+
+def build_bulk_split_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"cases": {"type": "array", "items": {"type": "string"}}},
+        "required": ["cases"],
+    }
+
+
+def split_bulk_upload_text(raw_text: str, db: Optional[Session] = None) -> List[str]:
+    client = get_llm_client()
+    response = create_with_retry(client, {
+        "model": get_llm_model(CASE_GENERATION_MODEL),
+        "messages": [
+            {"role": "system", "content": BULK_SPLIT_PROMPT},
+            {"role": "user", "content": raw_text[:60000]},
+        ],
+        "response_format": json_response_format(build_bulk_split_schema(), "bulk_case_split"),
+        "max_tokens": 16000,
+        "timeout": 120,
+    }, db=db)
+    parsed = parse_json_content(response.choices[0].message.content)
+    cases = parsed.get("cases") if isinstance(parsed, dict) else None
+    if not isinstance(cases, list) or not cases:
+        raise ValueError("Could not detect any case studies in this document")
+    cleaned = [str(item).strip() for item in cases if str(item).strip()]
+    if not cleaned:
+        raise ValueError("Could not detect any case studies in this document")
+    return cleaned
+
+
+BULK_EXTRACT_SYSTEM_PROMPT = """You are extracting a structured case study record from the raw text of an
+existing, already-written business case study document, for PCDC Case Studio.
+
+Unlike drafting a new case from a one-line brief, your job here is EXTRACTION,
+not invention: pull the title, narrative, data, objectives, and questions
+directly from the given text. Preserve the author's actual wording, numbers,
+and structure as closely as possible — do not invent new plot details,
+characters, or figures that are not present in the source text.
+
+Guidelines:
+- If the source clearly states difficulty, industry, subject, or capability,
+  use it. If it doesn't, infer the most reasonable value from the actual
+  content of the text — do not guess ungrounded from it.
+- Produce EXACTLY 3 written questions. If the source already poses discussion
+  questions, select or merge them into exactly 3 of increasing depth using
+  the source's own questions — do not invent unrelated new ones if the
+  source already provides usable questions. Where a model answer or marking
+  scheme isn't given in the source, write a concise one grounded in the
+  source's own facts.
+
+Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
+{
+  "title": string,
+  "description": string — the case's full narrative as extracted/preserved from the source (company/industry context, situation, people, constraints, timeline — flowing prose),
+  "capabilities": array of 1-3 strings — the primary capability(ies) the case assesses,
+  "difficulty": integer 1-5 — 1: Remember/Understand (easy), 2: Apply, 3: Analyze (moderate), 4: Evaluate, 5: Create (hard),
+  "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
+  "subject": string,
+  "functional_area": string,
+  "data": string — key facts and figures from the source,
+  "objectives": string — what the student must analyse, achieve, or decide,
+  "student_instructions_before": string,
+  "student_instructions_during": string,
+  "student_instructions_submission": string,
+  "reading_time_minutes": integer,
+  "questions": array of EXACTLY 3 objects, each with keys:
+      "question_text": string,
+      "word_limit_min": integer,
+      "word_limit_max": integer,
+      "instructions": string,
+      "model_answer": string,
+      "alternative_answers": array of strings,
+      "marking_scheme": string,
+  "case_specific_criteria": array of up to 2 short strings
+}
+Do not include markdown, comments, or any keys other than those listed."""
+
+
+def extract_bulk_case_fields(case_text: str, db: Optional[Session] = None) -> Dict[str, Any]:
+    client = get_llm_client()
+    response = create_with_retry(client, {
+        "model": get_llm_model(CASE_GENERATION_MODEL),
+        "messages": [
+            {"role": "system", "content": BULK_EXTRACT_SYSTEM_PROMPT},
+            {"role": "user", "content": case_text[:30000]},
+        ],
+        "response_format": json_response_format(_ai_fill_schema(), "faculty_case_bulk_extract"),
+        "max_tokens": 16000,
+        "timeout": 180,
+    }, db=db)
+    parsed = parse_json_content(response.choices[0].message.content)
+    if not isinstance(parsed, dict):
+        raise ValueError("AI could not extract structured data from this case")
+    return parsed
+
+
+def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str, Any]) -> int:
+    def _s(key: str) -> str:
+        return str(parsed.get(key) or "").strip()
+
+    def _list(key: str) -> List[str]:
+        val = parsed.get(key)
+        return [str(x).strip() for x in val if str(x).strip()] if isinstance(val, list) else []
+
+    title = _s("title")
+    description = _s("description")
+    if not title:
+        raise ValueError("Could not find a title in this case")
+    if not description:
+        raise ValueError("Could not find a description/narrative in this case")
+
+    try:
+        industry = normalize_domain(_s("industry"))
+    except HTTPException:
+        industry = "business"
+
+    try:
+        difficulty = max(1, min(5, int(parsed.get("difficulty") or 3)))
+    except (TypeError, ValueError):
+        difficulty = 3
+
+    capabilities = _list("capabilities")
+    if not capabilities:
+        raise ValueError("Could not determine a capability for this case")
+
+    objectives = _s("objectives")
+    if not objectives:
+        raise ValueError("Could not find objectives for this case")
+    sections = {"data": _s("data"), "objectives": objectives}
+    section_meta = {"data": "ai_generated", "objectives": "ai_generated"}
+    content = serialize_case_content(description, sections, section_meta)
+
+    try:
+        reading = max(1, int(parsed.get("reading_time_minutes") or 8))
+    except (TypeError, ValueError):
+        reading = 8
+    writing = 12
+    duration = reading + writing + RAPID_FIRE_TIME_MINUTES
+
+    marks = normalize_case_marks({"total_marks": TOTAL_MARKS})
+    written_marks_dist = _distribute_marks(TOTAL_MARKS - RAPID_FIRE_MARKS)
+
+    raw_questions = parsed.get("questions")
+    raw_questions = raw_questions if isinstance(raw_questions, list) else []
+    questions = []
+    for i in range(3):
+        q = raw_questions[i] if i < len(raw_questions) and isinstance(raw_questions[i], dict) else {}
+        question_text = str(q.get("question_text") or "").strip()
+        if not question_text:
+            continue
+        questions.append({
+            "question_number": i + 1,
+            "question_text": question_text,
+            "marks": written_marks_dist[i],
+            "word_limit_min": q.get("word_limit_min"),
+            "word_limit_max": q.get("word_limit_max"),
+            "instructions": str(q.get("instructions") or "").strip(),
+            "model_answer": str(q.get("model_answer") or "").strip(),
+            "alternative_answers": [str(x).strip() for x in (q.get("alternative_answers") or []) if str(x).strip()],
+            "marking_scheme": str(q.get("marking_scheme") or "").strip(),
+        })
+    if len(questions) < 3:
+        raise ValueError("Could not find 3 written questions in this case")
+
+    result = db.execute(
+        text("""
+            INSERT INTO case_studies (
+                title, description, content, domain, difficulty, estimated_minutes,
+                source, status, created_by, subject, functional_area, blooms_levels,
+                reading_time_minutes, answer_writing_time_minutes, rapid_fire_time_minutes,
+                total_marks, written_marks, rapid_fire_marks,
+                student_instructions_before, student_instructions_during,
+                student_instructions_submission
+            )
+            VALUES (
+                :title, :description, :content, :domain, :difficulty, :estimated_minutes,
+                'faculty', 'draft', :created_by, :subject, :functional_area, :blooms_levels,
+                :reading, :writing, :rapid_fire_time,
+                :total_marks, :written_marks, :rapid_fire_marks,
+                :ins_before, :ins_during, :ins_submission
+            )
+            RETURNING id
+        """),
+        {
+            "title": title,
+            "description": description,
+            "content": content,
+            "domain": industry,
+            "difficulty": difficulty,
+            "estimated_minutes": duration,
+            "created_by": faculty_id,
+            "subject": _s("subject") or None,
+            "functional_area": _s("functional_area") or None,
+            "blooms_levels": blooms_levels_for_difficulty(difficulty),
+            "reading": reading,
+            "writing": writing,
+            "rapid_fire_time": RAPID_FIRE_TIME_MINUTES,
+            "total_marks": marks["total_marks"],
+            "written_marks": marks["written_marks"],
+            "rapid_fire_marks": marks["rapid_fire_marks"],
+            "ins_before": _s("student_instructions_before") or None,
+            "ins_during": _s("student_instructions_during") or None,
+            "ins_submission": _s("student_instructions_submission") or None,
+        },
+    ).fetchone()
+    case_id = result.id
+
+    replace_capability_tags(db, case_id, capabilities)
+    replace_case_questions(db, case_id, questions)
+
+    criteria = _list("case_specific_criteria")[:2]
+    rubric = validate_rubric(RubricRequest(weights=dict(DEFAULT_RUBRIC_WEIGHTS), case_specific_criteria=criteria))
+    db.execute(
+        text("UPDATE case_studies SET evaluation_rubric = :r WHERE id = :cid"),
+        {"r": json.dumps(rubric), "cid": case_id},
+    )
+
+    return case_id
+
+
+@faculty_router.post("/cases/bulk-upload")
+def faculty_cases_bulk_upload(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Upload a single Word (.docx) or PDF document containing one or more
+    case studies. The document is split (when it contains multiple cases)
+    and each case's fields are extracted by AI into the same structured
+    shape as manual case creation, then saved as a draft — same as any other
+    faculty-created case: faculty can view but not edit it afterward, only
+    an admin can review, edit, and publish it."""
+    require_faculty(current_user)
+    faculty_id = current_user["id"]
+
+    content = file.file.read()
+    try:
+        raw_text = extract_text_from_upload(file.filename or "", content)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    if not raw_text.strip():
+        raise HTTPException(status_code=400, detail="No readable text found in this file")
+
+    try:
+        case_chunks = split_bulk_upload_text(raw_text, db=db)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Could not process this document: {exc}")
+
+    created: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+    for i, chunk in enumerate(case_chunks, start=1):
+        title_guess = f"Case {i}"
+        try:
+            parsed = extract_bulk_case_fields(chunk, db=db)
+            title_guess = str(parsed.get("title") or title_guess).strip() or title_guess
+            case_id = _create_case_from_extraction(db, faculty_id, parsed)
+            upsert_ai_bank_entry(db, case_id, current_user)
+            db.commit()
+            created.append({"row": i, "id": case_id, "title": title_guess})
+        except ValueError as error:
+            db.rollback()
+            errors.append({"row": i, "title": title_guess, "reason": str(error)})
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            errors.append({"row": i, "title": title_guess, "reason": "Could not process this case"})
+
+    return {
+        "created": created,
+        "errors": errors,
+        "created_count": len(created),
+        "error_count": len(errors),
+    }
 
 
 @faculty_router.get("/cases/assigned")
@@ -1640,24 +2084,11 @@ def get_faculty_case(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    row = get_case_row_for_read(db, case_id, current_user)
     return case_editor_response(db, row)
 
 
-@faculty_router.delete("/cases/{case_id}")
-def delete_faculty_case(
-    case_id: int,
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
-    require_faculty(current_user)
-    owned = db.execute(
-        text("SELECT id, title FROM case_studies WHERE id = :cid AND created_by = :faculty_id"),
-        {"cid": case_id, "faculty_id": current_user["id"]},
-    ).fetchone()
-    if not owned:
-        raise HTTPException(status_code=404, detail="Case study not found")
-
+def delete_case_and_dependents(db: Session, case_id: int) -> None:
     params = {"cid": case_id}
     attempt_filter = (
         "attempt_id IN (SELECT id FROM case_study_attempts WHERE case_study_id = :cid)"
@@ -1681,12 +2112,19 @@ def delete_faculty_case(
     ]
     for stmt in statements:
         db.execute(text(stmt), params)
-    db.execute(
-        text("DELETE FROM case_studies WHERE id = :cid AND created_by = :faculty_id"),
-        {"cid": case_id, "faculty_id": current_user["id"]},
-    )
+    db.execute(text("DELETE FROM case_studies WHERE id = :cid"), {"cid": case_id})
+
+
+@faculty_router.delete("/cases/{case_id}")
+def delete_faculty_case(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    row = get_case_row_for_mutation(db, case_id, current_user)
+    delete_case_and_dependents(db, case_id)
     db.commit()
-    return {"status": "deleted", "id": case_id, "title": owned.title}
+    return {"status": "deleted", "id": case_id, "title": row.title}
 
 
 def attempt_marks_summary(evaluation: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -1846,7 +2284,7 @@ def get_faculty_case_rubric(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    row = get_case_row_for_read(db, case_id, current_user)
     return rubric_response(db, row, normalize_rubric(row.evaluation_rubric))
 
 
@@ -1857,22 +2295,20 @@ def save_faculty_case_rubric(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    require_faculty(current_user)
-    get_owned_case_row(db, case_id, current_user)
+    get_case_row_for_mutation(db, case_id, current_user)
     rubric = validate_rubric(data)
     result = db.execute(
         text("""
             UPDATE case_studies
             SET evaluation_rubric = :evaluation_rubric,
                 updated_at = NOW()
-            WHERE id = :case_id AND created_by = :faculty_id
+            WHERE id = :case_id
             RETURNING id, title, description, content, domain, difficulty,
                       estimated_minutes, status, evaluation_rubric,
-                      reflection_questions, learning_outcomes, created_at, updated_at
+                      created_at, updated_at
         """),
         {
             "case_id": case_id,
-            "faculty_id": current_user["id"],
             "evaluation_rubric": json.dumps(rubric),
         },
     )
@@ -1881,15 +2317,15 @@ def save_faculty_case_rubric(
     return rubric_response(db, updated_row, rubric)
 
 
-@faculty_router.put("/cases/{case_id}")
-def update_faculty_case(
+def _apply_case_update(
+    db: Session,
     case_id: int,
     data: CaseUpdateRequest,
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    existing: Any,
 ) -> Dict[str, Any]:
-    require_faculty(current_user)
-    existing = get_owned_case_row(db, case_id, current_user)
+    """Core update logic, shared by the admin-only PUT /cases/{id} route and
+    the faculty ai-fill flow (which applies this to a case it just created
+    and already owns, bypassing the admin-only gate on the route itself)."""
     parsed_content = parse_case_content(existing.content)
 
     title = data.title.strip() if data.title is not None else existing.title
@@ -1924,8 +2360,8 @@ def update_faculty_case(
 
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
-    if difficulty < 1 or difficulty > 7:
-        raise HTTPException(status_code=400, detail="Difficulty must be between 1 and 7")
+    if difficulty < 1 or difficulty > 5:
+        raise HTTPException(status_code=400, detail="Difficulty must be between 1 and 5")
     if duration < 1:
         raise HTTPException(status_code=400, detail="Duration must be at least 1 minute")
     existing_values = safe_mapping(existing)
@@ -1965,11 +2401,6 @@ def update_faculty_case(
                 "student_instructions_before",
                 "student_instructions_during",
                 "student_instructions_submission",
-                "company_background",
-                "industry_background",
-                "faculty_common_mistakes",
-                "faculty_discussion_points",
-                "key_learning_points",
             ]
         }
     )
@@ -1991,8 +2422,6 @@ def update_faculty_case(
                 domain = :domain,
                 difficulty = :difficulty,
                 estimated_minutes = :estimated_minutes,
-                reflection_questions = :reflection_questions,
-                learning_outcomes = :learning_outcomes,
                 case_code = :case_code,
                 volume = :volume,
                 subject = :subject,
@@ -2010,28 +2439,20 @@ def update_faculty_case(
                 student_instructions_before = :student_instructions_before,
                 student_instructions_during = :student_instructions_during,
                 student_instructions_submission = :student_instructions_submission,
-                company_background = :company_background,
-                industry_background = :industry_background,
-                faculty_common_mistakes = :faculty_common_mistakes,
-                faculty_discussion_points = :faculty_discussion_points,
-                key_learning_points = :key_learning_points,
                 recommended_semesters = :recommended_semesters,
                 recommended_course_ids = :recommended_course_ids,
                 updated_at = NOW()
-            WHERE id = :case_id AND created_by = :faculty_id
+            WHERE id = :case_id
             RETURNING """ + CASE_EDITOR_COLUMNS + """
         """),
         {
             "case_id": case_id,
-            "faculty_id": current_user["id"],
             "title": title,
             "description": expected_outcomes,
             "content": serialize_case_content(expected_outcomes, sections, section_meta),
             "domain": domain,
             "difficulty": difficulty,
             "estimated_minutes": duration,
-            "reflection_questions": section_to_text(sections.get("reflection_questions")),
-            "learning_outcomes": section_to_text(sections.get("learning_outcomes")),
             **metadata,
             **timing,
             **marks,
@@ -2044,6 +2465,8 @@ def update_faculty_case(
         if not data.capabilities:
             raise HTTPException(status_code=400, detail="At least one capability is required")
         replace_capability_tags(db, case_id, data.capabilities)
+    if data.subject_areas is not None:
+        replace_subject_area_tags(db, case_id, data.subject_areas)
     replace_case_questions(db, case_id, data.questions)
     replace_rapid_fire_questions(db, case_id, data.rapid_fire_questions)
     # a bank entry hidden by an as-is publish of this case is no longer an
@@ -2051,6 +2474,17 @@ def update_faculty_case(
     release_used_entries(db, case_id)
     db.commit()
     return case_editor_response(db, row)
+
+
+@faculty_router.put("/cases/{case_id}")
+def update_faculty_case(
+    case_id: int,
+    data: CaseUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    existing = get_case_row_for_mutation(db, case_id, current_user)
+    return _apply_case_update(db, case_id, data, existing)
 
 
 @faculty_router.post("/cases/{case_id}/generate")
@@ -2061,8 +2495,7 @@ def generate_faculty_case_sections(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    row = get_case_row_for_mutation(db, case_id, current_user)
     parsed_content = parse_case_content(row.content)
     sections = parsed_content["sections"]
     section_meta = parsed_content["section_meta"]
@@ -2118,7 +2551,7 @@ def get_faculty_case_generation_job(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_faculty(current_user)
-    get_owned_case_row(db, case_id, current_user)
+    get_case_row_for_read(db, case_id, current_user)
     with CASE_GENERATION_JOBS_LOCK:
         job = CASE_GENERATION_JOBS.get(job_id)
         if not job or job["case_id"] != case_id or job["faculty_id"] != current_user["id"]:
@@ -2133,8 +2566,7 @@ def generate_faculty_case_questions(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    row = get_case_row_for_mutation(db, case_id, current_user)
     if not data.summary.strip():
         raise HTTPException(status_code=400, detail="A case summary is required")
     capabilities = get_capability_tags(db, case_id)
@@ -2167,40 +2599,27 @@ if an expert case author had been given a complete, well-written brief.
 
 Guidelines:
 - Invent a plausible fictional company, people, and SPECIFIC numeric data (figures, %, prices, dates).
-- Calibrate depth and Bloom's levels to the given difficulty level.
+- Calibrate depth to the given difficulty level.
 - Focus the evidence, questions, and model answers on the target capability(ies).
 - Produce EXACTLY 3 written questions of increasing depth.
 
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
   "title": string — a compelling case title,
-  "description": string — a detailed 4-6 sentence overview shown to students and on the case listing: introduce the company/context, the core situation and decision at stake, why it matters, and what the student is being asked to do — specific and informative, not a one-line teaser,
+  "description": string — the case's single full narrative, shown to students and on the case listing: company background, industry context, the core situation and decision at stake, the key people involved and their roles/interests, relevant constraints, the timeline of events, the learning outcomes and reflection points the case is meant to build, and why it all matters — written as flowing prose (several paragraphs), not a short teaser. This is the ONLY place case narrative/context appears, so it must be complete and self-contained,
   "capabilities": array of 1-3 strings — the primary capability(ies) the case assesses (e.g. ["Negotiation", "Decision Making"]) — use more than one only when the case genuinely exercises multiple distinct capabilities,
-  "difficulty": integer 1-7 — 1-2 easy, 3-4 moderate, 5-7 hard,
+  "difficulty": integer 1-5 — 1: Remember/Understand (easy), 2: Apply, 3: Analyze (moderate), 4: Evaluate, 5: Create (hard),
   "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
   "subject": string — e.g. "Marketing Management",
   "functional_area": string — e.g. "Channel Management & Negotiation",
-  "company_background": string — company name, location, business, size, turnover,
-  "industry_background": string — the market/industry context,
-  "situation": string — the core business situation and the decision to be made (the main scenario),
-  "background": string — brief additional context/framing,
   "data": string — key facts and figures students should use,
-  "characters": string — the people involved and their roles/interests (include the student's role),
-  "constraints": string — limits/pressures the student must work within,
   "objectives": string — what the student must analyse, achieve, or decide,
-  "timeline": string — the sequence of events/deadlines,
-  "reflection_questions": array of strings — 2-3 open-ended reflection prompts,
-  "learning_outcomes": array of strings — 3-5 outcomes,
   "student_instructions_before": string,
   "student_instructions_during": string,
   "student_instructions_submission": string,
-  "faculty_common_mistakes": string,
-  "faculty_discussion_points": string,
-  "key_learning_points": string,
   "reading_time_minutes": integer,
   "questions": array of EXACTLY 3 objects, each with keys:
       "question_text": string,
-      "blooms_level": string (Remember/Understand/Apply/Analyze/Evaluate/Create),
       "word_limit_min": integer,
       "word_limit_max": integer,
       "instructions": string,
@@ -2218,7 +2637,6 @@ def _ai_fill_schema() -> Dict[str, Any]:
         "additionalProperties": False,
         "properties": {
             "question_text": {"type": "string"},
-            "blooms_level": {"type": "string"},
             "word_limit_min": {"type": "integer"},
             "word_limit_max": {"type": "integer"},
             "instructions": {"type": "string"},
@@ -2226,23 +2644,19 @@ def _ai_fill_schema() -> Dict[str, Any]:
             "alternative_answers": {"type": "array", "items": {"type": "string"}},
             "marking_scheme": {"type": "string"},
         },
-        "required": ["question_text", "blooms_level", "word_limit_min", "word_limit_max",
+        "required": ["question_text", "word_limit_min", "word_limit_max",
                      "instructions", "model_answer", "alternative_answers", "marking_scheme"],
     }
     str_keys = [
-        "title", "description", "subject", "functional_area", "company_background",
-        "industry_background", "situation", "background", "data", "characters",
-        "constraints", "objectives", "timeline",
+        "title", "description", "subject", "functional_area",
+        "data", "objectives",
         "student_instructions_before", "student_instructions_during",
-        "student_instructions_submission", "faculty_common_mistakes",
-        "faculty_discussion_points", "key_learning_points",
+        "student_instructions_submission",
     ]
     props: Dict[str, Any] = {k: {"type": "string"} for k in str_keys}
     props["capabilities"] = {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string"}}
     props["difficulty"] = {"type": "integer"}
     props["industry"] = {"type": "string"}
-    props["reflection_questions"] = {"type": "array", "items": {"type": "string"}}
-    props["learning_outcomes"] = {"type": "array", "items": {"type": "string"}}
     props["reading_time_minutes"] = {"type": "integer"}
     props["questions"] = {"type": "array", "minItems": 3, "maxItems": 3, "items": q}
     props["case_specific_criteria"] = {"type": "array", "items": {"type": "string"}}
@@ -2250,8 +2664,8 @@ def _ai_fill_schema() -> Dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": props,
-        "required": str_keys + ["capabilities", "difficulty", "industry", "reflection_questions",
-                                "learning_outcomes", "reading_time_minutes", "questions"],
+        "required": str_keys + ["capabilities", "difficulty", "industry",
+                                "reading_time_minutes", "questions"],
     }
 
 
@@ -2275,6 +2689,10 @@ def ai_fill_faculty_case(
     if not data.brief.strip():
         raise HTTPException(status_code=400, detail="A brief is required")
 
+    # Subject, Capabilities, Difficulty, Bloom's, Program and Semester are now
+    # explicit case-level picks made by faculty before generating (on the
+    # AI-brief intake screen), stored on the case at creation — the AI must
+    # treat them as fixed inputs, not infer/override them.
     capabilities = get_capability_tags(db, case_id)
     difficulty = row.difficulty or 2
     duration = row.estimated_minutes or 28
@@ -2299,7 +2717,7 @@ def ai_fill_faculty_case(
             "response_format": json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
             "max_tokens": 16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
             "timeout": 180,
-        })
+        }, db=db)
         parsed = parse_json_content(response.choices[0].message.content)
     except Exception as exc:  # noqa: BLE001
         status = getattr(exc, "status_code", None)
@@ -2321,15 +2739,8 @@ def ai_fill_faculty_case(
         return [str(x).strip() for x in val if str(x).strip()] if isinstance(val, list) else []
 
     sections = {
-        "situation": _s("situation"),
-        "background": _s("background"),
         "data": _s("data"),
-        "characters": _s("characters"),
-        "constraints": _s("constraints"),
         "objectives": _s("objectives"),
-        "timeline": _s("timeline"),
-        "reflection_questions": _list("reflection_questions"),
-        "learning_outcomes": _list("learning_outcomes"),
     }
     section_meta = {key: "ai_generated" for key in sections}
 
@@ -2344,7 +2755,6 @@ def ai_fill_faculty_case(
             "question_number": i + 1,
             "question_text": str(q.get("question_text") or "").strip(),
             "marks": written_marks[i],
-            "blooms_level": str(q.get("blooms_level") or "").strip(),
             "word_limit_min": q.get("word_limit_min"),
             "word_limit_max": q.get("word_limit_max"),
             "instructions": str(q.get("instructions") or "").strip(),
@@ -2363,19 +2773,17 @@ def ai_fill_faculty_case(
     duration = reading + writing + RAPID_FIRE_TIME_MINUTES
     answer_writing = writing
 
-    # AI-inferred core fields (so the faculty needn't fill them). Fall back to the
-    # draft's existing values if the AI omits or returns something invalid.
-    try:
-        ai_difficulty = int(parsed.get("difficulty"))
-        difficulty = max(1, min(7, ai_difficulty))
-    except (TypeError, ValueError):
-        pass
+    # Industry is still AI-inferred (not a faculty-picked field). Difficulty,
+    # Capabilities, and Bloom's are faculty-picked at creation and must not be
+    # overridden by the AI's own output for the same fields.
     try:
         industry = normalize_domain(_s("industry"))
     except HTTPException:
         industry = row.domain or "business"
     ai_capabilities = _list("capabilities")
-    capabilities_out = ai_capabilities or (capabilities or None)
+    capabilities_out = capabilities or ai_capabilities or None
+    existing_blooms = parse_json_or_lines(row.blooms_levels)
+    blooms_levels_out = existing_blooms or json.loads(blooms_levels_for_difficulty(difficulty))
 
     req = CaseUpdateRequest(
         title=_s("title") or row.title,
@@ -2386,23 +2794,22 @@ def ai_fill_faculty_case(
         capabilities=capabilities_out,
         sections=sections,
         section_meta=section_meta,
-        metadata={"subject": _s("subject"), "functional_area": _s("functional_area")},
+        metadata={
+            "subject": _s("subject"),
+            "functional_area": _s("functional_area"),
+            "blooms_levels": blooms_levels_out,
+        },
         timing={"reading_time_minutes": reading, "answer_writing_time_minutes": answer_writing},
         marks={"total_marks": TOTAL_MARKS},
         instructions={
             "student_instructions_before": _s("student_instructions_before"),
             "student_instructions_during": _s("student_instructions_during"),
             "student_instructions_submission": _s("student_instructions_submission"),
-            "company_background": _s("company_background"),
-            "industry_background": _s("industry_background"),
-            "faculty_common_mistakes": _s("faculty_common_mistakes"),
-            "faculty_discussion_points": _s("faculty_discussion_points"),
-            "key_learning_points": _s("key_learning_points"),
         },
         questions=questions,
     )
     # Persist everything except the rubric via the normal update path.
-    update_faculty_case(case_id, req, db, current_user)
+    _apply_case_update(db, case_id, req, row)
 
     # Rubric: keep the platform's default weights (always valid, total 100) and
     # attach up to 2 AI-suggested case-specific criteria.
@@ -2430,14 +2837,13 @@ def generate_faculty_case_rapid_fire(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    row = get_case_row_for_mutation(db, case_id, current_user)
     if not data.summary.strip():
         raise HTTPException(status_code=400, detail="A case summary is required")
     capabilities = get_capability_tags(db, case_id)
     try:
         questions = call_openai_generate_rapid_fire(
-            row, capabilities, difficulty_label_for(row.difficulty), data.summary.strip()
+            row, capabilities, difficulty_label_for(row.difficulty), data.summary.strip(), db=db
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"AI rapid fire generation failed: {exc}")
@@ -2450,8 +2856,7 @@ def publish_faculty_case(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    row = get_case_row_for_publish(db, case_id, current_user)
     parsed_content = parse_case_content(row.content)
     sections = parsed_content["sections"]
     missing_fields: List[str] = []
@@ -2466,7 +2871,9 @@ def publish_faculty_case(
         missing_fields.append("duration")
     if not get_capability_tags(db, case_id):
         missing_fields.append("capabilities")
-    for section in ["situation", "objectives", "timeline", "reflection_questions"]:
+    if not (row.description or "").strip():
+        missing_fields.append("description")
+    for section in ["objectives"]:
         if not section_has_content(sections.get(section)):
             missing_fields.append(section)
     if not row.evaluation_rubric:
@@ -2485,12 +2892,12 @@ def publish_faculty_case(
         text("""
             UPDATE case_studies
             SET status = 'published', updated_at = NOW()
-            WHERE id = :case_id AND created_by = :faculty_id
+            WHERE id = :case_id
             RETURNING id, title, description, content, domain, difficulty,
-                      estimated_minutes, status, evaluation_rubric,
-                      reflection_questions, learning_outcomes, created_at, updated_at
+                      estimated_minutes, status, evaluation_rubric, created_by,
+                      created_at, updated_at
         """),
-        {"case_id": case_id, "faculty_id": current_user["id"]},
+        {"case_id": case_id},
     )
     updated_row = result.fetchone()
     db.commit()
