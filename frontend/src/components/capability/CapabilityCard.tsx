@@ -4,17 +4,19 @@ import {
   CheckCircle2,
   Lightbulb,
   MessageCircle,
+  Rocket,
   ShieldCheck,
   Target,
   Users,
   type LucideIcon,
 } from "lucide-react"
 
+import { scoreColorClass } from "../../utils/scoreColor"
+
 export interface CapabilityScore {
   name: string
   score: number
-  previous: number
-  trend: number
+  attempts: number
 }
 
 interface CapabilityCardProps {
@@ -22,31 +24,18 @@ interface CapabilityCardProps {
 }
 
 const iconMap: Record<string, LucideIcon> = {
-  "Analytical Thinking": BarChart3,
-  "Critical Thinking": Target,
-  "Strategic Thinking": CheckCircle2,
   "Decision Making": BriefcaseBusiness,
+  "Strategic Thinking": CheckCircle2,
   Communication: MessageCircle,
   Leadership: Users,
   Innovation: Lightbulb,
-  "Risk Assessment": ShieldCheck,
-}
-
-function trendDisplay(trend: number) {
-  if (trend > 0) {
-    return { label: `Up +${trend.toFixed(1)}% this month`, className: "text-[#16A34A]" }
-  }
-
-  if (trend < 0) {
-    return { label: `Down ${trend.toFixed(1)}% this month`, className: "text-[#EF4444]" }
-  }
-
-  return { label: "Stable", className: "text-[#6B7280]" }
+  Entrepreneurship: Rocket,
+  "Problem Solving": Target,
+  Professionalism: ShieldCheck,
 }
 
 export default function CapabilityCard({ capability }: CapabilityCardProps) {
   const Icon = iconMap[capability.name] ?? BarChart3
-  const trend = trendDisplay(capability.trend)
 
   return (
     <article className="rounded-lg border border-[#E6EBEB] bg-white p-4 shadow-sm">
@@ -58,7 +47,7 @@ export default function CapabilityCard({ capability }: CapabilityCardProps) {
       </div>
 
       <div className="mt-5">
-        <p className="text-2xl font-semibold text-[#111827]">
+        <p className={`text-2xl font-semibold ${scoreColorClass(capability.score)}`}>
           {capability.score}
           <span className="text-sm font-medium text-[#6B7280]"> / 100</span>
         </p>
@@ -68,7 +57,11 @@ export default function CapabilityCard({ capability }: CapabilityCardProps) {
             style={{ width: `${capability.score}%` }}
           />
         </div>
-        <p className={`mt-3 text-xs font-semibold ${trend.className}`}>{trend.label}</p>
+        <p className="mt-3 text-xs font-semibold text-[#6B7280]">
+          {capability.attempts > 0
+            ? `Based on ${capability.attempts} case attempt${capability.attempts === 1 ? "" : "s"}`
+            : "No attempts yet"}
+        </p>
       </div>
     </article>
   )

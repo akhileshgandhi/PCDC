@@ -1,15 +1,13 @@
 import axios from "axios"
 import {
   ArrowRight,
-  Award,
   BriefcaseBusiness,
-  CalendarDays,
+  CalendarClock,
   ChevronRight,
   Compass,
-  Flame,
   Lightbulb,
   MessageCircle,
-  ShieldCheck,
+  Rocket,
   Sparkles,
   Trophy,
   Users,
@@ -41,18 +39,6 @@ interface CoachItem {
   name: string
   description: string
   icon: LucideIcon
-}
-
-interface EvaluationItem {
-  title: string
-  date: string
-  score: number
-  status: string
-}
-
-interface PathwayItem {
-  title: string
-  level: string
 }
 
 const defaultSummary: StudentDashboardSummary = {
@@ -121,6 +107,7 @@ const coaches: CoachItem[] = [
   { name: "Leadership Coach", description: "Lead with impact", icon: Users },
   { name: "Communication Coach", description: "Refine executive voice", icon: MessageCircle },
   { name: "Career Coach", description: "Navigate your path", icon: Compass },
+  { name: "Startup Mentor", description: "Build with conviction", icon: Rocket },
   { name: "Reflection Coach", description: "Deepen self-awareness", icon: Lightbulb },
 ]
 
@@ -132,12 +119,6 @@ function formatEvaluationDate(value: string | null): string {
     parsed,
   )
 }
-
-const pathwayItems: PathwayItem[] = [
-  { title: "Market Entry Case", level: "Level 3" },
-  { title: "Problem Structuring Drill", level: "Level 3" },
-  { title: "Executive Communication Practice", level: "Level 2" },
-]
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<StudentDashboardSummary>(defaultSummary)
@@ -234,6 +215,13 @@ export default function Dashboard() {
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/82 sm:text-base">
               {summary.hero_message}
             </p>
+            {summary.upcoming_session ? (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-md bg-white/10 px-4 py-2.5 text-sm font-medium text-white/90">
+                <CalendarClock size={16} aria-hidden="true" className="shrink-0 text-[#c9a227]" />
+                Next {titleCase(summary.upcoming_session.session_type)} with{" "}
+                {summary.upcoming_session.mentor_name}: {formatSessionTime(summary.upcoming_session.scheduled_at)}
+              </div>
+            ) : null}
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Link
                 to={
@@ -365,13 +353,13 @@ export default function Dashboard() {
                 Real-time performance across core executive competencies.
               </p>
             </div>
-            <button
-              type="button"
+            <Link
+              to="/student/capability-profile"
               className="hidden items-center gap-2 text-sm font-semibold text-[#92702a] sm:inline-flex"
             >
               Details
               <ChevronRight size={16} aria-hidden="true" />
-            </button>
+            </Link>
           </div>
 
           <CapabilityMatrix
@@ -388,8 +376,8 @@ export default function Dashboard() {
                 const Icon = coach.icon
 
                 return (
-                  <button
-                    type="button"
+                  <Link
+                    to="/student/ai-coach"
                     key={coach.name}
                     className="flex w-full items-center gap-3 py-3 text-left"
                   >
@@ -403,17 +391,17 @@ export default function Dashboard() {
                       </span>
                     </span>
                     <ChevronRight size={17} aria-hidden="true" />
-                  </button>
+                  </Link>
                 )
               })}
             </div>
-            <button
-              type="button"
+            <Link
+              to="/student/ai-coach"
               className="mt-4 inline-flex w-full items-center justify-center gap-2 text-sm font-semibold"
             >
               View All Coaches
               <ChevronRight size={16} aria-hidden="true" />
-            </button>
+            </Link>
           </Card>
 
         </section>
@@ -505,6 +493,13 @@ export default function Dashboard() {
                 {isLoading ? "Loading achievements..." : "No achievements yet."}
               </p>
             )}
+            <Link
+              to="/student/achievements"
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 text-sm font-semibold"
+            >
+              View All Achievements
+              <ChevronRight size={16} aria-hidden="true" />
+            </Link>
           </Card>
 
           <Card title="Career Pathway">
@@ -584,6 +579,13 @@ export default function Dashboard() {
                 {isLoading ? "Loading pathway..." : "No pathway data yet."}
               </p>
             )}
+            <Link
+              to="/student/career-pathway"
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 text-sm font-semibold"
+            >
+              View Full Pathway
+              <ChevronRight size={16} aria-hidden="true" />
+            </Link>
           </Card>
         </section>
       </div>
@@ -642,35 +644,3 @@ function Badge({ children }: BadgeProps) {
   )
 }
 
-interface AchievementProps {
-  icon: LucideIcon
-  label: string
-}
-
-function Achievement({ icon: Icon, label }: AchievementProps) {
-  return (
-    <div>
-      <div className="mx-auto grid size-14 place-items-center rounded-full bg-[#fff7df] text-[#92702a]">
-        <Icon size={24} aria-hidden="true" />
-      </div>
-      <p className="mt-3 text-xs font-semibold leading-5">{label}</p>
-      <p className="mt-1 text-xs text-[#16a34a]">Earned</p>
-    </div>
-  )
-}
-
-interface CardLinkProps {
-  label: string
-}
-
-function CardLink({ label }: CardLinkProps) {
-  return (
-    <button
-      type="button"
-      className="mt-5 inline-flex w-full items-center justify-center gap-2 text-sm font-semibold"
-    >
-      {label}
-      <ChevronRight size={16} aria-hidden="true" />
-    </button>
-  )
-}

@@ -77,12 +77,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-[#f6f7fb] text-[#111827]">
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#081d3a] p-5 text-white lg:block">
         <div className="border-b border-white/10 pb-6">
-          <div className="text-xl font-semibold leading-tight">
-            Executive
-            <br />
-            Education
-          </div>
-          <p className="mt-1 text-xs text-white/70">Prestige Capability Development</p>
+          <div className="text-xl font-semibold leading-tight">Student Portal</div>
+          <p className="mt-1 text-xs text-white/70">PCDC Case Studio</p>
         </div>
 
         <nav className="mt-7 space-y-2">
@@ -136,7 +132,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="mx-auto flex min-h-20 max-w-[1280px] items-center gap-4 px-4 py-3 sm:px-6">
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold text-[#111827] sm:text-2xl">
-                PCDC Executive Portal
+                PCDC Student Portal
               </h1>
             </div>
 

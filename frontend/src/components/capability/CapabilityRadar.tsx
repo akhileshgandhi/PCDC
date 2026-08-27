@@ -11,7 +11,6 @@ import {
 export interface CapabilityRadarItem {
   name: string
   score: number
-  previous: number
 }
 
 interface CapabilityRadarProps {
@@ -41,16 +40,8 @@ export default function CapabilityRadar({ capabilities }: CapabilityRadarProps) 
             dataKey="score"
             stroke="#C9A227"
             fill="#C9A227"
-            fillOpacity={0.3}
+            fillOpacity={0.35}
             strokeWidth={3}
-          />
-          <Radar
-            name="Previous Month"
-            dataKey="previous"
-            stroke="#0B1D3A"
-            fill="transparent"
-            strokeDasharray="6 5"
-            strokeWidth={2}
           />
         </RadarChart>
       </ResponsiveContainer>
