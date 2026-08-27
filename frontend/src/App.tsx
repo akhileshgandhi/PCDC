@@ -129,7 +129,7 @@ export default function App() {
           <Route
             path="/faculty/*"
             element={
-              <ProtectedRoute allowedRole="faculty">
+              <ProtectedRoute allowedRole={["faculty", "admin"]}>
                 <FacultyPortal />
               </ProtectedRoute>
             }

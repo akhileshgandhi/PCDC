@@ -5,7 +5,7 @@ import type { UserRole } from "../../types/user"
 import { getUserRole, isAuthenticated, mustChangePassword } from "../../utils/auth"
 
 interface ProtectedRouteProps {
-  allowedRole: UserRole
+  allowedRole: UserRole | UserRole[]
   children: ReactNode
 }
 
@@ -21,8 +21,9 @@ export default function ProtectedRoute({ allowedRole, children }: ProtectedRoute
   }
 
   const role = getUserRole()
+  const allowed = Array.isArray(allowedRole) ? allowedRole : [allowedRole]
 
-  if (allowedRole && role !== allowedRole) {
+  if (allowed.length > 0 && (!role || !allowed.includes(role))) {
     return <Navigate to="/unauthorized" replace />
   }
 
