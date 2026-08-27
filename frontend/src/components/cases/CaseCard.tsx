@@ -42,6 +42,15 @@ function actionForStatus(caseStudy: CaseStudy) {
     }
   }
 
+  if (caseStudy.status === "expired") {
+    return {
+      label: "View Attempt",
+      to: `/student/case-studies/${caseStudy.id}/attempt`,
+      className: "border-[#B91C1C] text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white",
+      showArrow: false,
+    }
+  }
+
   if (caseStudy.status === "in_progress") {
     return {
       label: "Continue Attempt",

@@ -5,6 +5,10 @@ interface CountdownTimerProps {
   seconds: number
   label?: string
   onExpire?: () => void
+  // Keeps the tick/onExpire effects running without rendering the visible
+  // clock — used when a screen still owns the expiry action but the visible
+  // countdown is shown once, centrally, in the sticky header instead.
+  hidden?: boolean
 }
 
 /**
@@ -16,6 +20,7 @@ export default function CountdownTimer({
   seconds,
   label = "Time remaining",
   onExpire,
+  hidden = false,
 }: CountdownTimerProps) {
   const [secondsLeft, setSecondsLeft] = useState(() => Math.max(0, Math.round(seconds)))
   const expiredRef = useRef(false)
@@ -51,13 +56,17 @@ export default function CountdownTimer({
 
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums ${
-        low
-          ? "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]"
-          : warn
-            ? "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]"
-            : "border-[#E6EBEB] bg-white text-[#0B1D3A]"
-      }`}
+      className={
+        hidden
+          ? "sr-only"
+          : `inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold tabular-nums ${
+              low
+                ? "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]"
+                : warn
+                  ? "border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]"
+                  : "border-[#E6EBEB] bg-white text-[#0B1D3A]"
+            }`
+      }
       role="timer"
       aria-live="off"
     >

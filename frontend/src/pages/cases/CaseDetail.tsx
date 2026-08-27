@@ -10,13 +10,13 @@ import {
   UserCircle,
   type LucideIcon,
 } from "lucide-react"
-import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 
 import { getCaseDetail, startCaseAttempt, toCaseDomain, type CaseDetail as CaseDetailData } from "../../api/cases"
 import DifficultyBadge from "../../components/cases/DifficultyBadge"
 import DomainTag from "../../components/cases/DomainTag"
+import ExpandableText from "../../components/ExpandableText"
 import DashboardLayout from "../../layouts/DashboardLayout"
 
 function formatDate(value: string) {
@@ -33,14 +33,28 @@ function attemptAction(caseId: string, data: CaseDetailData) {
   const { attempt } = data
 
   if (attempt.status === "evaluated") {
+    const scoreText =
+      attempt.marks_scored !== null && attempt.marks_total !== null
+        ? ` - Score: ${attempt.marks_scored}/${attempt.marks_total}`
+        : attempt.total_score !== null
+          ? ` - Score: ${attempt.total_score}/100`
+          : ""
     return {
-      statusText: `Completed${attempt.total_score !== null ? ` - Score: ${attempt.total_score}/100` : ""}${
-        attempt.grade_label ? ` (${attempt.grade_label})` : ""
-      }`,
+      statusText: `Completed${scoreText}${attempt.grade_label ? ` (${attempt.grade_label})` : ""}`,
       to: `/student/case-studies/${caseId}/attempt`,
       buttonText: "View My Results",
       buttonClassName: "bg-white text-[#0B1D3A] hover:bg-[#F6F7F9]",
       icon: CheckCircle2,
+    }
+  }
+
+  if (attempt.status === "expired") {
+    return {
+      statusText: "Time Expired - this attempt could not be completed",
+      to: `/student/case-studies/${caseId}/attempt`,
+      buttonText: "View Attempt",
+      buttonClassName: "bg-white text-[#0B1D3A] hover:bg-[#F6F7F9]",
+      icon: AlertTriangle,
     }
   }
 
@@ -165,13 +179,13 @@ export default function CaseDetail() {
               <h1 className="mt-5 text-[28px] font-semibold leading-tight text-[#0B1D3A]">
                 {caseContent.title}
               </h1>
-              {caseContent.description ? (
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7280]">
-                  {caseContent.description}
-                </p>
-              ) : null}
+              <ExpandableText
+                label="Case Description"
+                text={caseContent.description || "Case content is being finalized."}
+                className="mt-3 max-w-2xl text-sm leading-6 text-[#6B7280]"
+              />
 
-              <div className="mt-6 grid gap-3 text-sm font-medium text-[#6B7280] sm:grid-cols-3">
+              <div className="mt-6 grid gap-3 border-t border-[#E6EBEB] pt-5 text-sm font-medium text-[#6B7280] sm:grid-cols-3">
                 <MetaItem
                   icon={Clock3}
                   label={`Estimated time: ${caseContent.estimated_minutes} minutes`}
@@ -187,29 +201,16 @@ export default function CaseDetail() {
               </div>
             </section>
 
-            <ContentSection title="The Situation">
-              <div className="max-w-[680px] whitespace-pre-line text-sm leading-[1.8] text-[#374151]">
-                {caseContent.situation || "Case content is being finalized."}
-              </div>
-            </ContentSection>
-
-            {caseContent.learning_outcomes.length > 0 ? (
-              <ContentSection title="What You Will Develop">
-                <ul className="space-y-3">
-                  {caseContent.learning_outcomes.map((outcome) => (
-                    <li key={outcome} className="flex gap-3 text-sm leading-6 text-[#374151]">
-                      <CheckCircle2
-                        className="mt-0.5 shrink-0 text-[#C9A227]"
-                        size={18}
-                        aria-hidden="true"
-                      />
-                      <span>{outcome}</span>
-                    </li>
-                  ))}
-                </ul>
-              </ContentSection>
+            {caseContent.reading_time_minutes || caseContent.answer_writing_time_minutes || caseContent.rapid_fire_time_minutes ? (
+              <section className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-[#111827]">Time Breakdown</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <TimeStat label="Reading" minutes={caseContent.reading_time_minutes} />
+                  <TimeStat label="Answer Writing" minutes={caseContent.answer_writing_time_minutes} />
+                  <TimeStat label="Rapid Fire" minutes={caseContent.rapid_fire_time_minutes} />
+                </div>
+              </section>
             ) : null}
-
           </main>
 
           <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
@@ -286,20 +287,6 @@ function MetaItem({ icon: Icon, label }: MetaItemProps) {
   )
 }
 
-interface ContentSectionProps {
-  title: string
-  children: ReactNode
-}
-
-function ContentSection({ title, children }: ContentSectionProps) {
-  return (
-    <section className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-xl font-semibold text-[#111827]">{title}</h2>
-      {children}
-    </section>
-  )
-}
-
 interface InfoRowProps {
   icon: LucideIcon
   text: string
@@ -310,6 +297,20 @@ function InfoRow({ icon: Icon, text }: InfoRowProps) {
     <div className="flex items-center gap-3">
       <Icon className="shrink-0 text-[#C9A227]" size={18} aria-hidden="true" />
       <span className="leading-6 text-white/90">{text}</span>
+    </div>
+  )
+}
+
+interface TimeStatProps {
+  label: string
+  minutes: number | null
+}
+
+function TimeStat({ label, minutes }: TimeStatProps) {
+  return (
+    <div className="rounded-lg border border-[#E6EBEB] bg-[#F9FAFB] px-4 py-3 text-center">
+      <p className="text-xl font-semibold text-[#0B1D3A]">{minutes ?? "-"}</p>
+      <p className="mt-0.5 text-xs font-medium text-[#6B7280]">{label} {minutes ? "min" : ""}</p>
     </div>
   )
 }

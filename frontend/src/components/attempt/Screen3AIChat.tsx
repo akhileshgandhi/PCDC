@@ -3,11 +3,6 @@ import { useEffect, useState } from "react"
 import type { RapidFireQuestion } from "../../api/cases"
 import CountdownTimer from "./CountdownTimer"
 
-export interface ChatMessage {
-  role: "ai" | "student"
-  text: string
-}
-
 function marksLabel(marks: number | null | undefined): string {
   if (marks == null) return ""
   return ` · ${marks} ${marks === 1 ? "mark" : "marks"}`
@@ -15,12 +10,8 @@ function marksLabel(marks: number | null | undefined): string {
 
 interface Screen3AIChatProps {
   rapidFireQuestions: RapidFireQuestion[]
-  analysisText: string
-  chatMessages: ChatMessage[]
   remainingSeconds?: number | null
   isGenerating?: boolean
-  onSendMessage: (message: string) => void
-  onNext: () => void
   onSubmit: (answers: string) => void
   isSubmitting: boolean
 }
@@ -92,6 +83,7 @@ export default function Screen3AIChat({
               seconds={remainingSeconds}
               label="Rapid fire time"
               onExpire={handleExpire}
+              hidden
             />
           ) : null}
         </div>

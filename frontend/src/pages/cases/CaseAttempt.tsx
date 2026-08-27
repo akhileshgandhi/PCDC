@@ -17,11 +17,12 @@ import {
   type RapidFireQuestion,
   type WrittenQuestion,
 } from "../../api/cases"
+import CaseReferencePanel from "../../components/attempt/CaseReferencePanel"
 import ProgressBar from "../../components/attempt/ProgressBar"
 import ReflectionStep from "../../components/attempt/ReflectionStep"
 import Screen1Briefing from "../../components/attempt/Screen1Briefing"
 import Screen2Analysis from "../../components/attempt/Screen2Analysis"
-import Screen3AIChat, { type ChatMessage } from "../../components/attempt/Screen3AIChat"
+import Screen3AIChat from "../../components/attempt/Screen3AIChat"
 import Screen6Evaluation, { type EvaluationData } from "../../components/attempt/Screen6Evaluation"
 
 // "analysis_submitted" deliberately has no entry here — it's the pre-submit
@@ -79,15 +80,10 @@ export default function CaseAttempt() {
 
   const [caseTitle, setCaseTitle] = useState("")
   const [caseSections, setCaseSections] = useState<{
-    situation: string
-    background: string
+    description: string
     data: string
-    characters: string
-    constraints: string
     objectives: string
-    timeline: string
-  }>({ situation: "", background: "", data: "", characters: "", constraints: "", objectives: "", timeline: "" })
-  const [reflectionPrompts, setReflectionPrompts] = useState<string[]>([])
+  }>({ description: "", data: "", objectives: "" })
   const [writtenQuestions, setWrittenQuestions] = useState<WrittenQuestion[]>([])
   const [rapidFireQuestions, setRapidFireQuestions] = useState<RapidFireQuestion[]>([])
   const [rapidFireLoading, setRapidFireLoading] = useState(false)
@@ -97,14 +93,12 @@ export default function CaseAttempt() {
   const [attemptId, setAttemptId] = useState<number | null>(null)
   const [currentScreen, setCurrentScreen] = useState(1)
   const [needsReflection, setNeedsReflection] = useState(false)
+  const [isCasePanelOpen, setIsCasePanelOpen] = useState(false)
 
   // Per-question answers for Stage 2
   const [writtenAnswers, setWrittenAnswers] = useState<string[]>([])
   // Ungraded free-text initial analysis written before the structured questions
   const [initialSummary, setInitialSummary] = useState("")
-  // Combined analysisText kept for evaluation context
-  const [analysisText, setAnalysisText] = useState("")
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null)
   const [expired, setExpired] = useState(false)
 
@@ -119,15 +113,10 @@ export default function CaseAttempt() {
         if (!isMounted) return
         setCaseTitle(detail.case.title)
         setCaseSections({
-          situation: detail.case.situation || "",
-          background: detail.case.background || "",
+          description: detail.case.description || "",
           data: detail.case.data || "",
-          characters: detail.case.characters || "",
-          constraints: detail.case.constraints || "",
           objectives: detail.case.objectives || "",
-          timeline: detail.case.timeline || "",
         })
-        setReflectionPrompts(detail.case.reflection_questions)
         const qs = detail.case.written_questions || []
         setWrittenQuestions(qs)
         // Rapid fire questions are AI-generated live when the student enters the
@@ -150,8 +139,6 @@ export default function CaseAttempt() {
         const attemptDetail = await getAttemptDetail(resolvedAttemptId)
         if (!isMounted) return
 
-        const storedAnalysis = attemptDetail.initial_analysis || ""
-        setAnalysisText(storedAnalysis)
         const qs2 = detail.case.written_questions || []
         let draft: { summary?: string; answers?: string[] } | null = null
         if (attemptDetail.analysis_draft) {
@@ -162,19 +149,15 @@ export default function CaseAttempt() {
           }
         }
         setInitialSummary(draft?.summary || attemptDetail.initial_summary || "")
-        setWrittenAnswers(qs2.map((_, i) => draft?.answers?.[i] || ""))
-        const discussionMessages = attemptDetail.conversations
-          .filter((entry) => entry.stage === "discussion")
-          .map((entry) => ({ role: entry.role, text: entry.message }))
-        setChatMessages(
-          discussionMessages.length === 0 && status !== "analysis_submitted"
-            ? [
-                {
-                  role: "ai",
-                  text: "Let's discuss your analysis — what part of your thinking would you like to pressure-test first?",
-                },
-              ]
-            : discussionMessages,
+        // Once analysis is submitted, analysis_draft is cleared server-side —
+        // the submitted per-question answers live in question_answers instead,
+        // so a post-submit reload (e.g. during Rapid Fire) still shows them
+        // back correctly rather than falling through to blank strings.
+        const answerByNumber = new Map(
+          attemptDetail.question_answers.map((qa) => [qa.question_number, qa.answer_text]),
+        )
+        setWrittenAnswers(
+          qs2.map((q, i) => draft?.answers?.[i] || answerByNumber.get(q.question_number) || ""),
         )
 
         if (attemptDetail.evaluation) {
@@ -277,6 +260,10 @@ export default function CaseAttempt() {
     return () => window.clearTimeout(timer)
   }, [currentScreen, attemptId, initialSummary, writtenAnswers])
 
+  useEffect(() => {
+    setIsCasePanelOpen(false)
+  }, [currentScreen])
+
   function goBack() {
     if (window.history.length > 1) {
       navigate(-1)
@@ -294,7 +281,7 @@ export default function CaseAttempt() {
   }
 
   async function handleAnalysisNext() {
-    if (!attemptId) return
+    if (!attemptId || isSubmitting) return
     setIsSubmitting(true)
     try {
       // Concatenate per-question answers into a single string for storage
@@ -302,7 +289,6 @@ export default function CaseAttempt() {
         .map((q, i) => `Q${q.question_number}: ${q.question_text}\n\n${writtenAnswers[i] || ""}`)
         .join("\n\n---\n\n")
       const submissionText = combined || writtenAnswers.join("\n\n")
-      setAnalysisText(submissionText)
       // Only send the ungraded initial analysis when structured questions exist
       // (in the fallback path the single textarea already IS the analysis).
       const summaryToSend = writtenQuestions.length > 0 ? initialSummary : undefined
@@ -313,10 +299,7 @@ export default function CaseAttempt() {
               answer_text: writtenAnswers[i] || "",
             }))
           : undefined
-      const result = await submitInitialAnalysis(attemptId, submissionText, summaryToSend, answersToSend)
-      if (result.opening_message) {
-        setChatMessages([{ role: "ai", text: result.opening_message }])
-      }
+      await submitInitialAnalysis(attemptId, submissionText, summaryToSend, answersToSend)
       setActionError("")
       setCurrentScreen(3)
     } catch (error) {
@@ -336,7 +319,7 @@ export default function CaseAttempt() {
   }
 
   async function handleRapidFireSubmit(rapidFireAnswers: string) {
-    if (!attemptId) return
+    if (!attemptId || isSubmitting) return
     setIsSubmitting(true)
     try {
       const result = await submitRapidFireAnswers(attemptId, rapidFireAnswers)
@@ -420,9 +403,23 @@ export default function CaseAttempt() {
     )
   }
 
+  // Once a submission is in flight (analysis -> rapid fire, or rapid fire ->
+  // evaluation), the phase is already over — keeping the countdown running
+  // during that wait just makes it look like time is still being spent.
+  const headerTimer =
+    isSubmitting
+      ? null
+      : currentScreen === 1 && readingSeconds != null
+        ? { seconds: readingSeconds, label: "Reading time" }
+        : currentScreen === 2 && writingSeconds != null
+          ? { seconds: writingSeconds, label: "Writing time" }
+          : currentScreen === 3 && rapidFireSeconds != null
+            ? { seconds: rapidFireSeconds, label: "Rapid fire time" }
+            : null
+
   return (
     <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
-      <ProgressBar currentScreen={currentScreen} title={caseTitle} />
+      <ProgressBar currentScreen={currentScreen} title={caseTitle} timer={headerTimer} />
       <main className="mx-auto max-w-[1180px] px-4 py-6 sm:px-6">
         <button
           type="button"
@@ -443,41 +440,53 @@ export default function CaseAttempt() {
         {currentScreen === 1 ? (
           <Screen1Briefing
             caseTitle={caseTitle}
-            situation={caseSections.situation}
-            background={caseSections.background}
+            description={caseSections.description}
             data={caseSections.data}
-            characters={caseSections.characters}
-            constraints={caseSections.constraints}
             objectives={caseSections.objectives}
-            timeline={caseSections.timeline}
             remainingSeconds={readingSeconds}
             onNext={() => setCurrentScreen(2)}
           />
         ) : null}
         {currentScreen === 2 ? (
-          <Screen2Analysis
-            questions={writtenQuestions}
-            answers={writtenAnswers}
-            initialSummary={initialSummary}
-            onInitialSummaryChange={setInitialSummary}
-            reflectionQuestions={reflectionPrompts}
-            remainingSeconds={writingSeconds}
-            onAnswerChange={handleAnalysisChange}
-            onNext={handleAnalysisNext}
-          />
+          <>
+            <CaseReferencePanel
+              sections={caseSections}
+              isOpen={isCasePanelOpen}
+              onToggle={() => setIsCasePanelOpen((open) => !open)}
+            />
+            <Screen2Analysis
+              questions={writtenQuestions}
+              answers={writtenAnswers}
+              initialSummary={initialSummary}
+              onInitialSummaryChange={setInitialSummary}
+              reflectionQuestions={[]}
+              remainingSeconds={writingSeconds}
+              onAnswerChange={handleAnalysisChange}
+              onNext={handleAnalysisNext}
+              isSubmitting={isSubmitting}
+            />
+          </>
         ) : null}
         {currentScreen === 3 ? (
-          <Screen3AIChat
-            rapidFireQuestions={rapidFireQuestions}
-            analysisText={analysisText}
-            chatMessages={chatMessages}
-            remainingSeconds={rapidFireSeconds}
-            isGenerating={rapidFireLoading}
-            onSendMessage={() => undefined}
-            onNext={() => undefined}
-            onSubmit={handleRapidFireSubmit}
-            isSubmitting={isSubmitting}
-          />
+          <>
+            <CaseReferencePanel
+              sections={caseSections}
+              isOpen={isCasePanelOpen}
+              onToggle={() => setIsCasePanelOpen((open) => !open)}
+              initialSummary={initialSummary}
+              answeredQuestions={writtenQuestions.map((q, i) => ({
+                question_text: q.question_text,
+                answer_text: writtenAnswers[i] || "",
+              }))}
+            />
+            <Screen3AIChat
+              rapidFireQuestions={rapidFireQuestions}
+              remainingSeconds={rapidFireSeconds}
+              isGenerating={rapidFireLoading}
+              onSubmit={handleRapidFireSubmit}
+              isSubmitting={isSubmitting}
+            />
+          </>
         ) : null}
         {currentScreen === 4 && evaluation ? (
           <Screen6Evaluation evaluation={evaluation} />

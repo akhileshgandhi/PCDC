@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, Loader2 } from "lucide-react"
 import type { WrittenQuestion } from "../../api/cases"
 import CountdownTimer from "./CountdownTimer"
 
@@ -31,6 +31,7 @@ interface Screen2AnalysisProps {
   remainingSeconds?: number | null
   onAnswerChange: (index: number, value: string) => void
   onNext: () => void
+  isSubmitting?: boolean
 }
 
 export default function Screen2Analysis({
@@ -42,6 +43,7 @@ export default function Screen2Analysis({
   remainingSeconds,
   onAnswerChange,
   onNext,
+  isSubmitting = false,
 }: Screen2AnalysisProps) {
   // Use written_questions if available, otherwise fall back to reflectionQuestions as plain prompts
   const hasStructured = questions.length > 0
@@ -67,7 +69,7 @@ export default function Screen2Analysis({
               <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Initial Analysis</h2>
             </div>
             {remainingSeconds != null ? (
-              <CountdownTimer seconds={remainingSeconds} label="Writing time" onExpire={onNext} />
+              <CountdownTimer seconds={remainingSeconds} label="Writing time" onExpire={onNext} hidden />
             ) : null}
           </div>
           <p className="mt-3 text-sm leading-6 text-[#6B7280]">
@@ -181,15 +183,24 @@ export default function Screen2Analysis({
           <button
             type="button"
             onClick={onNext}
-            disabled={!isReady}
+            disabled={!isReady || isSubmitting}
             className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
-              isReady
+              isReady && !isSubmitting
                 ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
                 : "cursor-not-allowed bg-[#D1D5DB] text-white"
             }`}
           >
-            Submit &amp; Start Rapid Fire
-            <ArrowRight size={16} aria-hidden="true" />
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                Submitting…
+              </>
+            ) : (
+              <>
+                Submit &amp; Start Rapid Fire
+                <ArrowRight size={16} aria-hidden="true" />
+              </>
+            )}
           </button>
           <p className="mt-3 text-center text-xs leading-5 text-[#6B7280]">
             Once submitted, you cannot edit your answers. The Rapid Fire round begins immediately.
@@ -220,7 +231,7 @@ export default function Screen2Analysis({
           <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Initial Analysis</h2>
         </div>
         {remainingSeconds != null ? (
-          <CountdownTimer seconds={remainingSeconds} label="Writing time" onExpire={onNext} />
+          <CountdownTimer seconds={remainingSeconds} label="Writing time" onExpire={onNext} hidden />
         ) : null}
       </div>
       <p className="mt-3 text-sm leading-6 text-[#6B7280]">
@@ -262,15 +273,24 @@ export default function Screen2Analysis({
       <button
         type="button"
         onClick={onNext}
-        disabled={!isReady}
+        disabled={!isReady || isSubmitting}
         className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
-          isReady
+          isReady && !isSubmitting
             ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
             : "cursor-not-allowed bg-[#D1D5DB] text-white"
         }`}
       >
-        Submit &amp; Start Rapid Fire
-        <ArrowRight size={16} aria-hidden="true" />
+        {isSubmitting ? (
+          <>
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            Submitting…
+          </>
+        ) : (
+          <>
+            Submit &amp; Start Rapid Fire
+            <ArrowRight size={16} aria-hidden="true" />
+          </>
+        )}
       </button>
       <p className="mt-3 text-center text-xs leading-5 text-[#6B7280]">
         Once submitted, you cannot edit your answers. The Rapid Fire round begins immediately.

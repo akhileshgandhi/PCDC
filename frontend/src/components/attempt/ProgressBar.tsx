@@ -1,11 +1,14 @@
+import CountdownTimer from "./CountdownTimer"
+
 interface ProgressBarProps {
   currentScreen: number
   title?: string
+  timer?: { seconds: number; label: string } | null
 }
 
 const stages = ["Briefing", "Analysis", "Rapid Fire", "Evaluation"]
 
-export default function ProgressBar({ currentScreen, title }: ProgressBarProps) {
+export default function ProgressBar({ currentScreen, title, timer }: ProgressBarProps) {
   const currentStage = stages[currentScreen - 1]
   const progressPercent = ((currentScreen - 1) / (stages.length - 1)) * 100
 
@@ -19,7 +22,7 @@ export default function ProgressBar({ currentScreen, title }: ProgressBarProps) 
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold uppercase tracking-wide text-[#C9A227]">
-                PCDC
+                PCDC Student Portal
               </p>
               <h1 className="truncate text-lg font-semibold text-[#111827]">
                 {title || "Case Attempt"}
@@ -31,6 +34,9 @@ export default function ProgressBar({ currentScreen, title }: ProgressBarProps) 
             <span className="rounded-full bg-[#F6F7F9] px-3 py-1 text-[#0B1D3A]">
             Stage {currentScreen} of 4: {currentStage}
             </span>
+            {timer ? (
+              <CountdownTimer seconds={timer.seconds} label={timer.label} />
+            ) : null}
           </div>
         </div>
 

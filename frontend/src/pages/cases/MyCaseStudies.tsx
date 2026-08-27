@@ -26,8 +26,6 @@ const difficulties = [
   "Level 3",
   "Level 4",
   "Level 5",
-  "Level 6",
-  "Level 7",
 ] as const
 
 const statusTabs = [
@@ -116,7 +114,9 @@ export default function MyCaseStudies() {
       const matchesDifficulty =
         selectedDifficulty === null || caseStudy.difficulty === selectedDifficulty
       const matchesStatus =
-        statusFilter === "all" || caseStudy.status === (statusFilter as CaseStatus)
+        statusFilter === "all" ||
+        caseStudy.status === (statusFilter as CaseStatus) ||
+        (statusFilter === "completed" && caseStudy.status === "expired")
       const matchesSearch =
         normalizedSearch.length === 0 ||
         caseStudy.title.toLowerCase().includes(normalizedSearch) ||
@@ -128,7 +128,9 @@ export default function MyCaseStudies() {
 
   const availableCount = caseStudies.filter((caseStudy) => caseStudy.status === "available").length
   const activeCount = caseStudies.filter((caseStudy) => caseStudy.status === "in_progress").length
-  const completedCount = caseStudies.filter((caseStudy) => caseStudy.status === "completed").length
+  const completedCount = caseStudies.filter(
+    (caseStudy) => caseStudy.status === "completed" || caseStudy.status === "expired",
+  ).length
 
   return (
     <DashboardLayout>

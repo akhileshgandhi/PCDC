@@ -69,6 +69,9 @@ export function toCaseStatus(value: string): CaseStatus {
   if (value === "completed") {
     return "completed"
   }
+  if (value === "expired") {
+    return "expired"
+  }
   if (value === "active" || value === "in_progress") {
     return "in_progress"
   }
@@ -97,15 +100,8 @@ export interface CaseDetailContent {
   domain: string
   difficulty: number
   difficulty_label: string | null
-  situation: string
-  background: string
   data: string
-  characters: string
-  constraints: string
   objectives: string
-  timeline: string
-  learning_outcomes: string[]
-  reflection_questions: string[]
   written_questions: WrittenQuestion[]
   rapid_fire_questions: RapidFireQuestion[]
   capabilities: string[]
@@ -125,6 +121,8 @@ export interface CaseAttemptState {
   stage_label: string | null
   total_score: number | null
   grade_label: string | null
+  marks_scored: number | null
+  marks_total: number | null
 }
 
 export interface CaseDetail {
@@ -142,7 +140,6 @@ export interface StartAttemptResponse {
   case_study_id: number
   title: string
   content: string
-  reflection_questions: string | null
   status: string
 }
 
@@ -191,6 +188,11 @@ export interface AttemptEvaluation {
   next_recommended_case_id: number | null
 }
 
+export interface AttemptQuestionAnswer {
+  question_number: number
+  answer_text: string
+}
+
 export interface AttemptDetail {
   id: number
   case_study_id: number
@@ -207,6 +209,7 @@ export interface AttemptDetail {
   time_taken_minutes: number | null
   conversations: AttemptConversation[]
   evaluation: AttemptEvaluation | null
+  question_answers: AttemptQuestionAnswer[]
 }
 
 export async function getAttemptDetail(attemptId: number) {
