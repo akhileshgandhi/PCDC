@@ -6,9 +6,10 @@ export interface BankEntry {
   brief: string | null
   subject: string | null
   semester_number: number | null
+  semesters: number[]
   difficulty: number
   difficulty_label: string
-  source: "uploaded" | "ai_generated"
+  source: "uploaded" | "ai_generated" | "case_builder"
   created_by: number | null
   creator_name: string | null
   creator_role: string | null
@@ -29,7 +30,7 @@ export interface BankEntryDetail extends BankEntry {
     metadata?: Record<string, string>
     timing?: Record<string, number>
     instructions?: Record<string, string>
-    questions?: Array<{ question_text: string; model_answer?: string; blooms_level?: string; marking_scheme?: string }>
+    questions?: Array<{ question_text: string; model_answer?: string; marking_scheme?: string }>
   }
 }
 

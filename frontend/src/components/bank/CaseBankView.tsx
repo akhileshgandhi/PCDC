@@ -128,6 +128,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
       total: entries.length,
       uploaded: entries.filter((e) => e.source === "uploaded").length,
       ai: entries.filter((e) => e.source === "ai_generated").length,
+      caseBuilder: entries.filter((e) => e.source === "case_builder").length,
     }),
     [entries],
   )
@@ -157,7 +158,8 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
               Publish any entry into your own Case Library.
             </p>
             <p className="mt-2 text-xs text-[#6b7280]">
-              {stats.total} entries · {stats.uploaded} uploaded · {stats.ai} AI generated
+              {stats.total} entries · {stats.caseBuilder} from Case Builder · {stats.uploaded} uploaded ·{" "}
+              {stats.ai} AI generated
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -207,6 +209,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
           </select>
           <select className={inputClass} value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
             <option value="">All sources</option>
+            <option value="case_builder">Case Builder</option>
             <option value="uploaded">Uploaded</option>
             <option value="ai_generated">AI generated</option>
           </select>
@@ -244,7 +247,9 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                   ) : null}
                 </div>
                 <span className="text-sm text-[#111827]">{entry.subject || "—"}</span>
-                <span className="text-sm text-[#111827]">{entry.semester_number ? `Sem ${entry.semester_number}` : "—"}</span>
+                <span className="text-sm text-[#111827]">
+                  {entry.semesters.length > 0 ? entry.semesters.map((s) => `Sem ${s}`).join(", ") : "—"}
+                </span>
                 <span className="inline-flex w-fit rounded-full bg-[#f6f7fb] px-3 py-1 text-xs font-semibold text-[#111827]">
                   {entry.difficulty_label}
                 </span>

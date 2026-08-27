@@ -1,4 +1,4 @@
-import { FileUp, Sparkles, X } from "lucide-react"
+import { FileUp, PenLine, Sparkles, X } from "lucide-react"
 
 import type { BankEntry } from "../../api/bank"
 
@@ -35,26 +35,14 @@ export const CASE_DOMAINS = [
 ] as const
 
 export const SECTION_FIELDS: Array<{ key: string; label: string; list?: boolean }> = [
-  { key: "situation", label: "Situation (core scenario)" },
-  { key: "background", label: "Background" },
   { key: "data", label: "Data (key facts & figures)" },
-  { key: "characters", label: "Characters (people & roles)" },
-  { key: "constraints", label: "Constraints" },
   { key: "objectives", label: "Objectives" },
-  { key: "timeline", label: "Timeline" },
-  { key: "reflection_questions", label: "Reflection questions (one per line)", list: true },
-  { key: "learning_outcomes", label: "Learning outcomes (one per line)", list: true },
 ]
 
 export const INSTRUCTION_FIELDS: Array<{ key: string; label: string }> = [
   { key: "student_instructions_before", label: "Student instructions — before" },
   { key: "student_instructions_during", label: "Student instructions — during" },
   { key: "student_instructions_submission", label: "Student instructions — submission" },
-  { key: "company_background", label: "Company background" },
-  { key: "industry_background", label: "Industry background" },
-  { key: "faculty_common_mistakes", label: "Faculty notes — common mistakes" },
-  { key: "faculty_discussion_points", label: "Faculty notes — discussion points" },
-  { key: "key_learning_points", label: "Key learning points" },
 ]
 
 export function formatDate(iso: string): string {
@@ -69,11 +57,21 @@ export function roleLabel(role: string | null): string {
 }
 
 export function SourceChip({ source }: { source: BankEntry["source"] }) {
-  return source === "ai_generated" ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[#f4f0ff] px-3 py-1 text-xs font-semibold text-[#6941c6]">
-      <Sparkles size={12} aria-hidden="true" /> AI generated
-    </span>
-  ) : (
+  if (source === "ai_generated") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#f4f0ff] px-3 py-1 text-xs font-semibold text-[#6941c6]">
+        <Sparkles size={12} aria-hidden="true" /> AI generated
+      </span>
+    )
+  }
+  if (source === "case_builder") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#fff7df] px-3 py-1 text-xs font-semibold text-[#92702a]">
+        <PenLine size={12} aria-hidden="true" /> Case Builder
+      </span>
+    )
+  }
+  return (
     <span className="inline-flex items-center gap-1 rounded-full bg-[#eef6ff] px-3 py-1 text-xs font-semibold text-[#175cd3]">
       <FileUp size={12} aria-hidden="true" /> Uploaded
     </span>

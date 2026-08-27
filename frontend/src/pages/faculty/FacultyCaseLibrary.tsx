@@ -1,4 +1,4 @@
-import { Archive, CircleX, Edit3, Eye, FileUp, Plus, Search, Send, Trash2 } from "lucide-react"
+import { Archive, BookOpen, CircleX, Edit3, Eye, FileUp, Plus, Rocket, Search, Send, Trash2 } from "lucide-react"
 import type { FormEvent } from "react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
@@ -12,13 +12,16 @@ import {
   getFacultyCases,
   getFacultySections,
   getFacultyStudents,
+  publishFacultyCase,
   type FacultyAssignedCase,
   type FacultyCase,
   type FacultySection,
   type FacultyStudent,
 } from "../../api/faculty"
 import UploadCaseDialog from "../../components/bank/UploadCaseDialog"
+import BulkUploadCaseDialog from "../../components/faculty/BulkUploadCaseDialog"
 import FacultyLayout from "../../layouts/FacultyLayout"
+import { getCurrentUser } from "../../utils/auth"
 
 const domains = [
   "All Domains",
@@ -50,6 +53,8 @@ export default function FacultyCaseLibrary() {
   const [notice, setNotice] = useState("")
   const [assigningCase, setAssigningCase] = useState<FacultyCase | null>(null)
   const [showBankUpload, setShowBankUpload] = useState(false)
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [assignedCases, setAssignedCases] = useState<FacultyAssignedCase[]>([])
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(true)
   const [closingAssignmentId, setClosingAssignmentId] = useState<number | null>(null)
@@ -84,8 +89,30 @@ export default function FacultyCaseLibrary() {
       setNotice(`Deleted "${caseStudy.title}".`)
       setError("")
       loadAssignedCases()
-    } catch {
-      setError("Unable to delete this case study.")
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || "Unable to delete this case study.")
+    }
+  }
+
+  async function handlePublishCase(caseStudy: FacultyCase) {
+    if (!window.confirm(`Publish "${caseStudy.title}"? Students will be able to see and attempt it once assigned.`)) {
+      return
+    }
+    try {
+      const updated = await publishFacultyCase(caseStudy.id)
+      setCases((current) =>
+        current.map((item) => (item.id === caseStudy.id ? { ...item, status: updated.status } : item)),
+      )
+      setNotice(`Published "${caseStudy.title}".`)
+      setError("")
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      setError(
+        typeof detail === "string"
+          ? detail
+          : "Unable to publish this case study. It may be missing required fields.",
+      )
     }
   }
 
@@ -137,7 +164,7 @@ export default function FacultyCaseLibrary() {
     return () => {
       isMounted = false
     }
-  }, [difficultyFilter, domainFilter, statusFilter])
+  }, [difficultyFilter, domainFilter, statusFilter, refreshKey])
 
   const filteredCases = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase()
@@ -186,6 +213,14 @@ export default function FacultyCaseLibrary() {
                 <FileUp size={17} aria-hidden="true" />
                 Upload case study
               </button>
+              <button
+                type="button"
+                onClick={() => setShowBulkUpload(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+              >
+                <FileUp size={17} aria-hidden="true" />
+                Bulk Upload
+              </button>
               <Link
                 to="/faculty/case-builder"
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e]"
@@ -225,7 +260,7 @@ export default function FacultyCaseLibrary() {
               aria-label="Difficulty"
             >
               <option value="">All Levels</option>
-              {[1, 2, 3, 4, 5, 6, 7].map((level) => (
+              {[1, 2, 3, 4, 5].map((level) => (
                 <option key={level} value={level}>
                   Level {level}
                 </option>
@@ -295,6 +330,7 @@ export default function FacultyCaseLibrary() {
                   key={caseStudy.id}
                   caseStudy={caseStudy}
                   onAssign={() => setAssigningCase(caseStudy)}
+                  onPublish={() => handlePublishCase(caseStudy)}
                   onDelete={() => handleDeleteCase(caseStudy)}
                 />
               ))}
@@ -415,6 +451,18 @@ export default function FacultyCaseLibrary() {
           }}
         />
       ) : null}
+
+      {showBulkUpload ? (
+        <BulkUploadCaseDialog
+          onClose={() => setShowBulkUpload(false)}
+          onDone={() => {
+            setShowBulkUpload(false)
+            setNotice("Bulk upload complete. New cases are saved as drafts for admin review.")
+            setError("")
+            setRefreshKey((key) => key + 1)
+          }}
+        />
+      ) : null}
     </FacultyLayout>
   )
 }
@@ -422,10 +470,12 @@ export default function FacultyCaseLibrary() {
 interface CaseRowProps {
   caseStudy: FacultyCase
   onAssign: () => void
+  onPublish: () => void
   onDelete: () => void
 }
 
-function CaseRow({ caseStudy, onAssign, onDelete }: CaseRowProps) {
+function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
+  const isAdmin = getCurrentUser()?.role === "admin"
   return (
     <article className="grid gap-4 px-5 py-4 lg:grid-cols-[1.5fr_0.8fr_0.7fr_0.7fr_0.8fr_1.2fr] lg:items-center">
       <div className="min-w-0">
@@ -463,15 +513,37 @@ function CaseRow({ caseStudy, onAssign, onDelete }: CaseRowProps) {
             Assign to Class
           </button>
         ) : null}
-        <div className="flex items-center gap-2">
-          <Link
-            to={`/faculty/case-builder/${caseStudy.id}`}
-            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
-            aria-label={`Edit ${caseStudy.title}`}
-            title="Edit"
+        {caseStudy.status === "draft" ? (
+          <button
+            type="button"
+            onClick={onPublish}
+            className="inline-flex size-9 items-center justify-center rounded-md bg-[#c9a227] text-[#0b1d3a] transition hover:bg-[#e0b84e]"
+            aria-label={`Publish ${caseStudy.title}`}
+            title="Publish"
           >
-            <Edit3 size={16} aria-hidden="true" />
-          </Link>
+            <Rocket size={16} aria-hidden="true" />
+          </button>
+        ) : null}
+        <div className="flex items-center gap-2">
+          {isAdmin ? (
+            <Link
+              to={`/faculty/case-builder/${caseStudy.id}`}
+              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+              aria-label={`Edit ${caseStudy.title}`}
+              title="Edit"
+            >
+              <Edit3 size={16} aria-hidden="true" />
+            </Link>
+          ) : (
+            <Link
+              to={`/faculty/case-builder/${caseStudy.id}`}
+              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+              aria-label={`View ${caseStudy.title}`}
+              title="View"
+            >
+              <BookOpen size={16} aria-hidden="true" />
+            </Link>
+          )}
           <Link
             to={`/faculty/case-attempts/${caseStudy.id}`}
             className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"

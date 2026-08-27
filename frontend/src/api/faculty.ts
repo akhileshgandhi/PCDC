@@ -70,15 +70,8 @@ export interface FacultyAssignedCase {
 }
 
 export type CaseSectionKey =
-  | "situation"
-  | "background"
   | "data"
-  | "characters"
-  | "constraints"
   | "objectives"
-  | "timeline"
-  | "reflection_questions"
-  | "learning_outcomes"
 
 export type CaseSectionMeta = "ai_generated" | "edited" | "manual"
 export type CaseSectionValue = string | string[]
@@ -122,11 +115,6 @@ export interface FacultyCaseInstructions {
   student_instructions_before?: string | null
   student_instructions_during?: string | null
   student_instructions_submission?: string | null
-  company_background?: string | null
-  industry_background?: string | null
-  faculty_common_mistakes?: string | null
-  faculty_discussion_points?: string | null
-  key_learning_points?: string | null
 }
 
 export interface FacultyCaseQuestion {
@@ -134,7 +122,6 @@ export interface FacultyCaseQuestion {
   question_number: number
   question_text: string
   marks: number
-  blooms_level?: string | null
   word_limit_min?: number | null
   word_limit_max?: number | null
   instructions?: string | null
@@ -164,7 +151,9 @@ export interface FacultyCaseEditor {
   questions: FacultyCaseQuestion[]
   rapid_fire_questions: FacultyRapidFireQuestion[]
   status: "draft" | "published" | "archived"
+  created_by: number
   capabilities: string[]
+  subject_areas: string[]
   expected_outcomes: string
   sections: Record<CaseSectionKey, CaseSectionValue>
   section_meta: Record<CaseSectionKey, CaseSectionMeta>
@@ -180,7 +169,13 @@ export interface CreateFacultyCasePayload {
   difficulty: number
   duration_minutes: number
   capabilities: string[]
+  subject_areas?: string[]
   expected_outcomes?: string
+  sections?: Partial<Record<CaseSectionKey, CaseSectionValue>>
+  section_meta?: Partial<Record<CaseSectionKey, CaseSectionMeta>>
+  questions?: FacultyCaseQuestion[]
+  rapid_fire_questions?: FacultyRapidFireQuestion[]
+  rubric?: FacultyRubric
   metadata?: FacultyCaseMetadata
   timing?: FacultyCaseTiming
   marks?: FacultyCaseMarks
@@ -194,6 +189,7 @@ export interface UpdateFacultyCasePayload {
   difficulty?: number
   duration_minutes?: number
   capabilities?: string[]
+  subject_areas?: string[]
   expected_outcomes?: string
   sections?: Partial<Record<CaseSectionKey, CaseSectionValue>>
   section_meta?: Partial<Record<CaseSectionKey, CaseSectionMeta>>
@@ -478,6 +474,24 @@ export async function facultyBulkImportStudents(sectionId: number, file: File) {
     `/faculty/students/bulk-import?section_id=${sectionId}`,
     form,
     { headers: { "Content-Type": "multipart/form-data" } },
+  )
+  return response.data
+}
+
+export interface FacultyCaseBulkUploadResult {
+  created: Array<{ row: number; id: number; title: string }>
+  errors: Array<{ row: number; title: string; reason: string }>
+  created_count: number
+  error_count: number
+}
+
+export async function bulkUploadFacultyCases(file: File) {
+  const form = new FormData()
+  form.append("file", file)
+  const response = await api.post<FacultyCaseBulkUploadResult>(
+    "/faculty/cases/bulk-upload",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" }, timeout: 300_000 },
   )
   return response.data
 }

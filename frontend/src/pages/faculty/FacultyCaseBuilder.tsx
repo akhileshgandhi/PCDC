@@ -7,10 +7,13 @@ import {
   Loader2,
   Pencil,
   PenLine,
+  Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Send,
   Sparkles,
+  Trash2,
   X,
   Zap,
 } from "lucide-react"
@@ -24,6 +27,8 @@ import {
   generateFacultyCaseQuestions,
   getFacultyCaseGenerationJob,
   getFacultyCase,
+  getFacultyCourses,
+  getFacultyTeaching,
   publishFacultyCase,
   updateFacultyCase,
   type CaseSectionKey,
@@ -31,13 +36,19 @@ import {
   type FacultyCaseGenerationJob,
   type FacultyCaseEditor,
   type FacultyCaseInstructions,
+  type FacultyRubric,
+  type RubricCriterion,
+  type RubricCriterionKey,
   type FacultyCaseQuestion,
   type FacultyCaseTiming,
+  type FacultyCourseOption,
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
+import ExpandableTextarea from "../../components/ExpandableTextarea"
 import CapabilitySelector from "../../components/faculty/CapabilitySelector"
 import RubricEditor from "../../components/faculty/RubricEditor"
 import FacultyLayout from "../../layouts/FacultyLayout"
+import { getCurrentUser } from "../../utils/auth"
 
 type BuilderMode = "scratch" | "ai"
 
@@ -48,6 +59,10 @@ interface CoreFormState {
   difficulty: string
   duration_minutes: string
   capabilities: string[]
+  subjectAreas: string[]
+  bloomsLevels: string[]
+  programIds: number[]
+  semesters: number[]
 }
 
 const industries = [
@@ -62,20 +77,39 @@ const industries = [
 ]
 
 const sectionDefinitions: Array<{ key: CaseSectionKey; label: string; required?: boolean }> = [
-  { key: "situation", label: "Situation", required: true },
-  { key: "background", label: "Background" },
   { key: "data", label: "Data" },
-  { key: "characters", label: "Characters" },
-  { key: "constraints", label: "Constraints" },
   { key: "objectives", label: "Objectives", required: true },
-  { key: "timeline", label: "Timeline", required: true },
-  { key: "reflection_questions", label: "Reflection Questions", required: true },
-  { key: "learning_outcomes", label: "Learning Outcomes" },
 ]
 
-const arraySections = new Set<CaseSectionKey>(["reflection_questions", "learning_outcomes"])
+const arraySections = new Set<CaseSectionKey>([])
 
-const bloomsLevels = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
+// Mirrors backend BLOOM_LEVELS — the case-level Bloom's Taxonomy Level is
+// picked explicitly here, independent of Difficulty.
+const BLOOM_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
+
+const DEFAULT_SEMESTER_COUNT = 6
+
+// Mirrors backend DEFAULT_RUBRIC_WEIGHTS / RUBRIC_CRITERIA — used for the
+// rubric picker in the pre-creation "Start from Scratch" form, which has no
+// case id yet so it can't use the case-scoped RubricEditor.
+const RUBRIC_CRITERIA: RubricCriterion[] = [
+  { key: "thinking_depth", label: "Thinking Depth" },
+  { key: "logic", label: "Logic" },
+  { key: "creativity", label: "Creativity" },
+  { key: "practicality", label: "Practicality" },
+  { key: "risk_awareness", label: "Risk Awareness" },
+  { key: "reflection", label: "Reflection" },
+]
+
+const DEFAULT_RUBRIC_WEIGHTS: Record<RubricCriterionKey, number> = {
+  thinking_depth: 30,
+  logic: 20,
+  creativity: 15,
+  practicality: 15,
+  risk_awareness: 10,
+  reflection: 10,
+}
+
 const WRITTEN_QUESTION_COUNT = 3
 const RAPID_FIRE_QUESTION_COUNT = 3
 // Rapid fire is always 3 AI-generated questions worth 1 mark each.
@@ -85,7 +119,6 @@ const emptyQuestion = (questionNumber: number): FacultyCaseQuestion => ({
   question_number: questionNumber,
   question_text: "",
   marks: 0,
-  blooms_level: "",
   word_limit_min: null,
   word_limit_max: null,
   instructions: "",
@@ -170,6 +203,15 @@ function describeAiFailure(error: unknown): string {
   return "AI generation failed. Please try again in a moment."
 }
 
+// Now that only an admin can mutate an existing case, a faculty member acting
+// on a stale page (or a leftover editable state) gets a 403 whose detail is
+// already a clear, specific message ("This case can only be edited by an
+// admin.") — surface it instead of a generic fallback so it isn't confusing.
+function describeApiError(error: unknown, fallback: string): string {
+  const err = error as { response?: { data?: { detail?: string } } }
+  return err?.response?.data?.detail || fallback
+}
+
 const emptyCoreForm: CoreFormState = {
   title: "",
   description: "",
@@ -177,14 +219,44 @@ const emptyCoreForm: CoreFormState = {
   difficulty: "3",
   duration_minutes: "45",
   capabilities: [],
+  subjectAreas: [],
+  bloomsLevels: [],
+  programIds: [],
+  semesters: [],
 }
 
 export default function FacultyCaseBuilder() {
   const navigate = useNavigate()
   const { id } = useParams()
   const caseId = id ? Number(id) : null
+  // Faculty can create a case (via the AI-brief flow below) but can never edit
+  // an existing one afterward, even their own drafts — only an admin can.
+  const isReadOnly = Boolean(caseId) && getCurrentUser()?.role !== "admin"
   const [mode, setMode] = useState<BuilderMode | null>(caseId ? "scratch" : null)
   const [coreForm, setCoreForm] = useState<CoreFormState>(emptyCoreForm)
+  // "Start from Scratch" fills the ENTIRE case — sections and questions
+  // included — before the case exists, since faculty lose edit access the
+  // moment it's created. These are local until Create Draft submits them.
+  const [scratchSections, setScratchSections] = useState({ data: "", objectives: "" })
+  const [scratchQuestions, setScratchQuestions] = useState<FacultyCaseQuestion[]>(() => padQuestions([]))
+  const [scratchTotalMarks, setScratchTotalMarks] = useState<number | null>(10)
+  const [scratchInstructions, setScratchInstructions] = useState<FacultyCaseInstructions>({
+    student_instructions_before: "",
+    student_instructions_during: "",
+    student_instructions_submission: "",
+  })
+  // Rapid Fire questions are always AI-generated live per student attempt —
+  // faculty only set the timing for that phase, not the questions themselves.
+  const [scratchTiming, setScratchTiming] = useState<FacultyCaseTiming>({
+    reading_time_minutes: null,
+    answer_writing_time_minutes: null,
+    rapid_fire_time_minutes: 8,
+  })
+  const [scratchRubric, setScratchRubric] = useState<FacultyRubric>({
+    weights: DEFAULT_RUBRIC_WEIGHTS,
+    case_specific_criteria: [],
+  })
+  const [scratchNewCriterion, setScratchNewCriterion] = useState("")
   const [caseData, setCaseData] = useState<FacultyCaseEditor | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [notice, setNotice] = useState("")
@@ -198,7 +270,25 @@ export default function FacultyCaseBuilder() {
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false)
   const [aiBrief, setAiBrief] = useState("")
   const [isAiCreating, setIsAiCreating] = useState(false)
+  const [courses, setCourses] = useState<FacultyCourseOption[]>([])
+  const [teachingSubjects, setTeachingSubjects] = useState<string[]>([])
+  const [teachingCourseNames, setTeachingCourseNames] = useState<string[]>([])
 
+  useEffect(() => {
+    getFacultyCourses()
+      .then((data) => setCourses(data.items))
+      .catch(() => undefined)
+    getFacultyTeaching()
+      .then((data) => {
+        setTeachingSubjects(
+          Array.from(new Set(data.selections.map((selection) => selection.subject))).sort(),
+        )
+        setTeachingCourseNames(
+          Array.from(new Set(data.selections.map((selection) => selection.course_name))),
+        )
+      })
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -280,15 +370,38 @@ export default function FacultyCaseBuilder() {
       return []
     }
     const blockers: string[] = []
-    if (!sectionValueToText(caseData.sections.situation).trim()) blockers.push("Situation")
+    if (!caseData.expected_outcomes.trim()) blockers.push("Description")
     if (!sectionValueToText(caseData.sections.objectives).trim()) blockers.push("Objectives")
-    if (!sectionValueToText(caseData.sections.timeline).trim()) blockers.push("Timeline")
-    if (!sectionValueToText(caseData.sections.reflection_questions).trim()) {
-      blockers.push("Reflection questions")
-    }
     if (!caseData.rubric_exists) blockers.push("Rubric")
     return blockers
   }, [caseData])
+
+  // The one exception to "only admin can mutate a case": faculty can publish
+  // a case they created themselves, since Start-from-Scratch/Generate-with-AI
+  // already collect the whole case in one shot — they still can't edit it.
+  const currentUserId = Number(getCurrentUser()?.sub)
+  const canPublish =
+    getCurrentUser()?.role === "admin" ||
+    (Boolean(caseData) && caseData?.created_by === currentUserId)
+
+  // Union with any already-selected subjects so a value set before My
+  // Teachings changed (or by another faculty on an existing case) never
+  // disappears from view, even if it's no longer in the faculty's list.
+  const subjectOptions = useMemo(
+    () => Array.from(new Set([...teachingSubjects, ...coreForm.subjectAreas])).sort(),
+    [teachingSubjects, coreForm.subjectAreas],
+  )
+
+  // Same idea for Program: only the courses this faculty teaches, plus
+  // whatever is already selected so nothing disappears from view.
+  const programOptions = useMemo(
+    () =>
+      courses.filter(
+        (course) =>
+          teachingCourseNames.includes(course.name) || coreForm.programIds.includes(course.id),
+      ),
+    [courses, teachingCourseNames, coreForm.programIds],
+  )
 
   function updateCoreField(field: keyof CoreFormState, value: string) {
     setCoreForm((current) => ({ ...current, [field]: value }))
@@ -300,6 +413,101 @@ export default function FacultyCaseBuilder() {
       capabilities: current.capabilities.includes(capabilityName)
         ? current.capabilities.filter((name) => name !== capabilityName)
         : [...current.capabilities, capabilityName],
+    }))
+  }
+
+  function toggleSubjectArea(area: string) {
+    setCoreForm((current) => ({
+      ...current,
+      subjectAreas: current.subjectAreas.includes(area)
+        ? current.subjectAreas.filter((item) => item !== area)
+        : [...current.subjectAreas, area],
+    }))
+  }
+
+  function toggleBloomsLevel(level: string) {
+    setCoreForm((current) => ({
+      ...current,
+      bloomsLevels: current.bloomsLevels.includes(level)
+        ? current.bloomsLevels.filter((item) => item !== level)
+        : [...current.bloomsLevels, level],
+    }))
+  }
+
+  function toggleProgram(courseId: number) {
+    setCoreForm((current) => ({
+      ...current,
+      programIds: current.programIds.includes(courseId)
+        ? current.programIds.filter((id) => id !== courseId)
+        : [...current.programIds, courseId],
+    }))
+  }
+
+  function toggleSemester(semester: number) {
+    setCoreForm((current) => ({
+      ...current,
+      semesters: current.semesters.includes(semester)
+        ? current.semesters.filter((item) => item !== semester)
+        : [...current.semesters, semester],
+    }))
+  }
+
+  function updateScratchSection(section: "data" | "objectives", value: string) {
+    setScratchSections((current) => ({ ...current, [section]: value }))
+  }
+
+  function updateScratchQuestion<K extends keyof FacultyCaseQuestion>(
+    index: number,
+    field: K,
+    value: FacultyCaseQuestion[K],
+  ) {
+    setScratchQuestions((current) => {
+      const next = [...current]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }
+
+  function handleScratchTotalMarksChange(value: number | null) {
+    const distributed = distributeWrittenMarks(value)
+    setScratchTotalMarks(value)
+    setScratchQuestions((current) => current.map((q, i) => ({ ...q, marks: distributed[i] ?? q.marks })))
+  }
+
+  function updateScratchInstructions<K extends keyof FacultyCaseInstructions>(
+    field: K,
+    value: string,
+  ) {
+    setScratchInstructions((current) => ({ ...current, [field]: value }))
+  }
+
+  function updateScratchTiming<K extends keyof FacultyCaseTiming>(field: K, value: number | null) {
+    setScratchTiming((current) => ({ ...current, [field]: value }))
+  }
+
+  function updateScratchRubricWeight(key: RubricCriterionKey, rawValue: string) {
+    const value = Math.max(0, Math.min(100, Number(rawValue) || 0))
+    setScratchRubric((current) => ({ ...current, weights: { ...current.weights, [key]: value } }))
+  }
+
+  function resetScratchRubricWeights() {
+    setScratchRubric((current) => ({ ...current, weights: DEFAULT_RUBRIC_WEIGHTS }))
+  }
+
+  function addScratchCriterion() {
+    const value = scratchNewCriterion.trim()
+    if (!value || scratchRubric.case_specific_criteria.length >= 2) return
+    setScratchRubric((current) => ({
+      ...current,
+      case_specific_criteria: [...current.case_specific_criteria, value],
+    }))
+    setScratchNewCriterion("")
+  }
+
+  function removeScratchCriterion(index: number) {
+    setScratchRubric((current) => ({
+      ...current,
+      case_specific_criteria: current.case_specific_criteria.filter((_, i) => i !== index),
     }))
   }
 
@@ -332,13 +540,25 @@ export default function FacultyCaseBuilder() {
         difficulty: Number(coreForm.difficulty),
         duration_minutes: Number(coreForm.duration_minutes),
         capabilities: coreForm.capabilities,
+        subject_areas: coreForm.subjectAreas,
+        metadata: { blooms_levels: coreForm.bloomsLevels },
+        recommendation: {
+          recommended_course_ids: coreForm.programIds,
+          recommended_semesters: coreForm.semesters,
+        },
+        sections: scratchSections,
+        questions: scratchQuestions,
+        instructions: scratchInstructions,
+        rubric: scratchRubric,
+        timing: scratchTiming,
+        marks: { total_marks: scratchTotalMarks },
       })
       setCaseData(normalizeCaseData(data))
       setErrors([])
       setNotice("Draft created.")
       navigate(`/faculty/case-builder/${data.id}`, { replace: true })
-    } catch {
-      setErrors(["Unable to create draft."])
+    } catch (error) {
+      setErrors([describeApiError(error, "Unable to create draft.")])
     } finally {
       setIsSaving(false)
     }
@@ -358,22 +578,26 @@ export default function FacultyCaseBuilder() {
         difficulty: Number(coreForm.difficulty),
         duration_minutes: Number(coreForm.duration_minutes),
         capabilities: coreForm.capabilities,
+        subject_areas: coreForm.subjectAreas,
         sections: caseData.sections,
         section_meta: caseData.section_meta,
-        metadata: caseData.metadata,
+        metadata: { ...caseData.metadata, blooms_levels: coreForm.bloomsLevels },
         timing: caseData.timing,
         marks: caseData.marks,
         instructions: caseData.instructions,
         questions: caseData.questions,
         rapid_fire_questions: caseData.rapid_fire_questions.slice(0, RAPID_FIRE_QUESTION_COUNT),
-        recommendation: caseData.recommendation,
+        recommendation: {
+          recommended_course_ids: coreForm.programIds,
+          recommended_semesters: coreForm.semesters,
+        },
       })
       setCaseData(normalizeCaseData(data))
       setCoreForm(caseToCoreForm(data))
       setErrors([])
       setNotice("Draft saved.")
-    } catch {
-      setErrors(["Unable to save draft."])
+    } catch (error) {
+      setErrors([describeApiError(error, "Unable to save draft.")])
     } finally {
       setIsSaving(false)
     }
@@ -459,8 +683,8 @@ export default function FacultyCaseBuilder() {
       setGenerationJob(job)
       setErrors([])
       setNotice(job.message || "Generation queued.")
-    } catch {
-      setErrors(["AI generation failed. Existing content was preserved."])
+    } catch (error) {
+      setErrors([describeApiError(error, "AI generation failed. Existing content was preserved.")])
       setGeneratingSection(null)
     }
   }
@@ -493,10 +717,11 @@ export default function FacultyCaseBuilder() {
     }
   }
 
-  // AI mode with no core fields: create a draft from defaults, then let AI infer
-  // and fill EVERYTHING (including title, capability, difficulty) from the brief.
+  // AI mode: faculty picks Subject/Capabilities/Difficulty/Bloom's/Program/
+  // Semester up front (same as scratch mode); AI then fills in the narrative,
+  // sections, questions, timing and rubric around those fixed picks.
   async function handleAiCreate() {
-    if (!aiBrief.trim()) {
+    if (!aiBrief.trim() || coreForm.capabilities.length === 0) {
       return
     }
     setIsAiCreating(true)
@@ -506,14 +731,20 @@ export default function FacultyCaseBuilder() {
       const draft = await createFacultyCase({
         title: aiBrief.trim().slice(0, 80),
         industry: "business",
-        difficulty: 3,
+        difficulty: Number(coreForm.difficulty),
         duration_minutes: 28,
-        capabilities: ["Critical Thinking"],
+        capabilities: coreForm.capabilities,
+        subject_areas: coreForm.subjectAreas,
+        metadata: { blooms_levels: coreForm.bloomsLevels },
+        recommendation: {
+          recommended_course_ids: coreForm.programIds,
+          recommended_semesters: coreForm.semesters,
+        },
       })
       const filled = await aiFillFacultyCase(draft.id, aiBrief.trim())
       setCaseData(normalizeCaseData(filled))
       setCoreForm(caseToCoreForm(filled))
-      setNotice("Full case generated. Review every section and edit as needed before publishing.")
+      setNotice("Full case generated. An admin will review and publish it.")
       navigate(`/faculty/case-builder/${filled.id}`, { replace: true })
     } catch (error) {
       setErrors([describeAiFailure(error)])
@@ -539,8 +770,8 @@ export default function FacultyCaseBuilder() {
       setCaseData(normalizeCaseData(data))
       setNotice("Case published.")
       setErrors([])
-    } catch {
-      setErrors(["Unable to publish. Check required sections and rubric."])
+    } catch (error) {
+      setErrors([describeApiError(error, "Unable to publish. Check required sections and rubric.")])
     } finally {
       setIsPublishing(false)
     }
@@ -563,28 +794,32 @@ export default function FacultyCaseBuilder() {
 
           {caseData ? (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSaving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />}
-                Save Draft
-              </button>
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={isPublishing}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPublishing ? (
-                  <Loader2 className="animate-spin" size={17} />
-                ) : (
-                  <Send size={17} />
-                )}
-                Publish
-              </button>
+              {!isReadOnly ? (
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={isSaving}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />}
+                  Save Draft
+                </button>
+              ) : null}
+              {canPublish && caseData.status === "draft" ? (
+                <button
+                  type="button"
+                  onClick={handlePublish}
+                  disabled={isPublishing}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPublishing ? (
+                    <Loader2 className="animate-spin" size={17} />
+                  ) : (
+                    <Send size={17} />
+                  )}
+                  Publish
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -601,8 +836,17 @@ export default function FacultyCaseBuilder() {
           mode === "ai" ? (
             <AiBriefStep
               brief={aiBrief}
+              form={coreForm}
+              courses={programOptions}
+              subjectOptions={subjectOptions}
               isBusy={isAiCreating}
               onBriefChange={setAiBrief}
+              onFieldChange={updateCoreField}
+              onCapabilityToggle={toggleCapability}
+              onSubjectAreaToggle={toggleSubjectArea}
+              onBloomsLevelToggle={toggleBloomsLevel}
+              onProgramToggle={toggleProgram}
+              onSemesterToggle={toggleSemester}
               onBack={() => setMode(null)}
               onGenerate={handleAiCreate}
             />
@@ -610,10 +854,33 @@ export default function FacultyCaseBuilder() {
             <CoreFieldsStep
               mode={mode}
               form={coreForm}
+              courses={programOptions}
+              subjectOptions={subjectOptions}
+              scratchSections={scratchSections}
+              scratchQuestions={scratchQuestions}
+              scratchTotalMarks={scratchTotalMarks}
+              scratchInstructions={scratchInstructions}
+              scratchTiming={scratchTiming}
+              scratchRubric={scratchRubric}
+              scratchNewCriterion={scratchNewCriterion}
               isSaving={isSaving}
               onBack={() => setMode(null)}
               onFieldChange={updateCoreField}
               onCapabilityToggle={toggleCapability}
+              onSubjectAreaToggle={toggleSubjectArea}
+              onBloomsLevelToggle={toggleBloomsLevel}
+              onProgramToggle={toggleProgram}
+              onSemesterToggle={toggleSemester}
+              onScratchSectionChange={updateScratchSection}
+              onScratchQuestionChange={updateScratchQuestion}
+              onScratchTotalMarksChange={handleScratchTotalMarksChange}
+              onScratchInstructionsChange={updateScratchInstructions}
+              onScratchTimingChange={updateScratchTiming}
+              onScratchRubricWeightChange={updateScratchRubricWeight}
+              onScratchRubricReset={resetScratchRubricWeights}
+              onScratchNewCriterionChange={setScratchNewCriterion}
+              onScratchAddCriterion={addScratchCriterion}
+              onScratchRemoveCriterion={removeScratchCriterion}
               onContinue={handleCreateDraft}
             />
           )
@@ -621,12 +888,19 @@ export default function FacultyCaseBuilder() {
           <EditorStep
             caseData={caseData}
             mode={mode}
+            readOnly={isReadOnly}
             coreForm={coreForm}
+            courses={programOptions}
+            subjectOptions={subjectOptions}
             publishBlockers={publishBlockers}
             generatingSection={generatingSection}
             generationJob={generationJob}
             onFieldChange={updateCoreField}
             onCapabilityToggle={toggleCapability}
+            onSubjectAreaToggle={toggleSubjectArea}
+            onBloomsLevelToggle={toggleBloomsLevel}
+            onProgramToggle={toggleProgram}
+            onSemesterToggle={toggleSemester}
             onSectionChange={updateSection}
             onGenerate={handleGenerate}
             onTimingChange={updateTiming}
@@ -695,13 +969,38 @@ function EntryCard({ title, description, icon: Icon, onClick }: EntryCardProps) 
 
 interface AiBriefStepProps {
   brief: string
+  form: CoreFormState
+  courses: FacultyCourseOption[]
+  subjectOptions: string[]
   isBusy: boolean
   onBriefChange: (value: string) => void
+  onFieldChange: (field: keyof CoreFormState, value: string) => void
+  onCapabilityToggle: (capabilityName: string) => void
+  onSubjectAreaToggle: (area: string) => void
+  onBloomsLevelToggle: (level: string) => void
+  onProgramToggle: (courseId: number) => void
+  onSemesterToggle: (semester: number) => void
   onBack: () => void
   onGenerate: () => void
 }
 
-function AiBriefStep({ brief, isBusy, onBriefChange, onBack, onGenerate }: AiBriefStepProps) {
+function AiBriefStep({
+  brief,
+  form,
+  courses,
+  subjectOptions,
+  isBusy,
+  onBriefChange,
+  onFieldChange,
+  onCapabilityToggle,
+  onSubjectAreaToggle,
+  onBloomsLevelToggle,
+  onProgramToggle,
+  onSemesterToggle,
+  onBack,
+  onGenerate,
+}: AiBriefStepProps) {
+  const canGenerate = brief.trim().length > 0 && form.capabilities.length > 0
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
       <div className="mb-5 flex items-start justify-between gap-3">
@@ -713,8 +1012,8 @@ function AiBriefStep({ brief, isBusy, onBriefChange, onBack, onGenerate }: AiBri
             </span>
           </div>
           <p className="mt-1 text-sm text-[#6b7280]">
-            Just write a line or two about the case. AI infers the title, capability, difficulty,
-            and fills every section, question, timing, and rubric — no fields to set up.
+            Write a line or two about the case, and set the classification below. AI fills every
+            section, question, timing, and rubric around your picks.
           </p>
         </div>
         <button type="button" onClick={onBack} className="text-sm font-semibold text-[#6b7280]">
@@ -728,15 +1027,35 @@ function AiBriefStep({ brief, isBusy, onBriefChange, onBack, onGenerate }: AiBri
         placeholder="e.g. A regional healthy-snacks company negotiating shelf space and trade terms with a large retail chain. Focus on negotiation strategy under a limited budget."
         className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
       />
+      <div className="mt-5">
+        <TaxonomyFields
+          form={form}
+          courses={courses}
+          subjectOptions={subjectOptions}
+          onFieldChange={onFieldChange}
+          onCapabilityToggle={onCapabilityToggle}
+          onSubjectAreaToggle={onSubjectAreaToggle}
+          onBloomsLevelToggle={onBloomsLevelToggle}
+          onProgramToggle={onProgramToggle}
+          onSemesterToggle={onSemesterToggle}
+        />
+      </div>
       <button
         type="button"
         onClick={onGenerate}
-        disabled={isBusy || !brief.trim()}
+        disabled={isBusy || !canGenerate}
         className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isBusy ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
         {isBusy ? "Generating the whole case…" : "Generate entire case"}
       </button>
+      {isBusy ? (
+        <p className="mt-2 text-xs text-[#6b7280]">
+          The AI is writing the full case in one pass — narrative, three structured questions with
+          model answers, student instructions, and rubric criteria. This can take up to a couple of
+          minutes; please don&apos;t close this tab.
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -744,60 +1063,317 @@ function AiBriefStep({ brief, isBusy, onBriefChange, onBack, onGenerate }: AiBri
 interface CoreFieldsStepProps {
   mode: BuilderMode
   form: CoreFormState
+  courses: FacultyCourseOption[]
+  subjectOptions: string[]
+  scratchSections: { data: string; objectives: string }
+  scratchQuestions: FacultyCaseQuestion[]
+  scratchTotalMarks: number | null
+  scratchInstructions: FacultyCaseInstructions
+  scratchTiming: FacultyCaseTiming
+  scratchRubric: FacultyRubric
+  scratchNewCriterion: string
   isSaving: boolean
   onBack: () => void
   onFieldChange: (field: keyof CoreFormState, value: string) => void
   onCapabilityToggle: (capabilityName: string) => void
+  onSubjectAreaToggle: (area: string) => void
+  onBloomsLevelToggle: (level: string) => void
+  onProgramToggle: (courseId: number) => void
+  onSemesterToggle: (semester: number) => void
+  onScratchSectionChange: (section: "data" | "objectives", value: string) => void
+  onScratchQuestionChange: <K extends keyof FacultyCaseQuestion>(
+    index: number,
+    field: K,
+    value: FacultyCaseQuestion[K],
+  ) => void
+  onScratchTotalMarksChange: (value: number | null) => void
+  onScratchInstructionsChange: <K extends keyof FacultyCaseInstructions>(
+    field: K,
+    value: string,
+  ) => void
+  onScratchTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
+  onScratchRubricWeightChange: (key: RubricCriterionKey, value: string) => void
+  onScratchRubricReset: () => void
+  onScratchNewCriterionChange: (value: string) => void
+  onScratchAddCriterion: () => void
+  onScratchRemoveCriterion: (index: number) => void
   onContinue: () => void
 }
 
 function CoreFieldsStep({
   mode,
   form,
+  courses,
+  subjectOptions,
+  scratchSections,
+  scratchQuestions,
+  scratchTotalMarks,
+  scratchInstructions,
+  scratchTiming,
+  scratchRubric,
+  scratchNewCriterion,
   isSaving,
   onBack,
   onFieldChange,
   onCapabilityToggle,
+  onSubjectAreaToggle,
+  onBloomsLevelToggle,
+  onProgramToggle,
+  onSemesterToggle,
+  onScratchSectionChange,
+  onScratchQuestionChange,
+  onScratchTotalMarksChange,
+  onScratchInstructionsChange,
+  onScratchTimingChange,
+  onScratchRubricWeightChange,
+  onScratchRubricReset,
+  onScratchNewCriterionChange,
+  onScratchAddCriterion,
+  onScratchRemoveCriterion,
   onContinue,
 }: CoreFieldsStepProps) {
+  const rubricTotal = Object.values(scratchRubric.weights).reduce(
+    (sum, value) => sum + Number(value || 0),
+    0,
+  )
+  const canContinue = !isSaving && (mode !== "scratch" || rubricTotal === 100)
+
   return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold">Core Fields</h2>
-          <p className="mt-1 text-sm text-[#6b7280]">
-            {mode === "ai"
-              ? "AI generation starts only after these fields are saved."
-              : "These fields create the draft before the section editor opens."}
-          </p>
+    <div className="space-y-5">
+      <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold">Core Fields</h2>
+            <p className="mt-1 text-sm text-[#6b7280]">
+              {mode === "ai"
+                ? "AI generation starts only after these fields are saved."
+                : "Fill in the whole case here — sections, questions, rapid fire, instructions, and the rubric included. Faculty can't edit it once it's created, only view it; an admin reviews and publishes it."}
+            </p>
+          </div>
+          <button type="button" onClick={onBack} className="text-sm font-semibold text-[#6b7280]">
+            Change mode
+          </button>
         </div>
-        <button type="button" onClick={onBack} className="text-sm font-semibold text-[#6b7280]">
-          Change mode
-        </button>
-      </div>
-      <CoreFieldsForm form={form} onFieldChange={onFieldChange} onCapabilityToggle={onCapabilityToggle} />
+        <CoreFieldsForm
+          form={form}
+          courses={courses}
+          subjectOptions={subjectOptions}
+          onFieldChange={onFieldChange}
+          onCapabilityToggle={onCapabilityToggle}
+          onSubjectAreaToggle={onSubjectAreaToggle}
+          onBloomsLevelToggle={onBloomsLevelToggle}
+          onProgramToggle={onProgramToggle}
+          onSemesterToggle={onSemesterToggle}
+        />
+      </section>
+
+      {mode === "scratch" ? (
+        <>
+          <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+            <h2 className="text-2xl font-semibold">Case Content</h2>
+            <p className="mt-1 text-sm text-[#6b7280]">
+              The case's data and the student's objective.
+            </p>
+            <div className="mt-4 grid gap-4">
+              <TextAreaField
+                label="Data (key facts & figures)"
+                value={scratchSections.data}
+                rows={4}
+                placeholder="Key facts and figures students should use — numbers, prices, percentages, dates."
+                onChange={(value) => onScratchSectionChange("data", value)}
+              />
+              <TextAreaField
+                label="Objectives"
+                value={scratchSections.objectives}
+                rows={3}
+                placeholder="What the student is expected to analyse, achieve, or decide."
+                onChange={(value) => onScratchSectionChange("objectives", value)}
+              />
+            </div>
+          </section>
+
+          <QuestionsPanel
+            mode={mode}
+            questions={scratchQuestions}
+            totalMarks={scratchTotalMarks}
+            onTotalMarksChange={onScratchTotalMarksChange}
+            onChange={onScratchQuestionChange}
+            onOpenGenerateModal={() => undefined}
+          />
+
+          <TimingPanel
+            timing={scratchTiming}
+            durationMinutes={form.duration_minutes}
+            onTimingChange={onScratchTimingChange}
+          />
+
+          <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+            <h2 className="text-2xl font-semibold">Student Instructions</h2>
+            <p className="mt-1 text-sm text-[#6b7280]">Shown to students at each phase.</p>
+            <div className="mt-4 grid gap-4">
+              <TextAreaField
+                label="Before Reading"
+                value={scratchInstructions.student_instructions_before ?? ""}
+                placeholder="What students should do before they start reading."
+                onChange={(value) => onScratchInstructionsChange("student_instructions_before", value)}
+              />
+              <TextAreaField
+                label="While Answering"
+                value={scratchInstructions.student_instructions_during ?? ""}
+                placeholder="How they should answer."
+                onChange={(value) => onScratchInstructionsChange("student_instructions_during", value)}
+              />
+              <TextAreaField
+                label="Submission"
+                value={scratchInstructions.student_instructions_submission ?? ""}
+                placeholder="Submission rules."
+                onChange={(value) => onScratchInstructionsChange("student_instructions_submission", value)}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Evaluation Rubric</h2>
+                <p className="mt-1 text-sm text-[#6b7280]">
+                  How this case is scored. Weights must total 100%. Add up to two case-specific checks.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onScratchRubricReset}
+                className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+              >
+                <RotateCcw size={13} aria-hidden="true" />
+                Reset to default
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {RUBRIC_CRITERIA.map((criterion) => (
+                <div key={criterion.key} className="grid gap-2 rounded-md border border-[#e6e8eb] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-[#111827]">{criterion.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={scratchRubric.weights[criterion.key]}
+                        onChange={(event) => onScratchRubricWeightChange(criterion.key, event.target.value)}
+                        className="h-9 w-16 rounded-md border border-[#e6e8eb] bg-white px-2 text-right text-sm font-semibold outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                      />
+                      <span className="text-sm font-semibold text-[#6b7280]">%</span>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={scratchRubric.weights[criterion.key]}
+                    onChange={(event) => onScratchRubricWeightChange(criterion.key, event.target.value)}
+                    className="w-full accent-[#0b1d3a]"
+                    aria-label={`${criterion.label} weight`}
+                  />
+                </div>
+              ))}
+            </div>
+            <div
+              className={`mt-4 rounded-lg border px-4 py-2.5 text-sm font-semibold ${
+                rubricTotal === 100
+                  ? "border-[#abefc6] bg-[#ecfdf3] text-[#027a48]"
+                  : "border-[#f3c4c4] bg-[#fff5f5] text-[#b42318]"
+              }`}
+            >
+              {rubricTotal === 100 ? (
+                <span className="inline-flex items-center gap-2">
+                  <CheckCircle2 size={15} /> Total: 100%
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2">
+                  <AlertTriangle size={15} /> Total: {rubricTotal}% — must equal 100%
+                </span>
+              )}
+            </div>
+
+            <h3 className="mb-2 mt-6 text-sm font-semibold uppercase tracking-wide text-[#6b7280]">
+              Case-specific criteria
+            </h3>
+            <div className="grid gap-2">
+              {scratchRubric.case_specific_criteria.map((criterion, index) => (
+                <div
+                  key={`${criterion}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-md border border-[#e6e8eb] px-3 py-2.5"
+                >
+                  <p className="text-sm font-medium text-[#111827]">{criterion}</p>
+                  <button
+                    type="button"
+                    onClick={() => onScratchRemoveCriterion(index)}
+                    className="grid size-8 shrink-0 place-items-center rounded-md text-[#b42318] transition hover:bg-[#fff5f5]"
+                    aria-label="Remove criterion"
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={scratchNewCriterion}
+                onChange={(event) => onScratchNewCriterionChange(event.target.value)}
+                disabled={scratchRubric.case_specific_criteria.length >= 2}
+                maxLength={160}
+                placeholder={
+                  scratchRubric.case_specific_criteria.length >= 2
+                    ? "Maximum of 2 criteria reached"
+                    : "Add a short qualitative criterion"
+                }
+                className="h-11 min-w-0 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb]"
+              />
+              <button
+                type="button"
+                onClick={onScratchAddCriterion}
+                disabled={!scratchNewCriterion.trim() || scratchRubric.case_specific_criteria.length >= 2}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Plus size={15} aria-hidden="true" />
+                Add
+              </button>
+            </div>
+          </section>
+        </>
+      ) : null}
+
       <button
         type="button"
         onClick={onContinue}
-        disabled={isSaving}
-        className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={!canContinue}
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSaving ? <Loader2 className="animate-spin" size={17} /> : <FileText size={17} />}
         Create Draft
       </button>
-    </section>
+    </div>
   )
 }
 
 interface EditorStepProps {
   caseData: FacultyCaseEditor
   mode: BuilderMode
+  readOnly: boolean
   coreForm: CoreFormState
+  courses: FacultyCourseOption[]
+  subjectOptions: string[]
   publishBlockers: string[]
   generatingSection: CaseSectionKey | null
   generationJob: FacultyCaseGenerationJob | null
   onFieldChange: (field: keyof CoreFormState, value: string) => void
   onCapabilityToggle: (capabilityName: string) => void
+  onSubjectAreaToggle: (area: string) => void
+  onBloomsLevelToggle: (level: string) => void
+  onProgramToggle: (courseId: number) => void
+  onSemesterToggle: (semester: number) => void
   onSectionChange: (section: CaseSectionKey, value: string) => void
   onGenerate: (section: CaseSectionKey) => void
   onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
@@ -823,12 +1399,19 @@ interface EditorStepProps {
 function EditorStep({
   caseData,
   mode,
+  readOnly,
   coreForm,
+  courses,
+  subjectOptions,
   publishBlockers,
   generatingSection,
   generationJob,
   onFieldChange,
   onCapabilityToggle,
+  onSubjectAreaToggle,
+  onBloomsLevelToggle,
+  onProgramToggle,
+  onSemesterToggle,
   onSectionChange,
   onGenerate,
   onTimingChange,
@@ -845,6 +1428,15 @@ function EditorStep({
 }: EditorStepProps) {
   return (
     <div className="space-y-5">
+      {readOnly ? (
+        <div className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] px-4 py-3 text-sm font-medium text-[#374151]">
+          You're viewing this case in read-only mode. Only an admin can edit it.
+          {caseData.created_by === Number(getCurrentUser()?.sub) && caseData.status === "draft"
+            ? " Since you created it, you can still publish it as-is using the button above."
+            : ""}
+        </div>
+      ) : null}
+
       {caseData.status === "published" && caseData.active_attempts > 0 ? (
         <div className="rounded-lg border border-[#facc15] bg-[#fffbeb] px-4 py-3 text-sm font-medium text-[#92400e]">
           {caseData.active_attempts} students have an active attempt on this case. Changes may
@@ -852,6 +1444,10 @@ function EditorStep({
         </div>
       ) : null}
 
+      <div
+        className={readOnly ? "pointer-events-none space-y-5 opacity-75" : "space-y-5"}
+        aria-disabled={readOnly || undefined}
+      >
       <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -868,7 +1464,17 @@ function EditorStep({
             The editor will refresh when it is ready.
           </div>
         ) : null}
-        <CoreFieldsForm form={coreForm} onFieldChange={onFieldChange} onCapabilityToggle={onCapabilityToggle} />
+        <CoreFieldsForm
+          form={coreForm}
+          courses={courses}
+          subjectOptions={subjectOptions}
+          onFieldChange={onFieldChange}
+          onCapabilityToggle={onCapabilityToggle}
+          onSubjectAreaToggle={onSubjectAreaToggle}
+          onBloomsLevelToggle={onBloomsLevelToggle}
+          onProgramToggle={onProgramToggle}
+          onSemesterToggle={onSemesterToggle}
+        />
       </section>
 
       <RubricEditor caseId={caseData.id} />
@@ -951,17 +1557,34 @@ function EditorStep({
           </div>
         </section>
       ) : null}
+      </div>
     </div>
   )
 }
 
 interface CoreFieldsFormProps {
   form: CoreFormState
+  courses: FacultyCourseOption[]
+  subjectOptions: string[]
   onFieldChange: (field: keyof CoreFormState, value: string) => void
   onCapabilityToggle: (capabilityName: string) => void
+  onSubjectAreaToggle: (area: string) => void
+  onBloomsLevelToggle: (level: string) => void
+  onProgramToggle: (courseId: number) => void
+  onSemesterToggle: (semester: number) => void
 }
 
-function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsFormProps) {
+function CoreFieldsForm({
+  form,
+  courses,
+  subjectOptions,
+  onFieldChange,
+  onCapabilityToggle,
+  onSubjectAreaToggle,
+  onBloomsLevelToggle,
+  onProgramToggle,
+  onSemesterToggle,
+}: CoreFieldsFormProps) {
   return (
     <div className="grid gap-4">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -971,16 +1594,17 @@ function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsF
           placeholder="e.g. Negotiating Shelf Space with a Retail Chain"
           onChange={(value) => onFieldChange("title", value)}
         />
-        <label className="grid gap-2 text-sm font-semibold text-[#111827] lg:col-span-2">
-          Description
-          <textarea
+        <div className="grid gap-2 text-sm font-semibold text-[#111827] lg:col-span-2">
+          <span>Description</span>
+          <ExpandableTextarea
+            label="Description"
             value={form.description}
-            onChange={(event) => onFieldChange("description", event.target.value)}
-            placeholder="A short summary shown to students and on the case listing."
-            rows={3}
+            onChange={(value) => onFieldChange("description", value)}
+            placeholder="The case's full narrative shown to students: company/industry context, the situation and decision at stake, key people, constraints, timeline, and the learning outcomes/reflection points the case is meant to build — all in one place."
+            rows={8}
             className="rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
           />
-        </label>
+        </div>
         <label className="grid gap-2 text-sm font-semibold text-[#111827]">
           Industry
           <select
@@ -995,28 +1619,174 @@ function CoreFieldsForm({ form, onFieldChange, onCapabilityToggle }: CoreFieldsF
             ))}
           </select>
         </label>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <label className="grid gap-2 text-sm font-semibold text-[#111827]">
-          Difficulty
-          <select
-            value={form.difficulty}
-            onChange={(event) => onFieldChange("difficulty", event.target.value)}
-            className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
-          >
-            {[1, 2, 3, 4, 5, 6, 7].map((level) => (
-              <option key={level} value={level}>
-                Level {level}
-              </option>
-            ))}
-          </select>
-        </label>
         <DurationField
           value={form.duration_minutes}
           onChange={(value) => onFieldChange("duration_minutes", value)}
         />
       </div>
+      <TaxonomyFields
+        form={form}
+        courses={courses}
+        subjectOptions={subjectOptions}
+        onFieldChange={onFieldChange}
+        onCapabilityToggle={onCapabilityToggle}
+        onSubjectAreaToggle={onSubjectAreaToggle}
+        onBloomsLevelToggle={onBloomsLevelToggle}
+        onProgramToggle={onProgramToggle}
+        onSemesterToggle={onSemesterToggle}
+      />
+    </div>
+  )
+}
+
+interface TaxonomyFieldsProps {
+  form: CoreFormState
+  courses: FacultyCourseOption[]
+  subjectOptions: string[]
+  onFieldChange: (field: keyof CoreFormState, value: string) => void
+  onCapabilityToggle: (capabilityName: string) => void
+  onSubjectAreaToggle: (area: string) => void
+  onBloomsLevelToggle: (level: string) => void
+  onProgramToggle: (courseId: number) => void
+  onSemesterToggle: (semester: number) => void
+}
+
+// The six case-level classification picks — shared identically between the
+// "Start from Scratch" core-fields form, the "Generate with AI" brief screen,
+// and post-creation admin edits, so faculty/admin always see the same controls.
+function TaxonomyFields({
+  form,
+  courses,
+  subjectOptions,
+  onFieldChange,
+  onCapabilityToggle,
+  onSubjectAreaToggle,
+  onBloomsLevelToggle,
+  onProgramToggle,
+  onSemesterToggle,
+}: TaxonomyFieldsProps) {
+  const selectedCourses = courses.filter((course) => form.programIds.includes(course.id))
+  const maxSemester = selectedCourses.length > 0
+    ? Math.max(...selectedCourses.map((course) => course.total_semesters || DEFAULT_SEMESTER_COUNT))
+    : DEFAULT_SEMESTER_COUNT
+  const semesterOptions = Array.from({ length: maxSemester }, (_, i) => i + 1)
+
+  return (
+    <div className="grid gap-5">
+      <label className="grid gap-2 text-sm font-semibold text-[#111827] lg:w-1/3">
+        Difficulty
+        <select
+          value={form.difficulty}
+          onChange={(event) => onFieldChange("difficulty", event.target.value)}
+          className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        >
+          {[1, 2, 3, 4, 5].map((level) => (
+            <option key={level} value={level}>
+              Level {level}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <CapabilitySelector selected={form.capabilities} onToggle={onCapabilityToggle} />
+
+      <div className="grid gap-2 text-sm font-semibold text-[#111827]">
+        <span>Bloom's Taxonomy Level</span>
+        <div className="flex flex-wrap gap-3">
+          {BLOOM_LEVELS.map((level) => (
+            <label
+              key={level}
+              className="flex items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm font-medium text-[#111827]"
+            >
+              <input
+                type="checkbox"
+                checked={form.bloomsLevels.includes(level)}
+                onChange={() => onBloomsLevelToggle(level)}
+                className="size-4"
+              />
+              {level}
+            </label>
+          ))}
+        </div>
+        <span className="text-xs font-normal text-[#6b7280]">Select as many as apply.</span>
+      </div>
+
+      <div className="grid gap-2 text-sm font-semibold text-[#111827]">
+        <span>Subject</span>
+        {subjectOptions.length === 0 ? (
+          <span className="text-xs font-normal text-[#6b7280]">
+            No subjects found in My Teachings yet — add your teaching assignments first.
+          </span>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {subjectOptions.map((area) => (
+              <label
+                key={area}
+                className="flex items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm font-medium text-[#111827]"
+              >
+                <input
+                  type="checkbox"
+                  checked={form.subjectAreas.includes(area)}
+                  onChange={() => onSubjectAreaToggle(area)}
+                  className="size-4"
+                />
+                {area}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-2 text-sm font-semibold text-[#111827]">
+        <span>Program</span>
+        {courses.length === 0 ? (
+          <span className="text-xs font-normal text-[#6b7280]">
+            No programs found in My Teachings yet — add your teaching assignments first.
+          </span>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {courses.map((course) => (
+              <label
+                key={course.id}
+                className="flex items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm font-medium text-[#111827]"
+              >
+                <input
+                  type="checkbox"
+                  checked={form.programIds.includes(course.id)}
+                  onChange={() => onProgramToggle(course.id)}
+                  className="size-4"
+                />
+                {course.name}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-2 text-sm font-semibold text-[#111827]">
+        <span>Semester</span>
+        <div className="flex flex-wrap gap-3">
+          {semesterOptions.map((semester) => (
+            <label
+              key={semester}
+              className="flex items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm font-medium text-[#111827]"
+            >
+              <input
+                type="checkbox"
+                checked={form.semesters.includes(semester)}
+                onChange={() => onSemesterToggle(semester)}
+                className="size-4"
+              />
+              {semester}
+            </label>
+          ))}
+        </div>
+        <span className="text-xs font-normal text-[#6b7280]">
+          {selectedCourses.length > 0
+            ? "Range reflects the selected program(s)."
+            : "Select a program to narrow this range."}
+        </span>
+      </div>
     </div>
   )
 }
@@ -1240,10 +2010,8 @@ interface InstructionsPanelProps {
 function InstructionsPanel({ instructions, onChange }: InstructionsPanelProps) {
   return (
     <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <h2 className="text-2xl font-semibold">Student Instructions &amp; Faculty Notes</h2>
-      <p className="mt-1 text-sm text-[#6b7280]">
-        Shown to students at each phase, plus discussion notes for faculty only.
-      </p>
+      <h2 className="text-2xl font-semibold">Student Instructions</h2>
+      <p className="mt-1 text-sm text-[#6b7280]">Shown to students at each phase.</p>
       <div className="mt-5 grid gap-4">
         <TextAreaField
           label="Student Instructions - Before Reading"
@@ -1262,36 +2030,6 @@ function InstructionsPanel({ instructions, onChange }: InstructionsPanelProps) {
           value={instructions.student_instructions_submission ?? ""}
           placeholder="Submission rules (e.g. finish within the time limit; Rapid Fire starts right after; 70% completion needed to be evaluated)."
           onChange={(value) => onChange("student_instructions_submission", value)}
-        />
-        <TextAreaField
-          label="Company Background"
-          value={instructions.company_background ?? ""}
-          placeholder="The company profile — name, location, business, size, turnover."
-          onChange={(value) => onChange("company_background", value)}
-        />
-        <TextAreaField
-          label="Industry Background"
-          value={instructions.industry_background ?? ""}
-          placeholder="The market/industry context relevant to the case."
-          onChange={(value) => onChange("industry_background", value)}
-        />
-        <TextAreaField
-          label="Faculty Notes - Common Mistakes"
-          value={instructions.faculty_common_mistakes ?? ""}
-          placeholder="Typical errors students make on this case (faculty-only)."
-          onChange={(value) => onChange("faculty_common_mistakes", value)}
-        />
-        <TextAreaField
-          label="Faculty Notes - Discussion Points"
-          value={instructions.faculty_discussion_points ?? ""}
-          placeholder="Prompts for classroom discussion (faculty-only)."
-          onChange={(value) => onChange("faculty_discussion_points", value)}
-        />
-        <TextAreaField
-          label="Key Learning Points"
-          value={instructions.key_learning_points ?? ""}
-          placeholder="The main takeaways students should leave with."
-          onChange={(value) => onChange("key_learning_points", value)}
         />
       </div>
     </section>
@@ -1390,18 +2128,12 @@ function QuestionsPanel({
                 placeholder="The question the student must answer (e.g. Identify the main negotiation challenge faced by the company)."
                 onChange={(value) => onChange(index, "question_text", value)}
               />
-              <div className="grid gap-4 sm:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <NumberField
                   label="Marks"
                   value={question.marks}
                   placeholder="e.g. 2"
                   onChange={(value) => onChange(index, "marks", value ?? 0)}
-                />
-                <SelectField
-                  label="Bloom's Level"
-                  value={question.blooms_level ?? ""}
-                  options={bloomsLevels}
-                  onChange={(value) => onChange(index, "blooms_level", value)}
                 />
                 <NumberField
                   label="Word Limit (Min)"
@@ -1547,20 +2279,8 @@ interface SectionEditorProps {
 }
 
 const SECTION_HINTS: Record<CaseSectionKey, string> = {
-  situation:
-    "Describe the core business situation and the decision to be made — what's happening, who is involved, and what the student must decide.",
-  background:
-    "Company and industry context relevant to the case (size, turnover, market, history).",
   data: "Key facts and figures students should use — numbers, prices, percentages, dates.",
-  characters:
-    "The people in the case and their roles/interests (e.g. the decision-maker, stakeholders, the student's role).",
-  constraints:
-    "Limits and pressures the student must work within — budget, time, policy, resources.",
   objectives: "What the student is expected to analyse, achieve, or decide. State the task clearly.",
-  timeline: "The sequence of events, meetings, or deadlines relevant to the decision.",
-  reflection_questions: "One question per line — open-ended prompts for the student to reflect on.",
-  learning_outcomes:
-    "One outcome per line — what students should be able to do after completing this case.",
 }
 
 function SectionEditor({
@@ -1660,6 +2380,10 @@ function caseToCoreForm(caseData: FacultyCaseEditor): CoreFormState {
     difficulty: String(caseData.difficulty),
     duration_minutes: String(caseData.duration_minutes),
     capabilities: caseData.capabilities,
+    subjectAreas: caseData.subject_areas,
+    bloomsLevels: caseData.metadata.blooms_levels ?? [],
+    programIds: caseData.recommendation.recommended_course_ids,
+    semesters: caseData.recommendation.recommended_semesters,
   }
 }
 

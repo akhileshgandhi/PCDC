@@ -25,7 +25,6 @@ const FALLBACK_CAPABILITIES = [
 
 interface EditableQuestion {
   question_text: string
-  blooms_level: string
   model_answer: string
   marking_scheme: string
 }
@@ -77,7 +76,6 @@ export default function PublishCaseDialog({ entry, variant, meta, onClose, onDon
   const [questions, setQuestions] = useState<EditableQuestion[]>(() =>
     (snapshot.questions ?? []).map((q) => ({
       question_text: q.question_text ?? "",
-      blooms_level: (q as Record<string, string>).blooms_level ?? "",
       model_answer: q.model_answer ?? "",
       marking_scheme: (q as Record<string, string>).marking_scheme ?? "",
     })),
@@ -149,7 +147,6 @@ export default function PublishCaseDialog({ entry, variant, meta, onClose, onDon
           .map((q, index) => ({
             question_number: index + 1,
             question_text: q.question_text,
-            blooms_level: q.blooms_level,
             model_answer: q.model_answer,
             marking_scheme: q.marking_scheme,
           })),
@@ -282,8 +279,6 @@ export default function PublishCaseDialog({ entry, variant, meta, onClose, onDon
                 <div className="space-y-2">
                   <textarea className={`${textareaClass} min-h-[48px]`} placeholder="Question text"
                     value={question.question_text} onChange={(e) => setQuestion(index, "question_text", e.target.value)} />
-                  <input className={inputClass} placeholder="Bloom's level (e.g. Analyze)"
-                    value={question.blooms_level} onChange={(e) => setQuestion(index, "blooms_level", e.target.value)} />
                   <textarea className={`${textareaClass} min-h-[60px]`} placeholder="Model answer"
                     value={question.model_answer} onChange={(e) => setQuestion(index, "model_answer", e.target.value)} />
                 </div>
@@ -291,16 +286,16 @@ export default function PublishCaseDialog({ entry, variant, meta, onClose, onDon
             ))}
             {questions.length < 3 ? (
               <button type="button" className={secondaryBtn}
-                onClick={() => setQuestions((current) => [...current, { question_text: "", blooms_level: "", model_answer: "", marking_scheme: "" }])}>
+                onClick={() => setQuestions((current) => [...current, { question_text: "", model_answer: "", marking_scheme: "" }])}>
                 + Add question
               </button>
             ) : null}
           </div>
         </details>
 
-        {/* ---- instructions & faculty notes ---- */}
+        {/* ---- student instructions ---- */}
         <details className="rounded-md border border-[#eef2f7] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-[#111827]">Instructions & faculty notes</summary>
+          <summary className="cursor-pointer text-sm font-semibold text-[#111827]">Student instructions</summary>
           <div className="mt-3 space-y-3">
             {INSTRUCTION_FIELDS.map((field) => (
               <div key={field.key}>

@@ -95,9 +95,6 @@ export default function ViewCaseDialog({ entry, variant, onClose, onPublish }: {
                 <details key={index} className="rounded-md border border-[#eef2f7] bg-[#f9fafb] p-3">
                   <summary className="cursor-pointer text-sm font-semibold text-[#111827]">
                     Q{index + 1}. {question.question_text}
-                    {question.blooms_level ? (
-                      <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#6b7280]">{question.blooms_level}</span>
-                    ) : null}
                   </summary>
                   {question.model_answer ? (
                     <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#374151]">
