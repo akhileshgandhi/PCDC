@@ -89,23 +89,24 @@ Output must match the provided JSON schema exactly.
 CASE_GENERATION_JOBS: Dict[str, Dict[str, Any]] = {}
 CASE_GENERATION_JOBS_LOCK = threading.Lock()
 
-DIFFICULTY_LABELS = ["Foundation", "Regular", "Pro", "Expert", "Champion"]
+DIFFICULTY_LABELS = ["Observation", "Analysis", "Decision Making", "Leadership", "Strategic Thinking"]
 FIXED_QUESTION_MARKS = [2, 2, 3]
 RAPID_FIRE_GENERATION_COUNT = 3
 
 # Bloom's Taxonomy is a case-level property, not an independently-editable
-# per-question field — every case targets the same cognitive level across all
-# its questions. Faculty/admin pick it explicitly from BLOOM_LEVELS at the
-# case level; BLOOMS_BY_DIFFICULTY only supplies a sensible starting value
-# (e.g. when a case is first created) rather than forcing the value.
+# per-question field — every case targets the same cognitive level(s) across
+# all its questions. Each difficulty level maps to exactly two Bloom's levels
+# (per the client spec); the UI auto-selects these the moment a difficulty is
+# chosen, so BLOOMS_BY_DIFFICULTY is the authoritative mapping, not just a
+# starting suggestion.
 BLOOM_LEVELS: List[str] = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
 
 BLOOMS_BY_DIFFICULTY: Dict[int, List[str]] = {
     1: ["Remember", "Understand"],
-    2: ["Apply"],
-    3: ["Analyze"],
-    4: ["Evaluate"],
-    5: ["Create"],
+    2: ["Understand", "Apply"],
+    3: ["Apply", "Analyze"],
+    4: ["Analyze", "Evaluate"],
+    5: ["Evaluate", "Create"],
 }
 
 
@@ -144,6 +145,89 @@ def difficulty_label_for(difficulty: int) -> str:
     return DIFFICULTY_LABELS[index]
 
 
+# Target word-count range for the case narrative (Case Background, Company/
+# Organisation Context, Situation, Facts and Data — all live in the
+# `description`/`expected_outcomes` field), scaled by difficulty level, per
+# the client's MBA case-authoring spec. The lower bound is enforced as a hard
+# minimum at publish time; the upper bound is only a hint fed to the AI.
+DESCRIPTION_WORD_RANGE_BY_DIFFICULTY: Dict[int, tuple] = {
+    1: (250, 275),
+    2: (275, 300),
+    3: (300, 325),
+    4: (325, 350),
+    5: (350, 400),
+}
+MIN_DESCRIPTION_WORDS_BY_DIFFICULTY: Dict[int, int] = {
+    level: bounds[0] for level, bounds in DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.items()
+}
+
+# Target word-count range per written question's Expected Answer (the
+# faculty answer key stored as model_answer) — a hint fed to the AI, not
+# enforced server-side since it's internal faculty content, not student-facing.
+ANSWER_WORD_RANGE_BY_DIFFICULTY: Dict[int, tuple] = {
+    1: (100, 140),
+    2: (120, 160),
+    3: (140, 190),
+    4: (160, 210),
+    5: (180, 250),
+}
+
+# The primary capability "families" each difficulty level is meant to
+# exercise, per the client's spec — used to steer the AI's own capability
+# suggestion toward a complementary triad rather than a random pick.
+PRIMARY_CAPABILITIES_BY_DIFFICULTY: Dict[int, List[str]] = {
+    1: ["Observation", "Questioning", "Reasoning"],
+    2: ["Diagnosis", "Problem Solving", "Analytical Thinking"],
+    3: ["Judgment", "Trade-off Analysis", "Decision Making"],
+    4: ["Influence", "Communication", "Empathy", "Conflict Management", "Leadership"],
+    5: ["Systems Thinking", "Long-term Planning", "Strategic Thinking", "Business Acumen", "Decision Making"],
+}
+
+# Semester progression, per the client's spec — complexity must increase
+# through BOTH the Difficulty Level AND the Semester, so a case fed the same
+# difficulty but a later semester should still read as more senior/complex.
+SEMESTER_FOCUS_BY_NUMBER: Dict[int, str] = {
+    1: (
+        "relatively straightforward — one primary problem; the student mainly "
+        "identifies what is happening (identifying problems, interpreting "
+        "information, basic diagnosis, simple managerial decisions); limited "
+        "stakeholder conflict"
+    ),
+    2: (
+        "introduces multiple variables, conflicting objectives, quantitative "
+        "information, and competing alternatives; the student diagnoses why it "
+        "is happening; some competing stakeholder interests"
+    ),
+    3: (
+        "deeper analysis, managerial judgment, cross-functional thinking, "
+        "uncertainty, trade-offs, people issues and implementation challenges; "
+        "the student chooses among genuinely competing alternatives; "
+        "significant stakeholder trade-offs"
+    ),
+    4: (
+        "resembles a problem faced by a business head, functional head, senior "
+        "manager, entrepreneur, or CEO — ambiguity, conflicting stakeholder "
+        "interests, strategic consequences, incomplete information, "
+        "organisational constraints, and long-term consequences; the student "
+        "designs and implements a strategic response under uncertainty, with "
+        "multiple stakeholders holding conflicting incentives, power, "
+        "expectations and resistance"
+    ),
+}
+
+
+def semester_focus_for(semester: Optional[int]) -> str:
+    if not semester:
+        return "not specified — calibrate complexity from the Difficulty level alone"
+    # Beyond semester 4 (the client's spec covers 4), keep escalating: treat it
+    # at least as senior/complex as semester 4's focus.
+    return SEMESTER_FOCUS_BY_NUMBER.get(semester) or SEMESTER_FOCUS_BY_NUMBER[4]
+
+
+def word_count(text_value: Optional[str]) -> int:
+    return len((text_value or "").split())
+
+
 class CaseCoreFields(BaseModel):
     title: str
     industry: str
@@ -152,6 +236,9 @@ class CaseCoreFields(BaseModel):
     capabilities: List[str] = Field(default_factory=list)
     subject_areas: List[str] = Field(default_factory=list)
     expected_outcomes: Optional[str] = ""
+    outcome_statement: Optional[str] = ""
+    decision_options: Optional[List[str]] = None
+    learning_takeaways: Optional[List[str]] = None
     sections: Optional[Dict[str, Any]] = None
     section_meta: Optional[Dict[str, str]] = None
     questions: Optional[List[Dict[str, Any]]] = None
@@ -171,6 +258,9 @@ class CaseUpdateRequest(BaseModel):
     capabilities: Optional[List[str]] = None
     subject_areas: Optional[List[str]] = None
     expected_outcomes: Optional[str] = None
+    outcome_statement: Optional[str] = None
+    decision_options: Optional[List[str]] = None
+    learning_takeaways: Optional[List[str]] = None
     sections: Optional[Dict[str, Any]] = None
     section_meta: Optional[Dict[str, str]] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -696,7 +786,8 @@ CASE_EDITOR_COLUMNS = """
     written_marks, rapid_fire_marks, student_instructions_before,
     student_instructions_during, student_instructions_submission,
     recommended_semesters,
-    recommended_course_ids, created_at, updated_at
+    recommended_course_ids, outcome_statement, decision_options,
+    learning_takeaways, created_at, updated_at
 """
 
 
@@ -841,6 +932,9 @@ def case_editor_response(db: Session, row: Any) -> Dict[str, Any]:
         "capabilities": get_capability_tags(db, row.id),
         "subject_areas": get_subject_area_tags(db, row.id),
         "expected_outcomes": parsed_content["expected_outcomes"],
+        "outcome_statement": row.outcome_statement or "",
+        "decision_options": parse_json_or_lines(row.decision_options),
+        "learning_takeaways": parse_json_or_lines(row.learning_takeaways),
         "sections": parsed_content["sections"],
         "section_meta": parsed_content["section_meta"],
         "rubric_exists": bool(row.evaluation_rubric),
@@ -1259,9 +1353,7 @@ def run_case_generation_job(
                 SET content = :content,
                     updated_at = NOW()
                 WHERE id = :case_id
-                RETURNING id, title, description, content, domain, difficulty,
-                          estimated_minutes, status, evaluation_rubric, created_by,
-                          created_at, updated_at
+                RETURNING """ + CASE_EDITOR_COLUMNS + """
             """),
             {
                 "case_id": case_id,
@@ -1660,7 +1752,8 @@ def create_faculty_case(
                 total_marks, written_marks, rapid_fire_marks,
                 student_instructions_before, student_instructions_during,
                 student_instructions_submission,
-                recommended_semesters, recommended_course_ids
+                recommended_semesters, recommended_course_ids,
+                outcome_statement, decision_options, learning_takeaways
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty,
@@ -1672,7 +1765,8 @@ def create_faculty_case(
                 :total_marks, :written_marks, :rapid_fire_marks,
                 :student_instructions_before, :student_instructions_during,
                 :student_instructions_submission,
-                :recommended_semesters, :recommended_course_ids
+                :recommended_semesters, :recommended_course_ids,
+                :outcome_statement, :decision_options, :learning_takeaways
             )
             RETURNING """ + CASE_EDITOR_COLUMNS + """
         """),
@@ -1684,6 +1778,9 @@ def create_faculty_case(
             "difficulty": data.difficulty,
             "estimated_minutes": data.duration_minutes,
             "created_by": current_user["id"],
+            "outcome_statement": (data.outcome_statement or "").strip(),
+            "decision_options": json_text(data.decision_options),
+            "learning_takeaways": json_text(data.learning_takeaways),
             **metadata,
             **timing,
             **marks,
@@ -2303,9 +2400,7 @@ def save_faculty_case_rubric(
             SET evaluation_rubric = :evaluation_rubric,
                 updated_at = NOW()
             WHERE id = :case_id
-            RETURNING id, title, description, content, domain, difficulty,
-                      estimated_minutes, status, evaluation_rubric,
-                      created_at, updated_at
+            RETURNING """ + CASE_EDITOR_COLUMNS + """
         """),
         {
             "case_id": case_id,
@@ -2340,6 +2435,21 @@ def _apply_case_update(
         data.expected_outcomes.strip()
         if data.expected_outcomes is not None
         else parsed_content["expected_outcomes"]
+    )
+    outcome_statement = (
+        data.outcome_statement.strip()
+        if data.outcome_statement is not None
+        else (existing.outcome_statement or "")
+    )
+    decision_options = (
+        json_text(data.decision_options)
+        if data.decision_options is not None
+        else existing.decision_options
+    )
+    learning_takeaways = (
+        json_text(data.learning_takeaways)
+        if data.learning_takeaways is not None
+        else existing.learning_takeaways
     )
     sections = parsed_content["sections"]
     section_meta = parsed_content["section_meta"]
@@ -2441,6 +2551,9 @@ def _apply_case_update(
                 student_instructions_submission = :student_instructions_submission,
                 recommended_semesters = :recommended_semesters,
                 recommended_course_ids = :recommended_course_ids,
+                outcome_statement = :outcome_statement,
+                decision_options = :decision_options,
+                learning_takeaways = :learning_takeaways,
                 updated_at = NOW()
             WHERE id = :case_id
             RETURNING """ + CASE_EDITOR_COLUMNS + """
@@ -2453,6 +2566,9 @@ def _apply_case_update(
             "domain": domain,
             "difficulty": difficulty,
             "estimated_minutes": duration,
+            "outcome_statement": outcome_statement,
+            "decision_options": decision_options,
+            "learning_takeaways": learning_takeaways,
             **metadata,
             **timing,
             **marks,
@@ -2584,31 +2700,119 @@ class AiFillRequest(BaseModel):
     subject: Optional[str] = None
 
 
-AI_FILL_SYSTEM_PROMPT = """You are an expert business-school case-study author for PCDC Case Studio.
-From a short brief you write a COMPLETE, classroom-ready case study for assessment.
+AI_FILL_SYSTEM_PROMPT = """You are an expert MBA/PGDM case-study designer, management educator, and
+corporate learning specialist, writing for PCDC Case Studio. From a short
+brief you write a COMPLETE, classroom-ready, decision-oriented case study.
 
 The brief you're given may be short, vaguely worded, poorly phrased, or missing
 details a case normally needs — treat that as the norm, not an obstacle. Never
 produce a thin, generic, or lower-effort case because the brief was weak, and
 never mention or apologize for gaps in the brief anywhere in your output. Read
 past wording issues to the underlying intent, then use your own business
-judgment to invent whatever specific, plausible detail is missing (industry
-context, numbers, stakeholders, complications) so the result reads like a
-professionally authored, fully fleshed-out case — as polished and detailed as
-if an expert case author had been given a complete, well-written brief.
+judgment to invent whatever specific, plausible detail is missing (context,
+numbers, stakeholders, complications) so the result reads like a professionally
+authored, fully fleshed-out case.
+
+REALISM — this is the single most important rule:
+- The case must resemble a situation that could genuinely happen in an Indian
+  organisation today — an SME, family business, startup, regional business,
+  manufacturing unit, distributor, retailer, service business, school/hospital/
+  diagnostic centre, logistics company, food business, D2C brand, automobile
+  ancillary unit, or local technology company. Prefer realistic Indian cities
+  (e.g. Indore, Bhopal, Gwalior, Ujjain, Dewas, Kota, Jaipur, Nagpur, Raipur,
+  Pune, Ahmedabad, Surat, Lucknow, Chandigarh, Vadodara, Nashik) when a
+  location naturally fits — never force one in if it adds nothing.
+- It should read like something an MBA student could realistically meet on an
+  internship, a management-trainee assignment, a consulting project, in a
+  family business, a startup, or a corporate/managerial role — NOT like a
+  textbook example or an artificial academic exercise.
+- Do not manufacture a dramatic crisis. Ordinary but consequential decisions
+  are more realistic than emergencies.
+- Avoid: generic textbook setups, unrealistic companies, excessive jargon,
+  unnecessarily complicated mathematics, random/irrelevant numbers, and cases
+  where the right answer is obvious.
+- Use SPECIFIC, plausible numeric data (revenue, costs, margins, volumes,
+  headcount, attrition %, inventory, capacity/utilisation, market share,
+  working capital, defect/complaint rates, etc.) — but only where it's
+  relevant to the decision, and don't overload a Level 1 case with data.
+
+DIFFICULTY CALIBRATION — match the case genuinely to the stated level, not just its label:
+- Level 1 (Observation): a simple, realistic situation. The student notices
+  facts, identifies obvious issues, and asks relevant questions. No
+  sophisticated strategic decision is required.
+- Level 2 (Analysis): multiple variables and competing explanations. The
+  student interprets information, identifies root causes, and applies a
+  management concept.
+- Level 3 (Decision Making): several genuinely defensible courses of action —
+  do NOT make the answer obvious. The student must weigh costs, benefits,
+  risks, stakeholder interests, constraints, and short- vs long-term
+  implications.
+- Level 4 (Leadership): significant people-complexity layered onto the
+  business problem — stakeholders with different interests, priorities,
+  emotions, incentives, fears, and expectations. The student must influence
+  people, not just solve the business problem.
+- Level 5 (Strategic Thinking): a complex, interconnected challenge spanning
+  multiple dimensions (financial, customers, competitors, people, operations,
+  technology, market, risk, scalability, long-term sustainability). There is
+  no simplistic correct answer.
+
+SEMESTER PROGRESSION — complexity must increase through BOTH the Difficulty
+Level above AND the Semester given in the user message; a later semester at
+the same difficulty should still read as more senior:
+- Semester 1: one primary problem — identifying what is happening, basic
+  diagnosis, simple managerial decisions; limited stakeholder conflict.
+- Semester 2: multiple variables, conflicting objectives, quantitative
+  information, competing alternatives — diagnosing why it is happening; some
+  competing stakeholder interests.
+- Semester 3: deeper analysis, managerial judgment, cross-functional
+  thinking, uncertainty, trade-offs, people issues, implementation
+  challenges — choosing among genuinely competing alternatives; significant
+  stakeholder trade-offs.
+- Semester 4: a problem resembling what a business head, functional head,
+  senior manager, entrepreneur, or CEO would face — ambiguity, conflicting
+  stakeholder interests, strategic consequences, incomplete information,
+  organisational constraints, long-term consequences; designing and
+  implementing a strategic response under uncertainty, with multiple
+  stakeholders holding conflicting incentives, power, expectations, and
+  resistance.
+If no semester is given, calibrate purely from the Difficulty Level.
+
+CAPABILITIES — pick EXACTLY THREE that genuinely complement each other and
+match what the student must actually demonstrate to solve THIS case (do not
+pick randomly). Draw from the family for the target difficulty as a starting
+point, adapting to the specific case:
+- Level 1: Observation, Questioning, Reasoning
+- Level 2: Diagnosis, Problem Solving, Analytical Thinking
+- Level 3: Judgment, Trade-off Analysis, Decision Making
+- Level 4: Influence, Communication, Empathy, Conflict Management, Leadership
+- Level 5: Systems Thinking, Long-term Planning, Strategic Thinking, Business Acumen, Decision Making
 
 Guidelines:
 - Invent a plausible fictional company, people, and SPECIFIC numeric data (figures, %, prices, dates).
-- Calibrate depth to the given difficulty level.
-- Focus the evidence, questions, and model answers on the target capability(ies).
-- Produce EXACTLY 3 written questions of increasing depth.
+- Produce EXACTLY 3 written questions of increasing depth. At least one must be phrased as a
+  first-person scenario such as "If you were in this situation, what would you do and why?" —
+  other good formulations: "What would you do in the first 30 days?", "Which information would
+  you seek before deciding?", "What risks could arise from your recommendation?", "How would you
+  implement your recommendation?", "What would you do differently if the situation changed?".
+  Never repeat the same question phrasing across questions.
+- Each "model_answer" is a FACULTY ANSWER KEY, not a short model response — substantially longer
+  than the question. It should generally cover: what a strong student should identify,
+  interpretation of the facts, reasoning, evidence from the case, key assumptions, a recommended
+  approach, alternatives where appropriate, risks, trade-offs, implementation considerations, and
+  the relevant management concept(s). For Level 3-5, explicitly note that more than one answer can
+  be acceptable given strong reasoning. Never write a superficial one-line answer like "the
+  company should improve its marketing" — always explain what should change, why, what evidence
+  supports it, what the alternatives/risks are, and how success would be measured.
 
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
   "title": string — a compelling case title,
-  "description": string — the case's single full narrative, shown to students and on the case listing: company background, industry context, the core situation and decision at stake, the key people involved and their roles/interests, relevant constraints, the timeline of events, the learning outcomes and reflection points the case is meant to build, and why it all matters — written as flowing prose (several paragraphs), not a short teaser. This is the ONLY place case narrative/context appears, so it must be complete and self-contained,
-  "capabilities": array of 1-3 strings — the primary capability(ies) the case assesses (e.g. ["Negotiation", "Decision Making"]) — use more than one only when the case genuinely exercises multiple distinct capabilities,
-  "difficulty": integer 1-5 — 1: Remember/Understand (easy), 2: Apply, 3: Analyze (moderate), 4: Evaluate, 5: Create (hard),
+  "description": string — "Case Background, Company/Organisation Context, Situation, and Facts and Data", woven together as flowing prose (several paragraphs), not a short teaser. This is the ONLY place case narrative/context appears, shown to students and on the case listing, so it must be complete and self-contained. Length must scale with difficulty (see the word-count target given in the user message),
+  "outcome_statement": string — 1-2 sentences stating "The Expected Outcome": the managerial outcome the student is expected to achieve (e.g. identify root causes, recommend what information to gather) — describe the outcome, do NOT reveal or hint at the solution,
+  "decision_options": array of 3-4 short strings — realistic Decision/Action Options available to the manager; none should read as obviously good/bad/correct/incorrect — at higher difficulty each option should have genuine advantages AND disadvantages,
+  "learning_takeaways": array of 2-4 short strings — concise points on what the case is meant to teach,
+  "capabilities": array of EXACTLY 3 strings — the complementary capability triad this case assesses (see CAPABILITIES above),
+  "difficulty": integer 1-5 — 1: Remember/Understand (easy), 2: Understand/Apply, 3: Apply/Analyze (moderate), 4: Analyze/Evaluate, 5: Evaluate/Create (hard),
   "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
   "subject": string — e.g. "Marketing Management",
   "functional_area": string — e.g. "Channel Management & Negotiation",
@@ -2623,7 +2827,7 @@ Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nest
       "word_limit_min": integer,
       "word_limit_max": integer,
       "instructions": string,
-      "model_answer": string,
+      "model_answer": string — the faculty answer key; length must scale with difficulty (see the word-count target given in the user message),
       "alternative_answers": array of strings,
       "marking_scheme": string,
   "case_specific_criteria": array of up to 2 short strings
@@ -2648,13 +2852,15 @@ def _ai_fill_schema() -> Dict[str, Any]:
                      "instructions", "model_answer", "alternative_answers", "marking_scheme"],
     }
     str_keys = [
-        "title", "description", "subject", "functional_area",
+        "title", "description", "outcome_statement", "subject", "functional_area",
         "data", "objectives",
         "student_instructions_before", "student_instructions_during",
         "student_instructions_submission",
     ]
     props: Dict[str, Any] = {k: {"type": "string"} for k in str_keys}
-    props["capabilities"] = {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string"}}
+    props["decision_options"] = {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "string"}}
+    props["learning_takeaways"] = {"type": "array", "minItems": 2, "maxItems": 4, "items": {"type": "string"}}
+    props["capabilities"] = {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string"}}
     props["difficulty"] = {"type": "integer"}
     props["industry"] = {"type": "string"}
     props["reading_time_minutes"] = {"type": "integer"}
@@ -2664,7 +2870,8 @@ def _ai_fill_schema() -> Dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": props,
-        "required": str_keys + ["capabilities", "difficulty", "industry",
+        "required": str_keys + ["decision_options", "learning_takeaways",
+                                "capabilities", "difficulty", "industry",
                                 "reading_time_minutes", "questions"],
     }
 
@@ -2673,6 +2880,38 @@ def _distribute_marks(total_written: int, n: int = 3) -> List[int]:
     base = max(0, total_written) // n
     remainder = max(0, total_written) - base * n
     return [base + (1 if i >= n - remainder else 0) for i in range(n)]
+
+
+def expand_description_if_short(client: Any, description: str, difficulty: int, db: Session) -> str:
+    """The AI sometimes undershoots the Case Background word-count target for
+    the given difficulty (models tend to stop early on range instructions).
+    Rather than silently shipping a too-short narrative that will later fail
+    the publish word-count gate, ask the model once to expand it — same
+    facts/characters, more context. Best-effort: on any failure, or if the
+    expansion isn't actually longer, fall back to the original text."""
+    min_words, _ = DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (250, 275))
+    if not description.strip() or word_count(description) >= min_words:
+        return description
+    try:
+        response = create_with_retry(client, {
+            "model": get_llm_model(CASE_GENERATION_MODEL),
+            "messages": [
+                {"role": "system", "content": (
+                    "You expand MBA case-study narratives without changing any facts, "
+                    "numbers, or characters already present. Add more relevant context, "
+                    "stakeholders, constraints, or background detail as needed to reach "
+                    "the target length. Return ONLY the expanded narrative text — no "
+                    "markdown, no headings, no commentary."
+                )},
+                {"role": "user", "content": f"Expand this case narrative to at least {min_words} words:\n\n{description}"},
+            ],
+            "max_tokens": 4000,
+            "timeout": 60,
+        }, db=db)
+        expanded = (response.choices[0].message.content or "").strip()
+        return expanded if word_count(expanded) > word_count(description) else description
+    except Exception:  # noqa: BLE001
+        return description
 
 
 @faculty_router.post("/cases/{case_id}/ai-fill")
@@ -2696,13 +2935,20 @@ def ai_fill_faculty_case(
     capabilities = get_capability_tags(db, case_id)
     difficulty = row.difficulty or 2
     duration = row.estimated_minutes or 28
+    selected_semesters = parse_json_or_lines(row.recommended_semesters)
+    semester = int(selected_semesters[0]) if selected_semesters else None
 
+    desc_words = DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (250, 275))
+    answer_words = ANSWER_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (100, 140))
     user_prompt = (
         f"Brief: {data.brief.strip()}\n"
         f"Target capability(ies): {', '.join(capabilities) or 'general management'}\n"
         f"Difficulty: {difficulty_label_for(difficulty)} (level {difficulty})\n"
+        f"Semester: {semester or 'not specified'} — {semester_focus_for(semester)}.\n"
         f"Subject/area (optional hint): {data.subject or 'infer from the brief'}\n"
         f"Total duration: {duration} minutes (reading + writing + 8 min rapid fire).\n"
+        f"Case Background length target: {desc_words[0]}-{desc_words[1]} words.\n"
+        f"Expected Answer length target per question: {answer_words[0]}-{answer_words[1]} words.\n"
         "Write the full case now as JSON."
     )
 
@@ -2784,10 +3030,14 @@ def ai_fill_faculty_case(
     capabilities_out = capabilities or ai_capabilities or None
     existing_blooms = parse_json_or_lines(row.blooms_levels)
     blooms_levels_out = existing_blooms or json.loads(blooms_levels_for_difficulty(difficulty))
+    description_out = expand_description_if_short(client, _s("description"), difficulty, db)
 
     req = CaseUpdateRequest(
         title=_s("title") or row.title,
-        expected_outcomes=_s("description"),
+        expected_outcomes=description_out,
+        outcome_statement=_s("outcome_statement"),
+        decision_options=_list("decision_options") or None,
+        learning_takeaways=_list("learning_takeaways") or None,
         industry=industry,
         difficulty=difficulty,
         duration_minutes=duration,
@@ -2857,8 +3107,6 @@ def publish_faculty_case(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     row = get_case_row_for_publish(db, case_id, current_user)
-    parsed_content = parse_case_content(row.content)
-    sections = parsed_content["sections"]
     missing_fields: List[str] = []
 
     if not row.title:
@@ -2873,9 +3121,12 @@ def publish_faculty_case(
         missing_fields.append("capabilities")
     if not (row.description or "").strip():
         missing_fields.append("description")
-    for section in ["objectives"]:
-        if not section_has_content(sections.get(section)):
-            missing_fields.append(section)
+    else:
+        min_words = MIN_DESCRIPTION_WORDS_BY_DIFFICULTY.get(row.difficulty, 250)
+        if word_count(row.description) < min_words:
+            missing_fields.append(
+                f"description (needs at least {min_words} words for this difficulty level)"
+            )
     if not row.evaluation_rubric:
         missing_fields.append("rubric")
 
@@ -2893,13 +3144,17 @@ def publish_faculty_case(
             UPDATE case_studies
             SET status = 'published', updated_at = NOW()
             WHERE id = :case_id
-            RETURNING id, title, description, content, domain, difficulty,
-                      estimated_minutes, status, evaluation_rubric, created_by,
-                      created_at, updated_at
+            RETURNING """ + CASE_EDITOR_COLUMNS + """
         """),
         {"case_id": case_id},
     )
     updated_row = result.fetchone()
+    # Refresh the mirrored bank snapshot (if any) to the just-published
+    # content — the bank only surfaces entries once their origin case is
+    # published, and this makes sure what other faculty see/copy reflects
+    # any admin edits made between creation and publish, not the stale
+    # creation-time snapshot.
+    upsert_ai_bank_entry(db, case_id, current_user)
     db.commit()
     return case_editor_response(db, updated_row)
 

@@ -89,7 +89,7 @@ _TRANSIENT_STATUS = {429, 500, 503}
 
 
 def create_with_retry(
-    client: OpenAI, kwargs: Dict[str, Any], attempts: int = 4, db: Optional[Session] = None
+    client: OpenAI, kwargs: Dict[str, Any], attempts: int = 2, db: Optional[Session] = None
 ) -> Any:
     # These calls routinely take 30s-3min+ (case generation, evaluation, full
     # rubric-scored feedback). If a caller's DB session is still checked out

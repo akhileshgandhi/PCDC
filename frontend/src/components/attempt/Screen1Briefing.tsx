@@ -8,6 +8,9 @@ interface Screen1BriefingProps {
   description: string
   data: string
   objectives: string
+  outcomeStatement?: string
+  decisionOptions?: string[]
+  learningTakeaways?: string[]
   remainingSeconds?: number | null
   onNext: () => void
 }
@@ -17,6 +20,9 @@ export default function Screen1Briefing({
   description,
   data,
   objectives,
+  outcomeStatement,
+  decisionOptions,
+  learningTakeaways,
   remainingSeconds,
   onNext,
 }: Screen1BriefingProps) {
@@ -36,7 +42,16 @@ export default function Screen1Briefing({
         </div>
       </Card>
 
-      <CaseBriefSections sections={{ description, data, objectives }} />
+      <CaseBriefSections
+        sections={{
+          description,
+          data,
+          objectives,
+          outcome_statement: outcomeStatement,
+          decision_options: decisionOptions,
+          learning_takeaways: learningTakeaways,
+        }}
+      />
 
       <div className="flex justify-end">
         <button

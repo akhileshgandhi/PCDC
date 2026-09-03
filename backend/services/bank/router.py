@@ -22,15 +22,19 @@ from services.auth.service import get_current_user
 from services.bank.service import parse_snapshot
 from services.faculty.router import (
     AI_FILL_SYSTEM_PROMPT,
+    ANSWER_WORD_RANGE_BY_DIFFICULTY,
     CASE_GENERATION_MODEL,
     CASE_SECTIONS,
     DEFAULT_RUBRIC_WEIGHTS,
+    DESCRIPTION_WORD_RANGE_BY_DIFFICULTY,
     _ai_fill_schema,
     blooms_levels_for_difficulty,
     delete_case_and_dependents,
     difficulty_label_for,
+    expand_description_if_short,
     normalize_domain,
     require_faculty,
+    semester_focus_for,
     serialize_case_content,
 )
 from shared.database import get_db
@@ -80,6 +84,9 @@ class BankPublishRequest(BaseModel):
     industry: Optional[str] = None
     functional_area: Optional[str] = None
     capabilities: Optional[List[str]] = None
+    outcome_statement: Optional[str] = None
+    decision_options: Optional[List[str]] = None
+    learning_takeaways: Optional[List[str]] = None
     sections: Optional[Dict[str, Any]] = None   # full sections dict (data, objectives)
     reading_time_minutes: Optional[int] = None
     answer_writing_time_minutes: Optional[int] = None
@@ -152,8 +159,23 @@ def _origin_semesters(raw: Optional[str], fallback: Optional[int]) -> List[int]:
     return [fallback] if fallback else []
 
 
+def _linked_case(row: Any) -> tuple:
+    """Resolve the one real case (if any) this entry is tied to — either the
+    case it was mirrored FROM (origin_case_id, set at creation for
+    case_builder/AI-fill/bulk-upload cases) or the case it was published TO
+    (used_case_id, set when a faculty publishes this entry into their own
+    library). An entry can have at most one of these meaningfully set.
+    Returns (case_id_or_None, is_published_bool)."""
+    if row.origin_case_id is not None:
+        return row.origin_case_id, row.origin_status == "published"
+    if row.used_case_id is not None:
+        return row.used_case_id, getattr(row, "used_status", None) == "published"
+    return None, False
+
+
 def entry_list_item(row: Any) -> Dict[str, Any]:
     snapshot = parse_snapshot(row.case_snapshot)
+    linked_case_id, linked_case_published = _linked_case(row)
     return {
         "id": row.id,
         "title": row.title,
@@ -167,6 +189,8 @@ def entry_list_item(row: Any) -> Dict[str, Any]:
         "created_by": row.created_by,
         "creator_name": row.creator_name,
         "creator_role": row.creator_role,
+        "linked_case_id": linked_case_id,
+        "linked_case_published": linked_case_published,
         "has_attachment": bool(row.attachment_name),
         "attachment_name": row.attachment_name,
         "has_full_case": bool(snapshot.get("questions")),
@@ -177,8 +201,29 @@ def entry_list_item(row: Any) -> Dict[str, Any]:
 ENTRY_COLUMNS = """
     b.id, b.title, b.brief, b.case_snapshot, b.subject, b.semester_number,
     b.difficulty, b.source, b.created_by, b.creator_name, b.status,
-    b.used_case_id, b.attachment_name, b.created_at, b.updated_at,
-    u.role AS creator_role, cs2.recommended_semesters AS origin_semesters
+    b.used_case_id, b.origin_case_id, b.attachment_name, b.created_at,
+    b.updated_at, u.role AS creator_role,
+    cs2.recommended_semesters AS origin_semesters, cs2.status AS origin_status,
+    cs3.status AS used_status
+"""
+
+ENTRY_JOINS = """
+    LEFT JOIN users u ON u.id = b.created_by
+    LEFT JOIN case_studies cs2 ON cs2.id = b.origin_case_id
+    LEFT JOIN case_studies cs3 ON cs3.id = b.used_case_id
+"""
+
+# The bank listing only ever shows entries tied to an already-published case
+# — never a standalone template (no case at all) and never one still stuck
+# in draft/admin-review. Mirrors _linked_case()'s resolution: prefer
+# origin_case_id (set at creation for case_builder/AI-fill/bulk-upload
+# cases), else used_case_id (set when this entry was previously published
+# into someone's library).
+PUBLISHED_ONLY_CLAUSE = """
+    (
+        (b.origin_case_id IS NOT NULL AND cs2.status = 'published')
+        OR (b.origin_case_id IS NULL AND b.used_case_id IS NOT NULL AND cs3.status = 'published')
+    )
 """
 
 
@@ -189,12 +234,16 @@ def list_bank_entries(
     semester: Optional[int] = Query(None),
     difficulty: Optional[int] = Query(None),
     source: Optional[str] = Query(None),
+    creator: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """The shared bank — every faculty and admin sees all available entries."""
+    """The shared bank — every faculty and admin sees only entries tied to an
+    already-published case, ready to assign straight to a class. A case still
+    in draft/admin-review, or a bank-only template that was never turned into
+    a published case, does not appear here at all."""
     require_faculty(current_user)
-    clauses = ["b.status = 'available'"]
+    clauses = ["b.status = 'available'", PUBLISHED_ONLY_CLAUSE]
     params: Dict[str, Any] = {}
     if q and q.strip():
         clauses.append("LOWER(b.title) LIKE :q")
@@ -211,13 +260,15 @@ def list_bank_entries(
     if source in ("uploaded", "ai_generated", "case_builder"):
         clauses.append("b.source = :source")
         params["source"] = source
+    if creator and creator.strip():
+        clauses.append("LOWER(b.creator_name) = :creator")
+        params["creator"] = creator.strip().lower()
 
     rows = db.execute(
         text(f"""
             SELECT {ENTRY_COLUMNS}
             FROM case_study_bank b
-            LEFT JOIN users u ON u.id = b.created_by
-            LEFT JOIN case_studies cs2 ON cs2.id = b.origin_case_id
+            {ENTRY_JOINS}
             WHERE {' AND '.join(clauses)}
             ORDER BY b.created_at DESC
         """),
@@ -240,6 +291,16 @@ def bank_meta(
             ORDER BY 1
         """)
     ).fetchall()
+    creator_rows = db.execute(
+        text(f"""
+            SELECT DISTINCT b.creator_name
+            FROM case_study_bank b
+            {ENTRY_JOINS}
+            WHERE b.status = 'available' AND {PUBLISHED_ONLY_CLAUSE}
+                  AND b.creator_name IS NOT NULL AND b.creator_name <> ''
+            ORDER BY 1
+        """)
+    ).fetchall()
     return {
         "subjects": [r[0] for r in subject_rows],
         "semesters": SEMESTER_NUMBERS,
@@ -247,6 +308,7 @@ def bank_meta(
             {"value": level, "label": f"L{level} — {difficulty_label_for(level)}"}
             for level in range(1, 6)
         ],
+        "creators": [r[0] for r in creator_rows],
     }
 
 
@@ -315,12 +377,16 @@ def generate_into_bank(
     require_faculty(current_user)
     validate_mapping(data.semester_number, data.difficulty)
 
+    desc_words = DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.get(data.difficulty, (250, 275))
+    answer_words = ANSWER_WORD_RANGE_BY_DIFFICULTY.get(data.difficulty, (100, 140))
     user_prompt = (
         f"Brief: {(data.topic or '').strip() or 'Author a compelling business case study.'}\n"
-        f"Target capability(ies): general management\n"
+        f"Target capability(ies): choose the complementary triad for this difficulty level\n"
         f"Difficulty: {difficulty_label_for(data.difficulty)} (level {data.difficulty})\n"
+        f"Semester: {data.semester_number or 'not specified'} — {semester_focus_for(data.semester_number)}.\n"
         f"Subject/area (optional hint): {data.subject or 'infer from the brief'}\n"
-        f"Semester (context): {data.semester_number or 'not specified'}\n"
+        f"Case Background length target: {desc_words[0]}-{desc_words[1]} words.\n"
+        f"Expected Answer length target per question: {answer_words[0]}-{answer_words[1]} words.\n"
         "Write the full case now as JSON."
     )
     try:
@@ -372,10 +438,14 @@ def generate_into_bank(
     except HTTPException:
         industry = "business"
 
+    description_out = expand_description_if_short(client, _s("description"), data.difficulty, db)
     snapshot = {
-        "description": _s("description"),
+        "description": description_out,
         "industry": industry,
         "capabilities": _list("capabilities"),
+        "outcome_statement": _s("outcome_statement"),
+        "decision_options": _list("decision_options"),
+        "learning_takeaways": _list("learning_takeaways"),
         "sections": {
             "data": _s("data"),
             "objectives": _s("objectives"),
@@ -424,8 +494,7 @@ def get_bank_entry_row(db: Session, entry_id: int) -> Any:
         text(f"""
             SELECT {ENTRY_COLUMNS}, b.attachment_data
             FROM case_study_bank b
-            LEFT JOIN users u ON u.id = b.created_by
-            LEFT JOIN case_studies cs2 ON cs2.id = b.origin_case_id
+            {ENTRY_JOINS}
             WHERE b.id = :bid
         """),
         {"bid": entry_id},
@@ -497,6 +566,13 @@ def publish_from_bank(
         else metadata_snapshot.get("functional_area")) or None
     capabilities = (_norm_list(data.capabilities) if data.capabilities is not None
                     else _norm_list(snapshot.get("capabilities")))
+    outcome_statement = _norm_str(
+        data.outcome_statement if data.outcome_statement is not None
+        else snapshot.get("outcome_statement"))
+    decision_options = (_norm_list(data.decision_options) if data.decision_options is not None
+                        else _norm_list(snapshot.get("decision_options")))
+    learning_takeaways = (_norm_list(data.learning_takeaways) if data.learning_takeaways is not None
+                          else _norm_list(snapshot.get("learning_takeaways")))
     validate_mapping(semester, difficulty)
     try:
         industry = normalize_domain(industry)
@@ -543,6 +619,9 @@ def publish_from_bank(
         or industry != (_norm_str(snapshot.get("industry")) or "business")
         or (functional_area or "") != _norm_str(metadata_snapshot.get("functional_area"))
         or capabilities != _norm_list(snapshot.get("capabilities"))
+        or outcome_statement != _norm_str(snapshot.get("outcome_statement"))
+        or decision_options != _norm_list(snapshot.get("decision_options"))
+        or learning_takeaways != _norm_list(snapshot.get("learning_takeaways"))
         or sections != original_sections
         or int(reading) != int(timing_snapshot.get("reading_time_minutes") or 8)
         or int(writing) != int(timing_snapshot.get("answer_writing_time_minutes") or 12)
@@ -567,7 +646,7 @@ def publish_from_bank(
                 total_marks, written_marks, rapid_fire_marks,
                 student_instructions_before, student_instructions_during,
                 student_instructions_submission,
-                recommended_semesters
+                recommended_semesters, outcome_statement, decision_options, learning_takeaways
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty, :estimated_minutes,
@@ -576,7 +655,7 @@ def publish_from_bank(
                 :reading, :writing, 8,
                 10, 7, 3,
                 :ins_before, :ins_during, :ins_submission,
-                :recommended_semesters
+                :recommended_semesters, :outcome_statement, :decision_options, :learning_takeaways
             )
             RETURNING id
         """),
@@ -590,6 +669,9 @@ def publish_from_bank(
             "source": "ai_generated" if row.source == "ai_generated" else "faculty",
             "created_by": current_user["id"],
             "rubric": json.dumps(rubric),
+            "outcome_statement": outcome_statement,
+            "decision_options": json.dumps(decision_options) if decision_options else None,
+            "learning_takeaways": json.dumps(learning_takeaways) if learning_takeaways else None,
             "subject": subject,
             "functional_area": functional_area,
             "difficulty_label": difficulty_label_for(difficulty),
@@ -658,14 +740,19 @@ def publish_from_bank(
             )
             status = "published"
 
+    # Always record which case this entry produced, so the bank listing can
+    # show "Assign to Class" once it's published instead of "Publish" again —
+    # regardless of whether the content was edited. Only an as-is (unedited)
+    # publish also hides the entry from the bank; an edited publish keeps the
+    # original template available for other faculty to reuse.
+    db.execute(
+        text("UPDATE case_study_bank SET used_case_id = :cid, updated_at = NOW() WHERE id = :bid"),
+        {"cid": case_id, "bid": entry_id},
+    )
     if not edited:   # as-is → hide from the bank while this copy is live
         db.execute(
-            text("""
-                UPDATE case_study_bank
-                SET status = 'used', used_case_id = :cid, updated_at = NOW()
-                WHERE id = :bid
-            """),
-            {"cid": case_id, "bid": entry_id},
+            text("UPDATE case_study_bank SET status = 'used' WHERE id = :bid"),
+            {"bid": entry_id},
         )
     db.commit()
     return {
@@ -690,15 +777,24 @@ def delete_bank_entry(
             status_code=403,
             detail="Only the person who added an entry (or an admin) can delete it",
         )
-    origin_case_id = db.execute(
-        text("SELECT origin_case_id FROM case_study_bank WHERE id = :bid"), {"bid": entry_id}
-    ).scalar()
+    # Same "which case does this entry point at" resolution as _linked_case():
+    # origin_case_id (entry mirrored FROM an existing case) if set, else
+    # used_case_id (entry published INTO a new case). Checking only
+    # origin_case_id here missed every entry linked via used_case_id — the
+    # bank row would disappear but the actual published case (and its
+    # attempts) stayed behind in the creator's Library, invisible from the
+    # Bank but still fully live.
+    link_row = db.execute(
+        text("SELECT origin_case_id, used_case_id FROM case_study_bank WHERE id = :bid"),
+        {"bid": entry_id},
+    ).fetchone()
+    linked_case_id = (link_row.origin_case_id or link_row.used_case_id) if link_row else None
     db.execute(text("DELETE FROM case_study_bank WHERE id = :bid"), {"bid": entry_id})
     # An admin removing a bank entry is a moderation decision on the case
     # itself, not just its shared listing — take the case out of its
     # creator's Library too. A faculty removing their own listing only
     # removes it from the bank; the case stays in their own Library.
-    if current_user["role"] == "admin" and origin_case_id:
-        delete_case_and_dependents(db, origin_case_id)
+    if current_user["role"] == "admin" and linked_case_id:
+        delete_case_and_dependents(db, linked_case_id)
     db.commit()
     return {"status": "deleted", "id": entry_id, "title": row.title}

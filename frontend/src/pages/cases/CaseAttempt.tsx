@@ -47,6 +47,32 @@ function isExpiredError(error: unknown): boolean {
   return typeof detail === "string" && detail.toLowerCase().includes("expired")
 }
 
+interface RapidFireAnswerPair {
+  sequence: number
+  question_text: string
+  answer_text: string
+}
+
+// Rapid fire Q&A is stored server-side as one combined text blob (built by
+// Screen3AIChat's submitAll: "Q1: ...\nA: ...\n\nQ2: ...\nA: ..."), not as
+// structured rows tied to the attempt — parse it back apart so the report
+// card can show each question next to the student's own answer.
+function parseRapidFireTranscript(text: string | null | undefined): RapidFireAnswerPair[] {
+  if (!text) return []
+  return text
+    .split(/\n\n+/)
+    .map((block) => {
+      const match = block.match(/^Q(\d+):\s*([\s\S]*?)\nA:\s*([\s\S]*)$/)
+      if (!match) return null
+      return {
+        sequence: Number(match[1]),
+        question_text: match[2].trim(),
+        answer_text: match[3].trim(),
+      }
+    })
+    .filter((pair): pair is RapidFireAnswerPair => pair !== null)
+}
+
 function toEvaluationData(evaluation: AttemptEvaluation): EvaluationData {
   return {
     total_score: evaluation.total_score,
@@ -83,7 +109,10 @@ export default function CaseAttempt() {
     description: string
     data: string
     objectives: string
-  }>({ description: "", data: "", objectives: "" })
+    outcome_statement: string
+    decision_options: string[]
+    learning_takeaways: string[]
+  }>({ description: "", data: "", objectives: "", outcome_statement: "", decision_options: [], learning_takeaways: [] })
   const [writtenQuestions, setWrittenQuestions] = useState<WrittenQuestion[]>([])
   const [rapidFireQuestions, setRapidFireQuestions] = useState<RapidFireQuestion[]>([])
   const [rapidFireLoading, setRapidFireLoading] = useState(false)
@@ -93,13 +122,13 @@ export default function CaseAttempt() {
   const [attemptId, setAttemptId] = useState<number | null>(null)
   const [currentScreen, setCurrentScreen] = useState(1)
   const [needsReflection, setNeedsReflection] = useState(false)
-  const [isCasePanelOpen, setIsCasePanelOpen] = useState(false)
 
   // Per-question answers for Stage 2
   const [writtenAnswers, setWrittenAnswers] = useState<string[]>([])
   // Ungraded free-text initial analysis written before the structured questions
   const [initialSummary, setInitialSummary] = useState("")
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null)
+  const [rapidFireAnswerPairs, setRapidFireAnswerPairs] = useState<RapidFireAnswerPair[]>([])
   const [expired, setExpired] = useState(false)
 
   useEffect(() => {
@@ -116,6 +145,9 @@ export default function CaseAttempt() {
           description: detail.case.description || "",
           data: detail.case.data || "",
           objectives: detail.case.objectives || "",
+          outcome_statement: detail.case.outcome_statement || "",
+          decision_options: detail.case.decision_options || [],
+          learning_takeaways: detail.case.learning_takeaways || [],
         })
         const qs = detail.case.written_questions || []
         setWrittenQuestions(qs)
@@ -163,6 +195,7 @@ export default function CaseAttempt() {
         if (attemptDetail.evaluation) {
           setEvaluation(toEvaluationData(attemptDetail.evaluation))
         }
+        setRapidFireAnswerPairs(parseRapidFireTranscript(attemptDetail.defense_responses))
         if (status === "expired") {
           setExpired(true)
         }
@@ -260,10 +293,6 @@ export default function CaseAttempt() {
     return () => window.clearTimeout(timer)
   }, [currentScreen, attemptId, initialSummary, writtenAnswers])
 
-  useEffect(() => {
-    setIsCasePanelOpen(false)
-  }, [currentScreen])
-
   function goBack() {
     if (window.history.length > 1) {
       navigate(-1)
@@ -324,6 +353,7 @@ export default function CaseAttempt() {
     try {
       const result = await submitRapidFireAnswers(attemptId, rapidFireAnswers)
       setEvaluation(toEvaluationData(result))
+      setRapidFireAnswerPairs(parseRapidFireTranscript(rapidFireAnswers))
       setActionError("")
       setCurrentScreen(4)
     } catch (error) {
@@ -420,7 +450,7 @@ export default function CaseAttempt() {
   return (
     <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
       <ProgressBar currentScreen={currentScreen} title={caseTitle} timer={headerTimer} />
-      <main className="mx-auto max-w-[1180px] px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
         <button
           type="button"
           onClick={goBack}
@@ -443,17 +473,16 @@ export default function CaseAttempt() {
             description={caseSections.description}
             data={caseSections.data}
             objectives={caseSections.objectives}
+            outcomeStatement={caseSections.outcome_statement}
+            decisionOptions={caseSections.decision_options}
+            learningTakeaways={caseSections.learning_takeaways}
             remainingSeconds={readingSeconds}
             onNext={() => setCurrentScreen(2)}
           />
         ) : null}
         {currentScreen === 2 ? (
-          <>
-            <CaseReferencePanel
-              sections={caseSections}
-              isOpen={isCasePanelOpen}
-              onToggle={() => setIsCasePanelOpen((open) => !open)}
-            />
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            <CaseReferencePanel sections={caseSections} />
             <Screen2Analysis
               questions={writtenQuestions}
               answers={writtenAnswers}
@@ -465,14 +494,12 @@ export default function CaseAttempt() {
               onNext={handleAnalysisNext}
               isSubmitting={isSubmitting}
             />
-          </>
+          </div>
         ) : null}
         {currentScreen === 3 ? (
-          <>
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
             <CaseReferencePanel
               sections={caseSections}
-              isOpen={isCasePanelOpen}
-              onToggle={() => setIsCasePanelOpen((open) => !open)}
               initialSummary={initialSummary}
               answeredQuestions={writtenQuestions.map((q, i) => ({
                 question_text: q.question_text,
@@ -486,10 +513,18 @@ export default function CaseAttempt() {
               onSubmit={handleRapidFireSubmit}
               isSubmitting={isSubmitting}
             />
-          </>
+          </div>
         ) : null}
         {currentScreen === 4 && evaluation ? (
-          <Screen6Evaluation evaluation={evaluation} />
+          <Screen6Evaluation
+            evaluation={evaluation}
+            answeredQuestions={writtenQuestions.map((q, i) => ({
+              question_number: q.question_number,
+              question_text: q.question_text,
+              answer_text: writtenAnswers[i] || "",
+            }))}
+            rapidFireAnswers={rapidFireAnswerPairs}
+          />
         ) : null}
         {currentScreen === 4 && !evaluation ? (
           <div className="flex flex-col items-center gap-3 py-16 text-[#6B7280]">

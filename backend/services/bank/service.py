@@ -133,8 +133,15 @@ def upsert_ai_bank_entry(
     """Store (or refresh) a faculty-created case in the shared bank so any
     faculty can find and publish it, not just its creator — called after
     case creation regardless of how the case was authored (AI-fill, bulk
-    upload, or manual "Start from Scratch"), tagged with the creator's name.
-    One bank entry per origin case (unique partial index on origin_case_id)."""
+    upload, or manual "Start from Scratch"), tagged with the creator's name,
+    and again when the origin case is actually published (see
+    publish_faculty_case) so the snapshot reflects the final reviewed
+    content. The bank's list/detail endpoints only surface entries whose
+    origin case has been published, so the entry stays hidden until then.
+    One bank entry per origin case (unique partial index on origin_case_id).
+    `source` is set only on first insert and preserved across refreshes —
+    it records how the case was originally authored, not how it was last
+    touched."""
     snapshot = build_snapshot_from_case(db, case_id)
     if not snapshot:
         return
@@ -168,7 +175,6 @@ def upsert_ai_bank_entry(
                 subject = EXCLUDED.subject,
                 semester_number = EXCLUDED.semester_number,
                 difficulty = EXCLUDED.difficulty,
-                source = EXCLUDED.source,
                 updated_at = NOW()
         """),
         {

@@ -155,6 +155,9 @@ export interface FacultyCaseEditor {
   capabilities: string[]
   subject_areas: string[]
   expected_outcomes: string
+  outcome_statement: string
+  decision_options: string[]
+  learning_takeaways: string[]
   sections: Record<CaseSectionKey, CaseSectionValue>
   section_meta: Record<CaseSectionKey, CaseSectionMeta>
   rubric_exists: boolean
@@ -171,6 +174,9 @@ export interface CreateFacultyCasePayload {
   capabilities: string[]
   subject_areas?: string[]
   expected_outcomes?: string
+  outcome_statement?: string
+  decision_options?: string[]
+  learning_takeaways?: string[]
   sections?: Partial<Record<CaseSectionKey, CaseSectionValue>>
   section_meta?: Partial<Record<CaseSectionKey, CaseSectionMeta>>
   questions?: FacultyCaseQuestion[]
@@ -191,6 +197,9 @@ export interface UpdateFacultyCasePayload {
   capabilities?: string[]
   subject_areas?: string[]
   expected_outcomes?: string
+  outcome_statement?: string
+  decision_options?: string[]
+  learning_takeaways?: string[]
   sections?: Partial<Record<CaseSectionKey, CaseSectionValue>>
   section_meta?: Partial<Record<CaseSectionKey, CaseSectionMeta>>
   metadata?: FacultyCaseMetadata

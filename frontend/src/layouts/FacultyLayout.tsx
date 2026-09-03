@@ -63,7 +63,7 @@ const navGroups: NavGroup[] = [
     label: "Cases",
     icon: BookOpen,
     items: [
-      { label: "Case Library", to: "/faculty/case-library" },
+      { label: "My Case Library", to: "/faculty/case-library" },
       { label: "Case Bank", to: "/faculty/case-bank" },
       { label: "Case Builder", to: "/faculty/case-builder" },
     ],
@@ -255,21 +255,23 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
               </p>
             </div>
 
-            <form
-              onSubmit={handleTopSearch}
-              className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex"
-            >
-              <button type="submit" aria-label="Search students" className="text-[#6b7280]">
-                <Search size={17} aria-hidden="true" />
-              </button>
-              <input
-                type="search"
-                value={topSearch}
-                onChange={(event) => setTopSearch(event.target.value)}
-                placeholder="Search students by name or email..."
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#6b7280]"
-              />
-            </form>
+            {location.pathname.startsWith("/faculty/students") ? (
+              <form
+                onSubmit={handleTopSearch}
+                className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex"
+              >
+                <button type="submit" aria-label="Search students" className="text-[#6b7280]">
+                  <Search size={17} aria-hidden="true" />
+                </button>
+                <input
+                  type="search"
+                  value={topSearch}
+                  onChange={(event) => setTopSearch(event.target.value)}
+                  placeholder="Search students by name or email..."
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-[#6b7280]"
+                />
+              </form>
+            ) : null}
 
             <div className="relative hidden sm:block" ref={notifRef}>
               <button

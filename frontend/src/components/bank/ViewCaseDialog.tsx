@@ -77,6 +77,9 @@ export default function ViewCaseDialog({ entry, variant, onClose, onPublish }: {
 
       <div className="space-y-4">
         <TextBlock label="Overview" value={entry.brief} />
+        <TextBlock label="The Expected Outcome" value={snapshot.outcome_statement} />
+        <ListBlock label="Decision / Action Options" items={snapshot.decision_options} />
+        <ListBlock label="Learning Takeaway" items={snapshot.learning_takeaways} />
         {SECTION_FIELDS.map((field) =>
           field.list ? (
             <ListBlock key={field.key} label={field.label.replace(" (one per line)", "")}

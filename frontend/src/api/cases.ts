@@ -102,6 +102,9 @@ export interface CaseDetailContent {
   difficulty_label: string | null
   data: string
   objectives: string
+  outcome_statement: string
+  decision_options: string[]
+  learning_takeaways: string[]
   written_questions: WrittenQuestion[]
   rapid_fire_questions: RapidFireQuestion[]
   capabilities: string[]

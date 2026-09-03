@@ -13,6 +13,8 @@ export interface BankEntry {
   created_by: number | null
   creator_name: string | null
   creator_role: string | null
+  linked_case_id: number | null
+  linked_case_published: boolean
   has_attachment: boolean
   attachment_name: string | null
   has_full_case: boolean
@@ -26,6 +28,9 @@ export interface BankEntryDetail extends BankEntry {
     description?: string
     industry?: string
     capabilities?: string[]
+    outcome_statement?: string
+    decision_options?: string[]
+    learning_takeaways?: string[]
     sections?: Record<string, string | string[]>
     metadata?: Record<string, string>
     timing?: Record<string, number>
@@ -38,6 +43,7 @@ export interface BankMeta {
   subjects: string[]
   semesters: number[]
   difficulties: Array<{ value: number; label: string }>
+  creators: string[]
 }
 
 export interface BankFilters {
@@ -46,6 +52,7 @@ export interface BankFilters {
   semester?: number
   difficulty?: number
   source?: string
+  creator?: string
 }
 
 export interface BankPublishPayload {
@@ -58,6 +65,9 @@ export interface BankPublishPayload {
   industry?: string
   functional_area?: string
   capabilities?: string[]
+  outcome_statement?: string
+  decision_options?: string[]
+  learning_takeaways?: string[]
   sections?: Record<string, string | string[]>
   reading_time_minutes?: number
   answer_writing_time_minutes?: number

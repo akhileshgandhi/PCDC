@@ -38,7 +38,7 @@ Return exactly 3 questions as a JSON object:
 
 RAPID_FIRE_GEN_PROMPT = """
 You are running the Rapid Fire round of an MBA/PGDM business case simulation.
-You are given the case content, the student's initial analysis, and their
+You are given the case description, the student's initial analysis, and their
 answers to the structured written questions.
 
 Generate EXACTLY 3 short-answer rapid-fire questions that PROBE THE THINKING
@@ -72,6 +72,32 @@ per-question marks (question_scores) come ONLY from the structured written
 answers; rapid_fire_score comes ONLY from the rapid fire answers. The initial
 analysis carries no marks of its own but informs the rubric dimensions.
 
+CALIBRATION — every score below MUST be justified by specific evidence in
+this student's own text, not a habitual "safe" number. Two different
+students should almost never land on the same score for a dimension unless
+their answers are genuinely equivalent in depth. Use these anchors for EACH
+0-100 dimension (thinking_depth, logic_score, creativity_score,
+practicality_score, risk_awareness_score, reflection_score, rapid_fire_score):
+- 0-30: Missing, off-topic, or just restates the case with no real analysis.
+- 31-50: Generic/textbook reasoning that could apply to almost any case —
+  does not engage with THIS case's specific numbers, constraints, or facts.
+- 51-70: Solid reasoning that references specific details from this case,
+  but stays surface-level, misses an important angle, or has a gap in logic.
+- 71-85: Strong, specific reasoning that correctly uses the case's own
+  numbers/facts, weighs at least one alternative or risk, and reaches a
+  defensible conclusion.
+- 86-100: Exceptional — goes beyond the obvious, quantifies a trade-off,
+  anticipates a second-order consequence, or explicitly challenges a stated
+  assumption with justification.
+Before finalizing each score, identify the single most specific, case-grounded
+sentence the student wrote that supports it — if you cannot point to one,
+the score cannot be above 50.
+
+For question_scores (marks_awarded): grade strictly against the marking
+scheme and model answer. Deduct marks for every point the marking scheme
+calls for that the student's answer does not address — do not award
+marks_total just because the answer is well-written or on-topic.
+
 Return a JSON object with EXACTLY these keys:
 
 {
@@ -99,7 +125,7 @@ Return a JSON object with EXACTLY these keys:
 }
 
 For marks_awarded: use the marking scheme and model answer to assess how many marks the student deserves out of marks_total.
-Base all scoring on the rubric criteria if provided. Be strict but fair.
+Base all scoring on the rubric criteria if provided. Be strict but fair — do not give the benefit of the doubt to vague, generic, or filler content.
 """
 
 VALID_DOMAINS = {
@@ -436,6 +462,17 @@ def split_lines(value: Optional[str]) -> List[str]:
     return [line.strip() for line in normalized.splitlines() if line.strip()]
 
 
+def parse_json_list(value: Optional[str]) -> List[str]:
+    """decision_options/learning_takeaways are stored as a JSON array string."""
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return split_lines(value)
+    return [str(item) for item in parsed] if isinstance(parsed, list) else []
+
+
 def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> Dict[str, Any]:
     require_role(current_user, ["student"], "Only students can view this page")
     row = db.execute(
@@ -443,7 +480,8 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
             SELECT cs.id, cs.title, cs.description, cs.domain, cs.difficulty,
                    cs.difficulty_label, cs.content, cs.reading_time_minutes,
                    cs.answer_writing_time_minutes, cs.rapid_fire_time_minutes,
-                   cs.estimated_minutes, cs.created_at, u.name AS created_by_name
+                   cs.estimated_minutes, cs.created_at, u.name AS created_by_name,
+                   cs.outcome_statement, cs.decision_options, cs.learning_takeaways
             FROM case_studies cs
             LEFT JOIN users u ON u.id = cs.created_by
             WHERE cs.id = :case_id AND cs.status = 'published'
@@ -486,6 +524,9 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         "difficulty_label": row.difficulty_label,
         "data": str_section("data"),
         "objectives": str_section("objectives"),
+        "outcome_statement": row.outcome_statement or "",
+        "decision_options": parse_json_list(row.decision_options),
+        "learning_takeaways": parse_json_list(row.learning_takeaways),
         "capabilities": [
             tag["tag_value"] for tag in get_case_tags(db, row.id) if tag["tag_type"] == "capability"
         ],
@@ -1014,6 +1055,12 @@ def submit_solution(
         """),
         {"attempt_id": attempt.id, "final_solution": final_solution},
     )
+    # Commit BEFORE generate_defense_questions — it calls the LLM via
+    # create_with_retry, which closes this session ahead of the API call
+    # (to avoid holding a stale/dropped connection open across a long AI
+    # call). Session.close() rolls back whatever's still pending, so without
+    # this commit the final_solution UPDATE above is silently lost.
+    db.commit()
     questions = generate_defense_questions(db, attempt.id, final_solution)
     log_conversation(db, attempt.id, "ai", "defense", json.dumps(questions))
     db.commit()
@@ -1053,6 +1100,14 @@ def submit_defense(
         {"attempt_id": attempt.id, "defense_responses": defense_responses},
     )
     log_conversation(db, attempt.id, "student", "defense", defense_responses)
+    # Commit BEFORE generate_and_save_evaluation: it calls the LLM via
+    # create_with_retry, which closes this session ahead of the (often
+    # 30s-3min) API call to avoid holding a stale/dropped connection open.
+    # Session.close() rolls back whatever's still pending, so without this
+    # commit the defense_responses UPDATE above is silently lost the moment
+    # the AI call starts — the evaluation ends up saved, but the student's
+    # own answer never does.
+    db.commit()
     evaluation = generate_and_save_evaluation(db, attempt.id)
     db.commit()
     return evaluation
@@ -1069,20 +1124,21 @@ def _generate_rapid_fire_questions(db: Session, attempt: Any) -> List[str]:
     the student's initial analysis AND their structured question answers."""
     row = db.execute(
         text("""
-            SELECT cs.content, cs.description, a.initial_summary, a.initial_analysis
+            SELECT cs.description, a.initial_summary, a.initial_analysis
             FROM case_study_attempts a
             JOIN case_studies cs ON cs.id = a.case_study_id
             WHERE a.id = :attempt_id
         """),
         {"attempt_id": attempt.id},
     ).fetchone()
-    case_content = (row.content if row else "") or ""
     case_description = (row.description if row else "") or ""
     summary = (row.initial_summary if row else "") or "(no initial analysis submitted)"
     answers = (row.initial_analysis if row else "") or "(no structured answers submitted)"
+    # Only the description (not the full case content blob) is sent — the
+    # rapid fire round probes the student's OWN reasoning, not case trivia,
+    # and a smaller prompt means a faster response during a live, timed round.
     prompt = (
         f"Case description:\n{case_description}\n\n"
-        f"Case content:\n{case_content}\n\n"
         f"Student's initial analysis:\n{summary}\n\n"
         f"Student's structured question answers:\n{answers}"
     )
@@ -1166,6 +1222,12 @@ def submit_rapid_fire(
         {"attempt_id": attempt.id, "rapid_fire_answers": rapid_fire_answers},
     )
     log_conversation(db, attempt.id, "student", "defense", rapid_fire_answers)
+    # Commit BEFORE generate_and_save_evaluation — see the matching comment in
+    # submit_defense above. Without this, the UPDATE two lines up (the
+    # student's actual rapid fire answers) gets silently rolled back the
+    # instant the AI evaluation call starts, and only the evaluation itself
+    # (written after the call, on a fresh transaction) ends up persisted.
+    db.commit()
     evaluation = generate_and_save_evaluation(db, attempt.id)
     update_capability_scores(db, current_user["id"], attempt.id, evaluation)
     mark_assignment_completed(db, current_user["id"], attempt.id)
@@ -1208,6 +1270,12 @@ def submit_reflection(
         """),
         {"attempt_id": attempt.id, "reflection_text": reflection_text},
     )
+    # Commit BEFORE get_or_create_evaluation: when no evaluation exists yet it
+    # falls through to generate_and_save_evaluation, which calls the LLM via
+    # create_with_retry — closing this session ahead of the API call, which
+    # rolls back whatever's still pending. Without this commit the reflection
+    # UPDATE above is silently lost the moment that AI call starts.
+    db.commit()
     evaluation = get_or_create_evaluation(db, attempt.id)
     update_capability_scores(db, current_user["id"], attempt.id, evaluation)
     mark_assignment_completed(db, current_user["id"], attempt.id)
@@ -1378,9 +1446,26 @@ def flatten_ai_text(value: Any) -> str:
     return str(value or "")
 
 
+RUBRIC_SCORE_KEYS = [
+    "thinking_depth",
+    "logic_score",
+    "creativity_score",
+    "practicality_score",
+    "risk_awareness_score",
+    "reflection_score",
+]
+
+
 def normalize_evaluation(data: Any) -> Dict[str, Any]:
     if not isinstance(data, dict):
         raise HTTPException(status_code=500, detail="AI evaluation failed")
+    # A malformed/off-schema AI response (wrong keys, refusal, truncated JSON)
+    # would otherwise have every bounded_score() below quietly fall back to 0
+    # and get saved as a real "everything is 0, grade F" evaluation — visually
+    # indistinguishable from a student who genuinely answered nothing. Fail
+    # loudly instead so the caller retries rather than persisting a fake zero.
+    if all(data.get(key) is None for key in RUBRIC_SCORE_KEYS):
+        raise HTTPException(status_code=502, detail="AI evaluation returned an incomplete response")
     scores = {
         "thinking_depth": bounded_score(data.get("thinking_depth")),
         "logic_score": bounded_score(data.get("logic_score")),
@@ -1938,8 +2023,12 @@ def call_llm(
         "model": get_llm_model(),
         "max_tokens": effective_max,
         "messages": [{"role": "system", "content": system_prompt}, *messages],
-        # Lower this on serverless hosts with short function limits (e.g. Vercel).
-        "timeout": int(os.getenv("LLM_TIMEOUT_SECONDS", "90")),
+        # Kept short because this app runs on Vercel serverless functions: a
+        # slow/overloaded provider (Gemini free tier especially — see
+        # create_with_retry) would otherwise hold the function open past its
+        # platform time limit, so a live student request just hangs instead
+        # of failing fast into a retry/fallback the user can actually see.
+        "timeout": int(os.getenv("LLM_TIMEOUT_SECONDS", "25")),
         # Near-zero temperature so the same case + same answers score the same
         # way for every student — sampling randomness otherwise causes a wide
         # spread on identical input (evaluation, rapid fire, defense scoring).

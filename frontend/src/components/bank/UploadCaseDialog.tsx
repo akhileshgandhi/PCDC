@@ -28,7 +28,7 @@ export default function UploadCaseDialog({ variant, meta, onClose, onDone }: {
 }) {
   const primaryBtn = bankTheme[variant].primaryBtn
   const [loadedMeta, setLoadedMeta] = useState<BankMeta>(
-    meta ?? { subjects: [], semesters: [], difficulties: [] },
+    meta ?? { subjects: [], semesters: [], difficulties: [], creators: [] },
   )
   const [title, setTitle] = useState("")
   const [brief, setBrief] = useState("")

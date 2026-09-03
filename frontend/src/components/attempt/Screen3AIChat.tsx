@@ -72,7 +72,10 @@ export default function Screen3AIChat({
   }
 
   return (
-    <section className="mx-auto max-w-[680px] space-y-5">
+    // Fills the full width of its grid column (equal split with the Case
+    // Reference panel) instead of capping to a fixed max-width, per the
+    // "use whole space" layout request.
+    <section className="w-full space-y-5">
       <div className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">

@@ -31,7 +31,7 @@ const defaultSummary: FacultyDashboardSummary = {
 
 const quickLinks = [
   {
-    label: "Case Library",
+    label: "My Case Library",
     description: "Manage drafts, published cases, and archived material.",
     to: "/faculty/case-library",
     icon: BookOpen,
@@ -131,7 +131,7 @@ export default function FacultyDashboard() {
                 to="/faculty/case-library"
                 className="inline-flex items-center justify-center rounded-md border border-[#c9a227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                Review Case Library
+                Review My Case Library
               </Link>
             </div>
           </div>

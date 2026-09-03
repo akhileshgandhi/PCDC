@@ -31,8 +31,22 @@ export interface EvaluationData {
   } | null
 }
 
+export interface AnsweredQuestion {
+  question_number: number
+  question_text: string
+  answer_text: string
+}
+
+export interface RapidFireAnswer {
+  sequence: number
+  question_text: string
+  answer_text: string
+}
+
 interface Screen6EvaluationProps {
   evaluation: EvaluationData
+  answeredQuestions?: AnsweredQuestion[]
+  rapidFireAnswers?: RapidFireAnswer[]
 }
 
 function gradeColor(grade: string) {
@@ -73,7 +87,10 @@ function toBulletItems(raw: string): string[] {
     .filter(Boolean)
 }
 
-export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps) {
+export default function Screen6Evaluation({ evaluation, answeredQuestions, rapidFireAnswers }: Screen6EvaluationProps) {
+  const answersByQuestion = new Map(
+    (answeredQuestions || []).map((q) => [q.question_number, q]),
+  )
   const metrics: RadarMetric[] = [
     { label: "Thinking", score: evaluation.thinking_depth },
     { label: "Logic", score: evaluation.logic_score },
@@ -136,7 +153,9 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-[#111827]">Written Question Scores</h3>
           <div className="mt-4 space-y-5">
-            {evaluation.question_scores.map((qs) => (
+            {evaluation.question_scores.map((qs) => {
+              const answered = answersByQuestion.get(qs.question_number)
+              return (
               <div key={qs.question_number} className="rounded-lg border border-[#E6EBEB] p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
@@ -146,7 +165,22 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
                     {qs.marks_awarded} / {qs.marks_total} marks
                   </span>
                 </div>
-                <ScoreBar score={qs.marks_awarded} max={qs.marks_total} />
+                {answered?.question_text ? (
+                  <p className="mt-3 text-sm font-medium leading-6 text-[#111827]">
+                    {answered.question_text}
+                  </p>
+                ) : null}
+                {answered?.answer_text ? (
+                  <div className="mt-2 rounded-lg bg-[#F6F7F9] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your Answer</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#374151]">
+                      {answered.answer_text}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="mt-3">
+                  <ScoreBar score={qs.marks_awarded} max={qs.marks_total} />
+                </div>
                 <p className="mt-3 text-sm leading-6 text-[#374151]">{qs.feedback}</p>
                 {qs.improvement && (
                   <div className="mt-2 flex gap-2 rounded-lg bg-[#FFFBEB] p-3">
@@ -155,7 +189,8 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         </article>
       )}
@@ -175,6 +210,24 @@ export default function Screen6Evaluation({ evaluation }: Screen6EvaluationProps
           </div>
           {evaluation.rapid_fire_feedback && (
             <p className="mt-3 text-sm leading-6 text-[#374151]">{evaluation.rapid_fire_feedback}</p>
+          )}
+          {rapidFireAnswers && rapidFireAnswers.length > 0 && (
+            <div className="mt-4 space-y-3 border-t border-[#E6EBEB] pt-4">
+              {rapidFireAnswers.map((qa) => (
+                <div key={qa.sequence} className="rounded-lg border border-[#E6EBEB] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
+                    Question {qa.sequence}
+                  </p>
+                  <p className="mt-2 text-sm font-medium leading-6 text-[#111827]">{qa.question_text}</p>
+                  <div className="mt-2 rounded-lg bg-[#F6F7F9] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your Answer</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#374151]">
+                      {qa.answer_text || "(no answer given)"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </article>
       )}

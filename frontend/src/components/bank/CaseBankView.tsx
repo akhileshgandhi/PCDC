@@ -1,5 +1,6 @@
-import { Download, Eye, FileUp, Rocket, Search, Sparkles, Trash2 } from "lucide-react"
+import { Download, Edit3, Eye, FileUp, Rocket, Search, Send, Sparkles, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 
 import {
   deleteBankEntry,
@@ -14,6 +15,7 @@ import {
   type BankPublishResult,
 } from "../../api/bank"
 import { getCurrentUser } from "../../utils/auth"
+import AssignToClassDialog from "../faculty/AssignToClassDialog"
 import PublishCaseDialog from "./PublishCaseDialog"
 import UploadCaseDialog from "./UploadCaseDialog"
 import ViewCaseDialog from "./ViewCaseDialog"
@@ -37,17 +39,19 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
   const t = bankTheme[variant]
   const currentUser = getCurrentUser()
   const [entries, setEntries] = useState<BankEntry[]>([])
-  const [meta, setMeta] = useState<BankMeta>({ subjects: [], semesters: [], difficulties: [] })
+  const [meta, setMeta] = useState<BankMeta>({ subjects: [], semesters: [], difficulties: [], creators: [] })
   const [searchQuery, setSearchQuery] = useState("")
   const [subjectFilter, setSubjectFilter] = useState("")
   const [semesterFilter, setSemesterFilter] = useState("")
   const [difficultyFilter, setDifficultyFilter] = useState("")
   const [sourceFilter, setSourceFilter] = useState("")
+  const [creatorFilter, setCreatorFilter] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [viewing, setViewing] = useState<BankEntryDetail | null>(null)
   const [publishing, setPublishing] = useState<BankEntryDetail | null>(null)
+  const [assigning, setAssigning] = useState<BankEntry | null>(null)
   const [showUpload, setShowUpload] = useState(false)
   const [showGenerate, setShowGenerate] = useState(false)
 
@@ -59,6 +63,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
         semester: semesterFilter ? Number(semesterFilter) : undefined,
         difficulty: difficultyFilter ? Number(difficultyFilter) : undefined,
         source: sourceFilter || undefined,
+        creator: creatorFilter || undefined,
       })
       setEntries(data.items)
       setError("")
@@ -67,7 +72,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
     } finally {
       setIsLoading(false)
     }
-  }, [searchQuery, subjectFilter, semesterFilter, difficultyFilter, sourceFilter])
+  }, [searchQuery, subjectFilter, semesterFilter, difficultyFilter, sourceFilter, creatorFilter])
 
   useEffect(() => {
     void loadEntries()
@@ -76,6 +81,8 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
   useEffect(() => {
     getBankMeta().then(setMeta).catch(() => undefined)
   }, [])
+
+  const isAdmin = currentUser?.role === "admin"
 
   const canDelete = useCallback(
     (entry: BankEntry) =>
@@ -153,9 +160,9 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
           <div>
             <h1 className="text-3xl font-semibold tracking-normal text-[#111827]">Case Study Bank</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
-              A shared library for every faculty and admin. Upload case studies mapped to subject,
-              semester and difficulty — AI-generated cases from all faculty are stored here too.
-              Publish any entry into your own Case Library.
+              A shared library of already-published case studies from every faculty — assign any
+              entry straight to a class. A case still in draft or admin review, or a fresh
+              upload/AI draft that hasn't been published yet, won't appear here until it is.
             </p>
             <p className="mt-2 text-xs text-[#6b7280]">
               {stats.total} entries · {stats.caseBuilder} from Case Builder · {stats.uploaded} uploaded ·{" "}
@@ -179,7 +186,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
       ) : null}
 
       <section className={cardClass}>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
           <div className="relative lg:col-span-1">
             <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7280]" />
             <input
@@ -213,11 +220,17 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
             <option value="uploaded">Uploaded</option>
             <option value="ai_generated">AI generated</option>
           </select>
+          <select className={inputClass} value={creatorFilter} onChange={(e) => setCreatorFilter(e.target.value)}>
+            <option value="">All faculty</option>
+            {meta.creators.map((creator) => (
+              <option key={creator} value={creator}>{creator}</option>
+            ))}
+          </select>
         </div>
       </section>
 
       <section className={cardClass}>
-        <div className="hidden gap-3 border-b border-[#eef2f7] pb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280] lg:grid lg:grid-cols-[1.7fr_0.9fr_0.7fr_0.8fr_1fr_1.1fr_0.9fr]">
+        <div className="hidden gap-3 border-b border-[#eef2f7] pb-3 text-xs font-semibold uppercase tracking-wide text-[#6b7280] lg:grid lg:grid-cols-[1.5fr_0.75fr_0.55fr_0.7fr_0.85fr_1fr_1.5fr]">
           <span>Case study</span>
           <span>Subject</span>
           <span>Semester</span>
@@ -236,12 +249,19 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
           <div className="divide-y divide-[#eef2f7]">
             {entries.map((entry) => (
               <div key={entry.id}
-                className="grid gap-2 py-4 lg:grid-cols-[1.7fr_0.9fr_0.7fr_0.8fr_1fr_1.1fr_0.9fr] lg:items-center">
+                className="grid gap-2 py-4 lg:grid-cols-[1.5fr_0.75fr_0.55fr_0.7fr_0.85fr_1fr_1.5fr] lg:items-center">
                 <div>
-                  <button type="button" onClick={() => void openView(entry)}
-                    className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
-                    {entry.title}
-                  </button>
+                  {entry.linked_case_id ? (
+                    <Link to={`/faculty/case-builder/${entry.linked_case_id}`}
+                      className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
+                      {entry.title}
+                    </Link>
+                  ) : (
+                    <button type="button" onClick={() => void openView(entry)}
+                      className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
+                      {entry.title}
+                    </button>
+                  )}
                   {entry.brief ? (
                     <p className="mt-0.5 line-clamp-1 text-xs text-[#6b7280]">{entry.brief}</p>
                   ) : null}
@@ -261,28 +281,45 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                   ) : null}
                   <span className="block text-xs text-[#6b7280]">{formatDate(entry.created_at)}</span>
                 </span>
-                <div className="flex items-center gap-1 lg:justify-end">
-                  <button type="button" title="View" onClick={() => void openView(entry)}
-                    className="rounded-md p-2 text-[#6b7280] transition hover:bg-[#f6f7fb] hover:text-[#111827]">
-                    <Eye size={16} />
-                  </button>
-                  {entry.has_attachment ? (
-                    <button type="button" title={`Download ${entry.attachment_name ?? "attachment"}`}
-                      onClick={() => void handleDownload(entry)}
-                      className="rounded-md p-2 text-[#6b7280] transition hover:bg-[#f6f7fb] hover:text-[#111827]">
-                      <Download size={16} />
+                <div className="flex items-center justify-end gap-1.5">
+                  {entry.linked_case_id && entry.linked_case_published ? (
+                    <button type="button" title="Assign to Class" onClick={() => setAssigning(entry)}
+                      className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs`}>
+                      <Send size={13} aria-hidden="true" /> Assign to Class
                     </button>
-                  ) : null}
-                  <button type="button" title="Publish into my Case Library" onClick={() => void openPublish(entry)}
-                    className={`${t.primaryBtn} !px-3 !py-2 text-xs`}>
-                    <Rocket size={14} aria-hidden="true" /> Publish
-                  </button>
-                  {canDelete(entry) ? (
-                    <button type="button" title="Delete" onClick={() => void handleDelete(entry)}
-                      className="rounded-md p-2 text-[#b42318] transition hover:bg-[#fff5f5]">
-                      <Trash2 size={16} />
+                  ) : (
+                    <button type="button" title="Publish into my Case Library" onClick={() => void openPublish(entry)}
+                      className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs`}>
+                      <Rocket size={13} aria-hidden="true" /> Publish
                     </button>
-                  ) : null}
+                  )}
+                  <div className="flex items-center gap-0.5">
+                    {entry.linked_case_id ? (
+                      <Link to={`/faculty/case-builder/${entry.linked_case_id}`}
+                        title={isAdmin ? "Edit" : "View"}
+                        className="rounded-md p-2 text-[#6b7280] transition hover:bg-[#f6f7fb] hover:text-[#111827]">
+                        {isAdmin ? <Edit3 size={16} /> : <Eye size={16} />}
+                      </Link>
+                    ) : (
+                      <button type="button" title="View" onClick={() => void openView(entry)}
+                        className="rounded-md p-2 text-[#6b7280] transition hover:bg-[#f6f7fb] hover:text-[#111827]">
+                        <Eye size={16} />
+                      </button>
+                    )}
+                    {entry.has_attachment ? (
+                      <button type="button" title={`Download ${entry.attachment_name ?? "attachment"}`}
+                        onClick={() => void handleDownload(entry)}
+                        className="rounded-md p-2 text-[#6b7280] transition hover:bg-[#f6f7fb] hover:text-[#111827]">
+                        <Download size={16} />
+                      </button>
+                    ) : null}
+                    {canDelete(entry) ? (
+                      <button type="button" title="Delete" onClick={() => void handleDelete(entry)}
+                        className="rounded-md p-2 text-[#b42318] transition hover:bg-[#fff5f5]">
+                        <Trash2 size={16} />
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ))}
@@ -307,6 +344,13 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
       {publishing ? (
         <PublishCaseDialog entry={publishing} variant={variant} meta={meta}
           onClose={() => setPublishing(null)} onDone={handlePublished} />
+      ) : null}
+      {assigning && assigning.linked_case_id ? (
+        <AssignToClassDialog
+          caseStudy={{ id: assigning.linked_case_id, title: assigning.title }}
+          onClose={() => setAssigning(null)}
+          onAssigned={(message) => { setAssigning(null); setNotice(message); setError("") }}
+        />
       ) : null}
     </div>
   )

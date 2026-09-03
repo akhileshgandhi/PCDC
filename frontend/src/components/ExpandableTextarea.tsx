@@ -8,12 +8,19 @@ interface ExpandableTextareaProps {
   placeholder?: string
   rows?: number
   className?: string
+  readOnly?: boolean
 }
 
 // An editable textarea with an "Expand" affordance that opens the same value
 // in a large fullscreen editor — for content worth writing/reading
 // comfortably rather than squeezed into a fixed-height box. Both views share
 // the same controlled value, so edits in either place are live.
+//
+// readOnly uses the native textarea attribute rather than relying on an
+// ancestor `pointer-events-none` block, so the field (and the fullscreen
+// expand affordance) stays scrollable/usable when this renders inside a
+// read-only case view — pointer-events-auto is applied explicitly here since
+// such an ancestor would otherwise swallow clicks/scroll on this subtree too.
 export default function ExpandableTextarea({
   label,
   value,
@@ -21,17 +28,19 @@ export default function ExpandableTextarea({
   placeholder,
   rows = 8,
   className,
+  readOnly,
 }: ExpandableTextareaProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
     <>
-      <div className="grid gap-1.5">
+      <div className="pointer-events-auto grid gap-1.5">
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           rows={rows}
+          readOnly={readOnly}
           className={className}
         />
         <button
@@ -46,7 +55,7 @@ export default function ExpandableTextarea({
 
       {isOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4"
+          className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4"
           onClick={() => setIsOpen(false)}
         >
           <div
@@ -73,6 +82,7 @@ export default function ExpandableTextarea({
               value={value}
               onChange={(event) => onChange(event.target.value)}
               placeholder={placeholder}
+              readOnly={readOnly}
               autoFocus
               className="flex-1 resize-none px-6 py-5 text-sm leading-7 text-[#374151] outline-none"
             />
