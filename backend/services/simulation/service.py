@@ -91,12 +91,25 @@ practicality_score, risk_awareness_score, reflection_score, rapid_fire_score):
   assumption with justification.
 Before finalizing each score, identify the single most specific, case-grounded
 sentence the student wrote that supports it — if you cannot point to one,
-the score cannot be above 50.
+the score cannot be above 50. Pick a PRECISE number reflecting exactly how
+many of that band's qualities are met, not the band's edge or a round
+number out of habit — e.g. an answer with strong reasoning but only one
+minor gap might be 79 or 83, not automatically 85; two different "strong"
+answers of slightly different depth should get different scores, not the
+same one.
 
-For question_scores (marks_awarded): grade strictly against the marking
-scheme and model answer. Deduct marks for every point the marking scheme
-calls for that the student's answer does not address — do not award
-marks_total just because the answer is well-written or on-topic.
+For question_scores (marks_awarded): the marking scheme is a numbered list
+of specific criteria, each with its own point value (e.g. "1) Correctly
+identifies revenue and COGS (0.5) 2) ..."). Go through it criterion by
+criterion — for EACH one, decide yes/no whether the student's answer
+actually addresses it, and sum only the points for criteria met. Do not
+award marks_total just because the answer is well-written, fluent, or
+on-topic; a fluent answer that only covers 2 of 4 criteria gets half marks.
+If a marking scheme is missing or too vague to check criterion-by-criterion,
+fall back to judging depth and specificity the same way the calibration
+bands above do (generic/textbook coverage caps at half marks; only
+answers that are specific, complete, and use the case's own facts earn
+marks_total).
 
 Return a JSON object with EXACTLY these keys:
 
@@ -1486,12 +1499,28 @@ def normalize_evaluation(data: Any) -> Dict[str, Any]:
     scores["overall_grade"] = str(data.get("overall_grade", ""))
     scores["grade_comment"] = str(data.get("grade_comment", ""))
     scores["next_recommended_case_id"] = data.get("next_recommended_case_id")
-    # Per-question scores — store as JSON string
+    # Per-question scores — store as JSON string. Clamp marks_awarded into
+    # [0, marks_total]: the marking scheme's itemized point values are meant
+    # to sum to marks_total, but the AI doesn't always get that arithmetic
+    # right (e.g. four 1-point criteria on a 2-mark question), which would
+    # otherwise let a question show more marks awarded than it's worth.
     raw_qs = data.get("question_scores")
+    clamped_qs = []
     if isinstance(raw_qs, list):
-        scores["question_scores"] = json.dumps(raw_qs)
-    else:
-        scores["question_scores"] = json.dumps([])
+        for item in raw_qs:
+            if not isinstance(item, dict):
+                continue
+            try:
+                marks_total = float(item.get("marks_total") or 0)
+            except (TypeError, ValueError):
+                marks_total = 0.0
+            try:
+                marks_awarded = float(item.get("marks_awarded") or 0)
+            except (TypeError, ValueError):
+                marks_awarded = 0.0
+            item = {**item, "marks_awarded": max(0.0, min(marks_awarded, marks_total))}
+            clamped_qs.append(item)
+    scores["question_scores"] = json.dumps(clamped_qs)
     return scores
 
 

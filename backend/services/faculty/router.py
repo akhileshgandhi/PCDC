@@ -127,6 +127,18 @@ You are generating Structured Written Questions for an MBA/PGDM business
 case study simulation. Given the case's core fields and a short case summary,
 produce exactly 3 written questions with model answers and a marking scheme,
 calibrated to the stated difficulty and targeted capabilities.
+
+Write each "marking_scheme" as a numbered list of 2-4 SPECIFIC, checkable
+criteria, each tagged with its own point value in parentheses, summing
+exactly to that question's total marks (e.g. for a 2-mark question:
+"1) Correctly identifies revenue and COGS (0.5) 2) Correctly explains gross
+profit and its significance (0.5) 3) Correctly identifies operating expenses
+(0.5) 4) Correctly explains net profit as the bottom-line indicator (0.5)").
+Never write a single vague sentence like "marks for accurately describing
+the components" — a grader must be able to check each criterion yes/no
+against what the student actually wrote, and award partial marks whenever
+some but not all criteria are met.
+
 Output must match the provided JSON schema exactly.
 """
 
@@ -2803,6 +2815,14 @@ Guidelines:
   be acceptable given strong reasoning. Never write a superficial one-line answer like "the
   company should improve its marketing" — always explain what should change, why, what evidence
   supports it, what the alternatives/risks are, and how success would be measured.
+- Each "marking_scheme" is a numbered list of 2-4 SPECIFIC, checkable criteria, each tagged with
+  its own point value in parentheses, summing exactly to that question's total marks (e.g. for a
+  2-mark question: "1) Correctly identifies revenue and COGS (0.5) 2) Correctly explains gross
+  profit and its significance (0.5) 3) Correctly identifies operating expenses (0.5) 4) Correctly
+  explains net profit as the bottom-line indicator (0.5)"). Never write a single vague sentence
+  like "marks for accurately describing the components" — a grader must be able to check each
+  criterion yes/no against what the student actually wrote, and award partial marks whenever some
+  but not all criteria are met.
 
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
