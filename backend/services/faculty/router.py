@@ -2914,170 +2914,242 @@ def expand_description_if_short(client: Any, description: str, difficulty: int, 
         return description
 
 
+def run_ai_fill_job(
+    job_id: str, case_id: int, faculty_id: int, faculty_name: Optional[str], brief: str, subject: Optional[str]
+) -> None:
+    """Background counterpart of the old synchronous ai-fill: generating a full
+    case (background + questions + rubric) in one AI call routinely takes
+    30s-3min, which is far longer than this app's Vercel serverless functions
+    stay alive — the platform was killing the request before the AI call (or
+    even its own retry/fallback) could finish. Running it as a background job
+    (matching the existing per-section generation pattern below) lets the
+    kickoff request return instantly while this does the slow work."""
+    set_generation_job(job_id, {"status": "in_progress", "message": "Generating case content"})
+    db = SessionLocal()
+    try:
+        row = db.execute(
+            text(f"""
+                SELECT {CASE_EDITOR_COLUMNS}
+                FROM case_studies
+                WHERE id = :case_id AND created_by = :faculty_id
+            """),
+            {"case_id": case_id, "faculty_id": faculty_id},
+        ).fetchone()
+        if not row:
+            raise RuntimeError("Case study not found")
+
+        # Subject, Capabilities, Difficulty, Bloom's, Program and Semester are
+        # explicit case-level picks made by faculty before generating (on the
+        # AI-brief intake screen), stored on the case at creation — the AI
+        # must treat them as fixed inputs, not infer/override them.
+        capabilities = get_capability_tags(db, case_id)
+        difficulty = row.difficulty or 2
+        duration = row.estimated_minutes or 28
+        selected_semesters = parse_json_or_lines(row.recommended_semesters)
+        semester = int(selected_semesters[0]) if selected_semesters else None
+
+        desc_words = DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (250, 275))
+        answer_words = ANSWER_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (100, 140))
+        user_prompt = (
+            f"Brief: {brief}\n"
+            f"Target capability(ies): {', '.join(capabilities) or 'general management'}\n"
+            f"Difficulty: {difficulty_label_for(difficulty)} (level {difficulty})\n"
+            f"Semester: {semester or 'not specified'} — {semester_focus_for(semester)}.\n"
+            f"Subject/area (optional hint): {subject or 'infer from the brief'}\n"
+            f"Total duration: {duration} minutes (reading + writing + 8 min rapid fire).\n"
+            f"Case Background length target: {desc_words[0]}-{desc_words[1]} words.\n"
+            f"Expected Answer length target per question: {answer_words[0]}-{answer_words[1]} words.\n"
+            "Write the full case now as JSON."
+        )
+
+        client = get_llm_client()
+        try:
+            response = create_with_retry(client, {
+                "model": get_llm_model(CASE_GENERATION_MODEL),
+                "messages": [
+                    {"role": "system", "content": AI_FILL_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "response_format": json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
+                "max_tokens": 16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
+                "timeout": 180,
+            }, db=db)
+            parsed = parse_json_content(response.choices[0].message.content)
+        except Exception as exc:  # noqa: BLE001
+            status = getattr(exc, "status_code", None)
+            if status == 503:
+                raise RuntimeError("The AI model is under heavy load right now. Please try again in a minute.")
+            raise RuntimeError(f"AI full-case generation failed: {exc}")
+        if not isinstance(parsed, dict):
+            raise RuntimeError("AI returned an unexpected response")
+
+        # --- Sanitize + assemble a CaseUpdateRequest ---
+        def _s(key: str) -> str:
+            return str(parsed.get(key) or "").strip()
+
+        def _list(key: str) -> List[str]:
+            val = parsed.get(key)
+            return [str(x).strip() for x in val if str(x).strip()] if isinstance(val, list) else []
+
+        sections = {
+            "data": _s("data"),
+            "objectives": _s("objectives"),
+        }
+        section_meta = {key: "ai_generated" for key in sections}
+
+        # Marks: platform total is 10 (3 rapid fire), so written = 7 split across 3.
+        written_marks = _distribute_marks(TOTAL_MARKS - RAPID_FIRE_MARKS)
+        raw_questions = parsed.get("questions")
+        raw_questions = raw_questions if isinstance(raw_questions, list) else []
+        questions = []
+        for i in range(3):
+            q = raw_questions[i] if i < len(raw_questions) and isinstance(raw_questions[i], dict) else {}
+            questions.append({
+                "question_number": i + 1,
+                "question_text": str(q.get("question_text") or "").strip(),
+                "marks": written_marks[i],
+                "word_limit_min": q.get("word_limit_min"),
+                "word_limit_max": q.get("word_limit_max"),
+                "instructions": str(q.get("instructions") or "").strip(),
+                "model_answer": str(q.get("model_answer") or "").strip(),
+                "alternative_answers": [str(x).strip() for x in (q.get("alternative_answers") or []) if str(x).strip()],
+                "marking_scheme": str(q.get("marking_scheme") or "").strip(),
+            })
+
+        reading = parsed.get("reading_time_minutes")
+        try:
+            reading = int(reading)
+        except (TypeError, ValueError):
+            reading = 8
+        reading = max(1, reading)
+        writing = 12  # default written-answer time; total duration derives from the parts
+        total_duration = reading + writing + RAPID_FIRE_TIME_MINUTES
+        answer_writing = writing
+
+        # Industry is still AI-inferred (not a faculty-picked field). Difficulty,
+        # Capabilities, and Bloom's are faculty-picked at creation and must not
+        # be overridden by the AI's own output for the same fields.
+        try:
+            industry = normalize_domain(_s("industry"))
+        except HTTPException:
+            industry = row.domain or "business"
+        ai_capabilities = _list("capabilities")
+        capabilities_out = capabilities or ai_capabilities or None
+        existing_blooms = parse_json_or_lines(row.blooms_levels)
+        blooms_levels_out = existing_blooms or json.loads(blooms_levels_for_difficulty(difficulty))
+        description_out = expand_description_if_short(client, _s("description"), difficulty, db)
+
+        req = CaseUpdateRequest(
+            title=_s("title") or row.title,
+            expected_outcomes=description_out,
+            outcome_statement=_s("outcome_statement"),
+            decision_options=_list("decision_options") or None,
+            learning_takeaways=_list("learning_takeaways") or None,
+            industry=industry,
+            difficulty=difficulty,
+            duration_minutes=total_duration,
+            capabilities=capabilities_out,
+            sections=sections,
+            section_meta=section_meta,
+            metadata={
+                "subject": _s("subject"),
+                "functional_area": _s("functional_area"),
+                "blooms_levels": blooms_levels_out,
+            },
+            timing={"reading_time_minutes": reading, "answer_writing_time_minutes": answer_writing},
+            marks={"total_marks": TOTAL_MARKS},
+            instructions={
+                "student_instructions_before": _s("student_instructions_before"),
+                "student_instructions_during": _s("student_instructions_during"),
+                "student_instructions_submission": _s("student_instructions_submission"),
+            },
+            questions=questions,
+        )
+        # Persist everything except the rubric via the normal update path.
+        _apply_case_update(db, case_id, req, row)
+
+        # Rubric: keep the platform's default weights (always valid, total 100)
+        # and attach up to 2 AI-suggested case-specific criteria.
+        criteria = _list("case_specific_criteria")[:2]
+        rubric = validate_rubric(RubricRequest(weights=dict(DEFAULT_RUBRIC_WEIGHTS), case_specific_criteria=criteria))
+        result = db.execute(
+            text(
+                "UPDATE case_studies SET evaluation_rubric = :r, updated_at = NOW() "
+                "WHERE id = :cid AND created_by = :fid RETURNING " + CASE_EDITOR_COLUMNS
+            ),
+            {"r": json.dumps(rubric), "cid": case_id, "fid": faculty_id},
+        )
+        updated = result.fetchone()
+        # every faculty AI-generated case study is stored in the shared bank,
+        # tagged with the generating faculty's name
+        upsert_ai_bank_entry(db, case_id, {"id": faculty_id, "name": faculty_name})
+        db.commit()
+        set_generation_job(
+            job_id,
+            {
+                "status": "succeeded",
+                "message": "Generation complete",
+                "case": case_editor_response(db, updated),
+            },
+        )
+    except Exception as exc:
+        db.rollback()
+        set_generation_job(
+            job_id,
+            {
+                "status": "failed",
+                "message": str(exc) or "AI generation failed.",
+                "error": str(exc),
+            },
+        )
+    finally:
+        db.close()
+
+
 @faculty_router.post("/cases/{case_id}/ai-fill")
 def ai_fill_faculty_case(
     case_id: int,
     data: AiFillRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """TEST: from a one-line brief, generate and apply the ENTIRE case study
-    (sections, instructions, questions, timing, marks, rubric) in one shot."""
+    """From a one-line brief, generate and apply the ENTIRE case study
+    (sections, instructions, questions, timing, marks, rubric). Runs as a
+    background job (see run_ai_fill_job) — this endpoint only validates and
+    enqueues, so it returns immediately instead of holding the HTTP request
+    open for the 30s-3min the actual generation can take."""
     require_faculty(current_user)
-    row = get_owned_case_row(db, case_id, current_user)
+    get_owned_case_row(db, case_id, current_user)
     if not data.brief.strip():
         raise HTTPException(status_code=400, detail="A brief is required")
 
-    # Subject, Capabilities, Difficulty, Bloom's, Program and Semester are now
-    # explicit case-level picks made by faculty before generating (on the
-    # AI-brief intake screen), stored on the case at creation — the AI must
-    # treat them as fixed inputs, not infer/override them.
-    capabilities = get_capability_tags(db, case_id)
-    difficulty = row.difficulty or 2
-    duration = row.estimated_minutes or 28
-    selected_semesters = parse_json_or_lines(row.recommended_semesters)
-    semester = int(selected_semesters[0]) if selected_semesters else None
-
-    desc_words = DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (250, 275))
-    answer_words = ANSWER_WORD_RANGE_BY_DIFFICULTY.get(difficulty, (100, 140))
-    user_prompt = (
-        f"Brief: {data.brief.strip()}\n"
-        f"Target capability(ies): {', '.join(capabilities) or 'general management'}\n"
-        f"Difficulty: {difficulty_label_for(difficulty)} (level {difficulty})\n"
-        f"Semester: {semester or 'not specified'} — {semester_focus_for(semester)}.\n"
-        f"Subject/area (optional hint): {data.subject or 'infer from the brief'}\n"
-        f"Total duration: {duration} minutes (reading + writing + 8 min rapid fire).\n"
-        f"Case Background length target: {desc_words[0]}-{desc_words[1]} words.\n"
-        f"Expected Answer length target per question: {answer_words[0]}-{answer_words[1]} words.\n"
-        "Write the full case now as JSON."
-    )
-
-    try:
-        client = get_llm_client()
-        response = create_with_retry(client, {
-            "model": get_llm_model(CASE_GENERATION_MODEL),
-            "messages": [
-                {"role": "system", "content": AI_FILL_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            "response_format": json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
-            "max_tokens": 16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
-            "timeout": 180,
-        }, db=db)
-        parsed = parse_json_content(response.choices[0].message.content)
-    except Exception as exc:  # noqa: BLE001
-        status = getattr(exc, "status_code", None)
-        if status == 503:
-            raise HTTPException(
-                status_code=503,
-                detail="The AI model is under heavy load right now. Please try again in a minute.",
-            )
-        raise HTTPException(status_code=502, detail=f"AI full-case generation failed: {exc}")
-    if not isinstance(parsed, dict):
-        raise HTTPException(status_code=502, detail="AI returned an unexpected response")
-
-    # --- Sanitize + assemble a CaseUpdateRequest ---
-    def _s(key: str) -> str:
-        return str(parsed.get(key) or "").strip()
-
-    def _list(key: str) -> List[str]:
-        val = parsed.get(key)
-        return [str(x).strip() for x in val if str(x).strip()] if isinstance(val, list) else []
-
-    sections = {
-        "data": _s("data"),
-        "objectives": _s("objectives"),
+    job_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    job = {
+        "job_id": job_id,
+        "case_id": case_id,
+        "faculty_id": current_user["id"],
+        "status": "queued",
+        "scope": "ai_fill",
+        "sections": [],
+        "message": "Generation queued",
+        "created_at": now,
+        "updated_at": now,
     }
-    section_meta = {key: "ai_generated" for key in sections}
+    with CASE_GENERATION_JOBS_LOCK:
+        CASE_GENERATION_JOBS[job_id] = job
 
-    # Marks: platform total is 10 (3 rapid fire), so written = 7 split across 3.
-    written_marks = _distribute_marks(TOTAL_MARKS - RAPID_FIRE_MARKS)
-    raw_questions = parsed.get("questions")
-    raw_questions = raw_questions if isinstance(raw_questions, list) else []
-    questions = []
-    for i in range(3):
-        q = raw_questions[i] if i < len(raw_questions) and isinstance(raw_questions[i], dict) else {}
-        questions.append({
-            "question_number": i + 1,
-            "question_text": str(q.get("question_text") or "").strip(),
-            "marks": written_marks[i],
-            "word_limit_min": q.get("word_limit_min"),
-            "word_limit_max": q.get("word_limit_max"),
-            "instructions": str(q.get("instructions") or "").strip(),
-            "model_answer": str(q.get("model_answer") or "").strip(),
-            "alternative_answers": [str(x).strip() for x in (q.get("alternative_answers") or []) if str(x).strip()],
-            "marking_scheme": str(q.get("marking_scheme") or "").strip(),
-        })
-
-    reading = parsed.get("reading_time_minutes")
-    try:
-        reading = int(reading)
-    except (TypeError, ValueError):
-        reading = 8
-    reading = max(1, reading)
-    writing = 12  # default written-answer time; total duration derives from the parts
-    duration = reading + writing + RAPID_FIRE_TIME_MINUTES
-    answer_writing = writing
-
-    # Industry is still AI-inferred (not a faculty-picked field). Difficulty,
-    # Capabilities, and Bloom's are faculty-picked at creation and must not be
-    # overridden by the AI's own output for the same fields.
-    try:
-        industry = normalize_domain(_s("industry"))
-    except HTTPException:
-        industry = row.domain or "business"
-    ai_capabilities = _list("capabilities")
-    capabilities_out = capabilities or ai_capabilities or None
-    existing_blooms = parse_json_or_lines(row.blooms_levels)
-    blooms_levels_out = existing_blooms or json.loads(blooms_levels_for_difficulty(difficulty))
-    description_out = expand_description_if_short(client, _s("description"), difficulty, db)
-
-    req = CaseUpdateRequest(
-        title=_s("title") or row.title,
-        expected_outcomes=description_out,
-        outcome_statement=_s("outcome_statement"),
-        decision_options=_list("decision_options") or None,
-        learning_takeaways=_list("learning_takeaways") or None,
-        industry=industry,
-        difficulty=difficulty,
-        duration_minutes=duration,
-        capabilities=capabilities_out,
-        sections=sections,
-        section_meta=section_meta,
-        metadata={
-            "subject": _s("subject"),
-            "functional_area": _s("functional_area"),
-            "blooms_levels": blooms_levels_out,
-        },
-        timing={"reading_time_minutes": reading, "answer_writing_time_minutes": answer_writing},
-        marks={"total_marks": TOTAL_MARKS},
-        instructions={
-            "student_instructions_before": _s("student_instructions_before"),
-            "student_instructions_during": _s("student_instructions_during"),
-            "student_instructions_submission": _s("student_instructions_submission"),
-        },
-        questions=questions,
+    background_tasks.add_task(
+        run_ai_fill_job,
+        job_id,
+        case_id,
+        current_user["id"],
+        current_user.get("name"),
+        data.brief.strip(),
+        data.subject,
     )
-    # Persist everything except the rubric via the normal update path.
-    _apply_case_update(db, case_id, req, row)
-
-    # Rubric: keep the platform's default weights (always valid, total 100) and
-    # attach up to 2 AI-suggested case-specific criteria.
-    criteria = _list("case_specific_criteria")[:2]
-    rubric = validate_rubric(RubricRequest(weights=dict(DEFAULT_RUBRIC_WEIGHTS), case_specific_criteria=criteria))
-    result = db.execute(
-        text(
-            "UPDATE case_studies SET evaluation_rubric = :r, updated_at = NOW() "
-            "WHERE id = :cid AND created_by = :fid RETURNING " + CASE_EDITOR_COLUMNS
-        ),
-        {"r": json.dumps(rubric), "cid": case_id, "fid": current_user["id"]},
-    )
-    updated = result.fetchone()
-    # every faculty AI-generated case study is stored in the shared bank,
-    # tagged with the generating faculty's name
-    upsert_ai_bank_entry(db, case_id, current_user)
-    db.commit()
-    return case_editor_response(db, updated)
+    return generation_job_response(job)
 
 
 @faculty_router.post("/cases/{case_id}/generate-rapid-fire")

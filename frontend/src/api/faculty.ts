@@ -223,7 +223,7 @@ export interface FacultyCaseGenerationJob {
   job_id: string
   case_id: number
   status: GenerationJobStatus
-  scope: "full" | "section"
+  scope: "full" | "section" | "ai_fill"
   sections: CaseSectionKey[]
   message: string
   error?: string
@@ -362,9 +362,12 @@ export async function generateFacultyCaseQuestions(caseId: number, summary: stri
   return response.data.questions
 }
 
-// TEST: one-brief full-case autofill (fills every field + rubric in one call).
+// One-brief full-case autofill (fills every field + rubric). Runs as a
+// background job on the server (full generation can take 30s-3min) — this
+// kicks it off and returns the queued job immediately; poll it with
+// getFacultyCaseGenerationJob the same way section generation already does.
 export async function aiFillFacultyCase(caseId: number, brief: string, subject?: string) {
-  const response = await api.post<FacultyCaseEditor>(
+  const response = await api.post<FacultyCaseGenerationJob>(
     `/faculty/cases/${caseId}/ai-fill`,
     { brief, subject },
   )

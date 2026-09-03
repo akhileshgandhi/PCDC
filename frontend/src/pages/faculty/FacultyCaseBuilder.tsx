@@ -18,7 +18,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 
 import {
   aiFillFacultyCase,
@@ -237,6 +237,7 @@ const emptyCoreForm: CoreFormState = {
 
 export default function FacultyCaseBuilder() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams()
   const caseId = id ? Number(id) : null
   // Faculty can create a case (via the AI-brief flow below) but can never edit
@@ -283,6 +284,10 @@ export default function FacultyCaseBuilder() {
   const [isAiCreating, setIsAiCreating] = useState(false)
   const [regenerateBrief, setRegenerateBrief] = useState("")
   const [isRegenerating, setIsRegenerating] = useState(false)
+  // Both the initial "Generate with AI" and "Regenerate with AI" flows kick
+  // off the same ai_fill background job — this tracks which one is in flight
+  // so the polling effect below can show the right completion message.
+  const [aiFillIntent, setAiFillIntent] = useState<"create" | "regenerate" | null>(null)
   const [courses, setCourses] = useState<FacultyCourseOption[]>([])
   const [teachingSubjects, setTeachingSubjects] = useState<string[]>([])
   const [teachingCourseNames, setTeachingCourseNames] = useState<string[]>([])
@@ -336,6 +341,31 @@ export default function FacultyCaseBuilder() {
     }
   }, [caseId])
 
+  // handleAiCreate navigates from /case-builder to /case-builder/:id right
+  // after kicking off the ai_fill job — those are separate sibling <Route>
+  // entries (see FacultyPortal.tsx), so React Router may remount this
+  // component rather than preserve it, which would otherwise drop the
+  // generationJob/aiFillIntent state set before the navigate. Passing them
+  // through navigate's `state` and recovering them here makes the hand-off
+  // correct regardless of whether a remount actually happens. Keyed on
+  // location.key (unique per navigation) rather than mount-once, so it also
+  // works if this instance IS preserved (no remount) across the navigate.
+  useEffect(() => {
+    const navState = location.state as
+      | { generationJob?: FacultyCaseGenerationJob; aiFillIntent?: "create" | "regenerate" }
+      | null
+    if (navState?.generationJob) {
+      setGenerationJob(navState.generationJob)
+      setAiFillIntent(navState.aiFillIntent ?? "create")
+      setIsAiCreating(navState.aiFillIntent !== "regenerate")
+      setIsRegenerating(navState.aiFillIntent === "regenerate")
+      // Clear it so navigating back to this history entry later doesn't
+      // replay a stale job.
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
+
   useEffect(() => {
     if (
       !caseData ||
@@ -357,16 +387,33 @@ export default function FacultyCaseBuilder() {
           setCaseData(normalizeCaseData(job.case))
           setCoreForm(caseToCoreForm(job.case))
           setGeneratingSection(null)
-          setNotice(job.scope === "section" ? "Section generated." : "Case draft generated.")
+          setIsAiCreating(false)
+          setIsRegenerating(false)
+          setNotice(
+            job.scope === "section"
+              ? "Section generated."
+              : job.scope === "ai_fill"
+                ? aiFillIntent === "regenerate"
+                  ? "Case regenerated."
+                  : "Full case generated. An admin will review and publish it."
+                : "Case draft generated.",
+          )
+          setAiFillIntent(null)
           setErrors([])
         }
         if (job.status === "failed") {
           setGeneratingSection(null)
+          setIsAiCreating(false)
+          setIsRegenerating(false)
+          setAiFillIntent(null)
           setErrors([job.message || "AI generation failed. Existing content was preserved."])
         }
       } catch {
         if (isMounted) {
           setGeneratingSection(null)
+          setIsAiCreating(false)
+          setIsRegenerating(false)
+          setAiFillIntent(null)
           setErrors(["Unable to check generation status. Refresh and try again."])
         }
       }
@@ -376,7 +423,7 @@ export default function FacultyCaseBuilder() {
       isMounted = false
       window.clearInterval(timer)
     }
-  }, [caseData, generationJob])
+  }, [caseData, generationJob, aiFillIntent])
 
   const publishBlockers = useMemo(() => {
     if (!caseData) {
@@ -781,15 +828,20 @@ export default function FacultyCaseBuilder() {
           recommended_semesters: coreForm.semesters,
         },
       })
-      const filled = await aiFillFacultyCase(draft.id, aiBrief.trim())
-      setCaseData(normalizeCaseData(filled))
-      setCoreForm(caseToCoreForm(filled))
-      setNotice("Full case generated. An admin will review and publish it.")
-      navigate(`/faculty/case-builder/${filled.id}`, { replace: true })
+      // Kick off generation as a background job (returns almost instantly —
+      // it only enqueues), then navigate to the draft with the job attached
+      // via router state. The destination page shows a "Generating..."
+      // banner while it polls (see the polling effect above), so the long
+      // AI call happens off the request path instead of blocking this one.
+      const job = await aiFillFacultyCase(draft.id, aiBrief.trim())
+      navigate(`/faculty/case-builder/${draft.id}`, {
+        replace: true,
+        state: { generationJob: job, aiFillIntent: "create" },
+      })
     } catch (error) {
       setErrors([describeAiFailure(error)])
-    } finally {
       setIsAiCreating(false)
+      setAiFillIntent(null)
     }
   }
 
@@ -804,14 +856,13 @@ export default function FacultyCaseBuilder() {
     setErrors([])
     setNotice("")
     try {
-      const filled = await aiFillFacultyCase(caseData.id, regenerateBrief.trim())
-      setCaseData(normalizeCaseData(filled))
-      setCoreForm(caseToCoreForm(filled))
-      setNotice("Case regenerated.")
+      setAiFillIntent("regenerate")
+      const job = await aiFillFacultyCase(caseData.id, regenerateBrief.trim())
+      setGenerationJob(job)
     } catch (error) {
       setErrors([describeAiFailure(error)])
-    } finally {
       setIsRegenerating(false)
+      setAiFillIntent(null)
     }
   }
 
