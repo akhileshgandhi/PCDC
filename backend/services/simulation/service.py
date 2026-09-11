@@ -2167,7 +2167,12 @@ def call_llm(
     # models from wrapping the JSON in prose or markdown fences.
     if force_json:
         kwargs["response_format"] = {"type": "json_object"}
-    result = create_with_retry(client, kwargs, db=db)
+    # attempts=1: this runs synchronously inside a live student request, not
+    # a background job — retrying the SAME provider a second time before
+    # falling back just burns the request's time budget on a provider that's
+    # already shown itself to be down/slow. One try, then straight to the
+    # (independently confirmed working) fallback.
+    result = create_with_retry(client, kwargs, attempts=1, db=db)
     return (result.choices[0].message.content or "").strip()
 
 

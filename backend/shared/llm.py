@@ -10,7 +10,7 @@ import os
 import time
 from typing import Any, Dict, Optional
 
-from openai import OpenAI
+from openai import APIConnectionError, APITimeoutError, OpenAI
 from sqlalchemy.orm import Session
 
 GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -27,7 +27,17 @@ def is_gemini() -> bool:
 
 
 def get_llm_client() -> OpenAI:
-    """Return an OpenAI-compatible client for the active provider."""
+    """Return an OpenAI-compatible client for the active provider.
+
+    max_retries=0: the SDK's own built-in retry (default 2, with backoff)
+    silently re-attempts a timed-out/connection-failed request BEFORE
+    create_with_retry() ever sees the exception, multiplying the effective
+    wait per "attempt" by up to 3x. On a Vercel serverless function with a
+    hard execution limit, that alone can exhaust the whole request — the
+    platform kills the function before our own retry-then-fallback logic
+    ever runs. create_with_retry() is the single place that owns retry
+    pacing and attempt count; the SDK must fail fast on the first try.
+    """
     if is_gemini():
         key = os.getenv("GEMINI_API_KEY")
         if not key:
@@ -35,11 +45,12 @@ def get_llm_client() -> OpenAI:
         return OpenAI(
             api_key=key,
             base_url=os.getenv("GEMINI_BASE_URL", GEMINI_DEFAULT_BASE_URL),
+            max_retries=0,
         )
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         raise RuntimeError("OPENAI_API_KEY is not configured")
-    return OpenAI(api_key=key)
+    return OpenAI(api_key=key, max_retries=0)
 
 
 def get_llm_model(default: Optional[str] = None) -> str:
@@ -58,7 +69,7 @@ def get_fallback_llm_client() -> Optional[OpenAI]:
     key = os.getenv("OPENAI_API_KEY")
     if not key or not key.startswith("sk-"):
         return None
-    return OpenAI(api_key=key)
+    return OpenAI(api_key=key, max_retries=0)
 
 
 def get_fallback_llm_model() -> str:
@@ -87,6 +98,13 @@ def json_response_format(schema: Dict[str, Any], name: str) -> Dict[str, Any]:
 # in the app should go through this rather than calling the client raw.
 _TRANSIENT_STATUS = {429, 500, 503}
 
+# A timed-out or connection-failed request has no HTTP status at all (it
+# never got a response), so it's invisible to the status-code check above —
+# without this, a sustained outage that manifests as timeouts (rather than a
+# clean 429/503) skips both our retry loop AND the fallback provider
+# entirely, surfacing to the user as a dead request instead of a covered one.
+_TRANSIENT_EXCEPTIONS = (APITimeoutError, APIConnectionError)
+
 
 def create_with_retry(
     client: OpenAI,
@@ -112,7 +130,7 @@ def create_with_retry(
             return client.chat.completions.create(**kwargs)
         except Exception as error:  # noqa: BLE001 - narrow via status_code below
             status = getattr(error, "status_code", None)
-            if status not in _TRANSIENT_STATUS:
+            if status not in _TRANSIENT_STATUS and not isinstance(error, _TRANSIENT_EXCEPTIONS):
                 raise
             last_error = error
             if attempt < attempts - 1:
