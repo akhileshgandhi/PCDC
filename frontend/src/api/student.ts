@@ -33,6 +33,7 @@ export interface StudentDashboardSummary {
   level_label: string | null
   hero_message: string
   active_case: StudentActiveCase | null
+  active_case_count: number
   upcoming_session: StudentUpcomingSession | null
 }
 

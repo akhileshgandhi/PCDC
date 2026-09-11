@@ -145,6 +145,14 @@ def student_dashboard_summary(
         {"student_id": student_id},
     ).fetchone()
 
+    active_case_count = db.execute(
+        text("""
+            SELECT COUNT(*) FROM assigned_cases
+            WHERE student_id = :student_id AND status IN ('pending', 'active')
+        """),
+        {"student_id": student_id},
+    ).scalar() or 0
+
     upcoming_session_row = db.execute(
         text("""
             SELECT se.id, se.session_type, se.scheduled_at, u.name AS mentor_name
@@ -186,6 +194,7 @@ def student_dashboard_summary(
             "due_date": str(active_case_row.due_date) if active_case_row.due_date else None,
             "started": active_case_row.status == "active",
         } if active_case_row else None,
+        "active_case_count": int(active_case_count),
         "upcoming_session": {
             "id": upcoming_session_row.id,
             "session_type": upcoming_session_row.session_type,
