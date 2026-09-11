@@ -1,32 +1,59 @@
+import { Download } from "lucide-react"
 import { useState } from "react"
 
-import { bulkUploadFacultyCases, type FacultyCaseBulkUploadResult } from "../../api/faculty"
+import {
+  bulkUploadFacultyCases,
+  downloadBulkUploadCaseTemplate,
+  type FacultyCaseBulkUploadResult,
+} from "../../api/faculty"
 import { ModalShell, apiErrorDetail, errorBanner, secondaryBtn } from "../bank/shared"
 
-/** Upload a single Word (.docx) or PDF document containing one or more case
- * studies. AI splits the document (if it holds multiple cases) and extracts
- * each case's fields — title, description, difficulty, capabilities,
- * objectives, and all 3 written questions — from the document's own text.
- * Every case lands as a draft for admin to review, edit, and publish — same
- * as any other faculty-created case. */
+/** Upload one or more Word (.docx) / PDF documents, each containing one or
+ * more case studies. AI splits every document (if it holds multiple cases)
+ * and extracts each case's fields — title, description, difficulty,
+ * capabilities, objectives, and all 3 written questions — from the
+ * document's own text. Every case lands as a draft for admin to review,
+ * edit, and publish — same as any other faculty-created case. */
 export default function BulkUploadCaseDialog({ onClose, onDone }: {
   onClose: () => void
   onDone: () => void
 }) {
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState<FacultyCaseBulkUploadResult | null>(null)
 
+  function addFiles(picked: FileList | null) {
+    if (!picked || picked.length === 0) return
+    setFiles((prev) => [...prev, ...Array.from(picked)])
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleDownloadTemplate() {
+    setError("")
+    setIsDownloadingTemplate(true)
+    try {
+      await downloadBulkUploadCaseTemplate()
+    } catch (downloadError: unknown) {
+      setError(apiErrorDetail(downloadError, "Could not download the template."))
+    } finally {
+      setIsDownloadingTemplate(false)
+    }
+  }
+
   async function handleUpload() {
-    if (!file) {
-      setError("Choose a .docx or .pdf file first.")
+    if (files.length === 0) {
+      setError("Choose at least one .docx or .pdf file first.")
       return
     }
     setError("")
     setIsUploading(true)
     try {
-      const data = await bulkUploadFacultyCases(file)
+      const data = await bulkUploadFacultyCases(files)
       setResult(data)
     } catch (uploadError: unknown) {
       setError(apiErrorDetail(uploadError, "Bulk upload failed."))
@@ -39,28 +66,66 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
     <ModalShell title="Bulk upload case studies" onClose={onClose} wide>
       {error ? <div className={errorBanner}>{error}</div> : null}
 
-      <p className="mb-4 text-sm leading-6 text-[#6b7280]">
-        Upload a single Word or PDF document — one case study, or several concatenated in the
-        same file. AI reads the document and extracts each case's title, description, difficulty,
-        capabilities, objectives, and all 3 written questions from its own text. Every case is
-        created as a <strong>draft</strong> for an admin to review, edit, and publish. Larger
-        documents with several cases can take a few minutes to process.
+      <p className="mb-3 text-sm leading-6 text-[#6b7280]">
+        Upload one or more Word or PDF documents — a single case study per file, several
+        concatenated in one file, or any mix. Every case is created as a{" "}
+        <strong>draft</strong> for an admin to review, edit, and publish.
+      </p>
+
+      <button
+        type="button"
+        onClick={() => void handleDownloadTemplate()}
+        disabled={isDownloadingTemplate}
+        className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#0b1d3a] hover:underline disabled:opacity-60"
+      >
+        <Download size={15} />
+        {isDownloadingTemplate ? "Downloading…" : "Download case study template"}
+      </button>
+      <p className="mb-4 -mt-2 text-xs leading-5 text-[#6b7280]">
+        Filling in the template's labeled sections is read directly, with no AI guessing involved
+        — fastest and most reliable. Documents in your own format still work: AI reads them and
+        extracts each case's title, description, difficulty, capabilities, and all 3 written
+        questions from the free-form text instead. Larger batches can take a few minutes either way.
       </p>
 
       <label className="block cursor-pointer rounded-md border-2 border-dashed border-[#e6e8eb] px-4 py-6 text-center text-sm text-[#6b7280] transition hover:border-[#c9a227] hover:bg-[#fdfaf1]">
         <input
           type="file"
           accept=".docx,.pdf"
+          multiple
           className="hidden"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          onChange={(event) => {
+            addFiles(event.target.files)
+            event.target.value = ""
+          }}
         />
-        {file ? `📎 ${file.name}` : "Click to choose a .docx or .pdf file"}
+        {files.length > 0
+          ? `📎 ${files.length} file${files.length === 1 ? "" : "s"} selected — click to add more`
+          : "Click to choose one or more .docx or .pdf files"}
       </label>
+
+      {files.length > 0 && !result ? (
+        <ul className="mt-3 divide-y divide-[#e6e8eb] rounded-md border border-[#e6e8eb]">
+          {files.map((f, index) => (
+            <li key={`${f.name}-${index}`} className="flex items-center justify-between px-3 py-2 text-sm">
+              <span className="truncate text-[#111827]">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => removeFile(index)}
+                disabled={isUploading}
+                className="ml-3 shrink-0 text-xs font-semibold text-[#b42318] hover:underline disabled:opacity-50"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       {isUploading ? (
         <p className="mt-4 text-sm font-medium text-[#6b7280]">
-          Reading the document and extracting each case — this can take a few minutes for
-          documents with several cases…
+          Reading {files.length > 1 ? `${files.length} documents` : "the document"} and
+          extracting each case — this can take a few minutes for larger batches…
         </p>
       ) : null}
 
@@ -76,6 +141,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
                 <thead className="bg-[#f6f7fb] text-xs font-semibold uppercase text-[#6b7280]">
                   <tr>
                     <th className="px-3 py-2">#</th>
+                    <th className="px-3 py-2">File</th>
                     <th className="px-3 py-2">Title</th>
                   </tr>
                 </thead>
@@ -83,6 +149,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
                   {result.created.map((item) => (
                     <tr key={item.id} className="border-t border-[#e6e8eb]">
                       <td className="px-3 py-2">{item.row}</td>
+                      <td className="px-3 py-2 text-[#6b7280]">{item.file}</td>
                       <td className="px-3 py-2">{item.title}</td>
                     </tr>
                   ))}
@@ -96,6 +163,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
                 <thead className="bg-[#fff5f5] text-xs font-semibold uppercase text-[#b42318]">
                   <tr>
                     <th className="px-3 py-2">#</th>
+                    <th className="px-3 py-2">File</th>
                     <th className="px-3 py-2">Title</th>
                     <th className="px-3 py-2">Reason</th>
                   </tr>
@@ -104,6 +172,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
                   {result.errors.map((item) => (
                     <tr key={item.row} className="border-t border-[#f3c4c4]">
                       <td className="px-3 py-2">{item.row}</td>
+                      <td className="px-3 py-2 text-[#6b7280]">{item.file}</td>
                       <td className="px-3 py-2">{item.title}</td>
                       <td className="px-3 py-2 text-[#b42318]">{item.reason}</td>
                     </tr>
@@ -123,7 +192,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
           <button
             type="button"
             onClick={() => void handleUpload()}
-            disabled={isUploading || !file}
+            disabled={isUploading || files.length === 0}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isUploading ? "Processing…" : "Upload"}

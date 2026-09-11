@@ -2,7 +2,7 @@ import { ArrowRight, CheckCircle, MessageSquare, TrendingUp, Zap } from "lucide-
 import { Link } from "react-router-dom"
 
 import RadarChart, { type RadarMetric } from "./RadarChart"
-import type { QuestionScore } from "../../api/cases"
+import type { CapabilityScore, QuestionScore, RapidFireScore } from "../../api/cases"
 import { scoreColorClass } from "../../utils/scoreColor"
 
 export interface EvaluationData {
@@ -18,8 +18,9 @@ export interface EvaluationData {
   blind_spots: string
   improvement_areas: string
   question_scores: QuestionScore[]
-  rapid_fire_score: number
+  rapid_fire_scores: RapidFireScore[]
   rapid_fire_feedback: string
+  capability_scores: CapabilityScore[]
   overall_grade: string
   grade_comment: string
   next_case?: {
@@ -103,12 +104,17 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
   const gc = gradeColor(grade)
 
   // Actual marks scored out of the case's total marks (written question marks +
-  // rapid fire marks), rather than the 0-100 capability score.
+  // rapid fire marks), rather than the 0-100 capability score. Rapid fire is
+  // 3 independently-graded 1-mark questions summed directly, not a single
+  // 0-100 score rescaled to a fraction of 3.
   const writtenAwarded = evaluation.question_scores.reduce((s, q) => s + (q.marks_awarded || 0), 0)
   const writtenTotal = evaluation.question_scores.reduce((s, q) => s + (q.marks_total || 0), 0)
-  const rapidMarks = Math.round((evaluation.rapid_fire_score / 100) * 3 * 10) / 10
+  const rapidMarks = Math.round(
+    evaluation.rapid_fire_scores.reduce((s, rf) => s + (rf.marks_awarded || 0), 0) * 10,
+  ) / 10
+  const rapidTotal = evaluation.rapid_fire_scores.length || 3
   const marksScored = Math.round((writtenAwarded + rapidMarks) * 10) / 10
-  const totalMarks = writtenTotal + 3
+  const totalMarks = writtenTotal + rapidTotal
   const hasMarks = writtenTotal > 0
   const marksPct = hasMarks ? (marksScored / totalMarks) * 100 : evaluation.total_score
 
@@ -133,7 +139,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
             )}
             {hasMarks && (
               <p className="mt-1 text-sm text-[#6B7280]">
-                Written {writtenAwarded}/{writtenTotal} + Rapid Fire {rapidMarks}/3
+                Written {writtenAwarded}/{writtenTotal} + Rapid Fire {rapidMarks}/{rapidTotal}
               </p>
             )}
             {evaluation.grade_comment && (
@@ -196,37 +202,52 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
       )}
 
       {/* Rapid Fire Score */}
-      {(evaluation.rapid_fire_score > 0 || evaluation.rapid_fire_feedback) && (
+      {(evaluation.rapid_fire_scores.length > 0 || evaluation.rapid_fire_feedback) && (
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2">
             <Zap size={18} className="text-[#C9A227]" />
             <h3 className="text-lg font-semibold text-[#111827]">Rapid Fire Round</h3>
-            <span className={`ml-auto text-lg font-bold ${scoreColor(evaluation.rapid_fire_score)}`}>
-              {Math.round((evaluation.rapid_fire_score / 100) * 3 * 10) / 10} / 3 marks
+            <span className={`ml-auto text-lg font-bold ${scoreColor(rapidTotal > 0 ? (rapidMarks / rapidTotal) * 100 : 0)}`}>
+              {rapidMarks} / {rapidTotal} marks
             </span>
-          </div>
-          <div className="mt-2">
-            <ScoreBar score={evaluation.rapid_fire_score} max={100} />
           </div>
           {evaluation.rapid_fire_feedback && (
             <p className="mt-3 text-sm leading-6 text-[#374151]">{evaluation.rapid_fire_feedback}</p>
           )}
-          {rapidFireAnswers && rapidFireAnswers.length > 0 && (
+          {evaluation.rapid_fire_scores.length > 0 && (
             <div className="mt-4 space-y-3 border-t border-[#E6EBEB] pt-4">
-              {rapidFireAnswers.map((qa) => (
-                <div key={qa.sequence} className="rounded-lg border border-[#E6EBEB] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
-                    Question {qa.sequence}
-                  </p>
-                  <p className="mt-2 text-sm font-medium leading-6 text-[#111827]">{qa.question_text}</p>
-                  <div className="mt-2 rounded-lg bg-[#F6F7F9] p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your Answer</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#374151]">
-                      {qa.answer_text || "(no answer given)"}
-                    </p>
+              {evaluation.rapid_fire_scores.map((rf) => {
+                const qa = rapidFireAnswers?.find((a) => a.sequence === rf.sequence)
+                return (
+                  <div key={rf.sequence} className="rounded-lg border border-[#E6EBEB] p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
+                        Question {rf.sequence}
+                      </p>
+                      <span className={`text-sm font-bold ${scoreColor(rf.marks_awarded * 100)}`}>
+                        {rf.marks_awarded} / 1 mark
+                      </span>
+                    </div>
+                    {qa?.question_text ? (
+                      <p className="mt-2 text-sm font-medium leading-6 text-[#111827]">{qa.question_text}</p>
+                    ) : null}
+                    {qa?.answer_text ? (
+                      <div className="mt-2 rounded-lg bg-[#F6F7F9] p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your Answer</p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[#374151]">
+                          {qa.answer_text || "(no answer given)"}
+                        </p>
+                      </div>
+                    ) : null}
+                    <div className="mt-3">
+                      <ScoreBar score={rf.marks_awarded} max={1} />
+                    </div>
+                    {rf.feedback && (
+                      <p className="mt-3 text-sm leading-6 text-[#374151]">{rf.feedback}</p>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </article>
@@ -250,6 +271,34 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
           </div>
         </div>
       </article>
+
+      {/* Capability Demonstration — separate from the generic 6-dimension
+          rubric above: scored against the specific capabilities this case
+          was designed to assess. */}
+      {evaluation.capability_scores.length > 0 && (
+        <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-[#111827]">Capability Demonstration</h3>
+          <p className="mt-1 text-sm text-[#6B7280]">
+            How well this attempt demonstrated the capabilities this case is designed to build.
+          </p>
+          <div className="mt-4 space-y-4">
+            {evaluation.capability_scores.map((cap) => (
+              <div key={cap.capability}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold text-[#111827]">{cap.capability}</span>
+                  <span className={`font-semibold ${scoreColor(cap.score)}`}>{cap.score}</span>
+                </div>
+                <div className="mt-1.5">
+                  <ScoreBar score={cap.score} max={100} />
+                </div>
+                {cap.justification && (
+                  <p className="mt-1.5 text-sm leading-6 text-[#6B7280]">{cap.justification}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </article>
+      )}
 
       {/* Insights */}
       <div className="grid gap-4 md:grid-cols-3">

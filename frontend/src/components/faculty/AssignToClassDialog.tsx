@@ -17,7 +17,11 @@ function todayDateString() {
 interface AssignToClassDialogProps {
   caseStudy: { id: number; title: string }
   onClose: () => void
-  onAssigned: (message: string) => void
+  // hadNoEffect is true when nothing was actually assigned (every matched
+  // student already has this case, from a prior assignment or attempt) —
+  // callers should show this as a warning, not a plain success notice, so
+  // "0 students" doesn't get lost inside an otherwise-reassuring message.
+  onAssigned: (message: string, hadNoEffect?: boolean) => void
 }
 
 type AssignMode = "sections" | "students"
@@ -123,9 +127,19 @@ export default function AssignToClassDialog({ caseStudy, onClose, onAssigned }: 
           instructions: instructions || undefined,
         })
         const totalNew = result.assignments.reduce((sum, item) => sum + item.newly_assigned, 0)
-        onAssigned(
-          `Assigned "${caseStudy.title}" to ${result.assignments.length} section(s); ${totalNew} student(s) newly notified.`,
-        )
+        const totalMatched = result.assignments.reduce((sum, item) => sum + item.matched_students, 0)
+        if (totalNew === 0) {
+          onAssigned(
+            totalMatched === 0
+              ? `No students found in the selected section(s) — nothing was assigned.`
+              : `Nothing new to assign: every student in the selected section(s) already has "${caseStudy.title}" assigned or has already attempted it.`,
+            true,
+          )
+        } else {
+          onAssigned(
+            `Assigned "${caseStudy.title}" to ${result.assignments.length} section(s); ${totalNew} student(s) newly notified.`,
+          )
+        }
       } catch {
         setError("Unable to assign this case. It may already be assigned or not published.")
       } finally {
@@ -145,10 +159,17 @@ export default function AssignToClassDialog({ caseStudy, onClose, onAssigned }: 
         due_date: dueDate || undefined,
         instructions: instructions || undefined,
       })
-      onAssigned(
-        `Assigned "${caseStudy.title}" to ${result.newly_assigned} student(s)` +
-          (result.skipped ? ` (${result.skipped} already assigned/attempted).` : "."),
-      )
+      if (result.newly_assigned === 0) {
+        onAssigned(
+          `Nothing new to assign: the selected student(s) already have "${caseStudy.title}" assigned or have already attempted it.`,
+          true,
+        )
+      } else {
+        onAssigned(
+          `Assigned "${caseStudy.title}" to ${result.newly_assigned} student(s)` +
+            (result.skipped ? ` (${result.skipped} already assigned/attempted).` : "."),
+        )
+      }
     } catch {
       setError("Unable to assign this case. It may already be assigned or not published.")
     } finally {

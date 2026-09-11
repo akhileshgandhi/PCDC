@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom"
 
 import AdminAcademicSetup from "./AdminAcademicSetup"
 import AdminCaseBank from "./AdminCaseBank"
-import AdminCaseImport from "./AdminCaseImport"
 import AdminCourses from "./AdminCourses"
 import AdminDashboard from "./AdminDashboard"
 import AdminFaculty from "./AdminFaculty"
@@ -28,7 +27,6 @@ export default function AdminPortal() {
       <Route path="/user/:id" element={<AdminUserDetail />} />
       <Route path="/courses" element={<AdminCourses />} />
       <Route path="/sections" element={<AdminSections />} />
-      <Route path="/case-import" element={<AdminCaseImport />} />
       <Route
         path="/settings"
         element={

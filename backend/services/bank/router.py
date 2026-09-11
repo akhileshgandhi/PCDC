@@ -238,12 +238,15 @@ def list_bank_entries(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """The shared bank — every faculty and admin sees only entries tied to an
-    already-published case, ready to assign straight to a class. A case still
-    in draft/admin-review, or a bank-only template that was never turned into
-    a published case, does not appear here at all."""
+    """Faculty see only entries tied to an already-published case, ready to
+    assign straight to a class — a case still in draft/admin-review doesn't
+    appear for them. Admin sees everything, published or not, since they're
+    the ones who need to find and review pending drafts (bulk-uploaded or
+    AI-generated cases land here before anyone can publish them)."""
     require_faculty(current_user)
-    clauses = ["b.status = 'available'", PUBLISHED_ONLY_CLAUSE]
+    clauses = ["b.status = 'available'"]
+    if current_user["role"] != "admin":
+        clauses.append(PUBLISHED_ONLY_CLAUSE)
     params: Dict[str, Any] = {}
     if q and q.strip():
         clauses.append("LOWER(b.title) LIKE :q")
@@ -291,12 +294,13 @@ def bank_meta(
             ORDER BY 1
         """)
     ).fetchall()
+    creator_filter_clause = "TRUE" if current_user["role"] == "admin" else PUBLISHED_ONLY_CLAUSE
     creator_rows = db.execute(
         text(f"""
             SELECT DISTINCT b.creator_name
             FROM case_study_bank b
             {ENTRY_JOINS}
-            WHERE b.status = 'available' AND {PUBLISHED_ONLY_CLAUSE}
+            WHERE b.status = 'available' AND {creator_filter_clause}
                   AND b.creator_name IS NOT NULL AND b.creator_name <> ''
             ORDER BY 1
         """)

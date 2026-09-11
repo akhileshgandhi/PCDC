@@ -168,6 +168,18 @@ export interface QuestionScore {
   improvement: string
 }
 
+export interface RapidFireScore {
+  sequence: number
+  marks_awarded: number
+  feedback: string
+}
+
+export interface CapabilityScore {
+  capability: string
+  score: number
+  justification: string
+}
+
 export interface AttemptEvaluation {
   attempt_id: number
   thinking_depth: number
@@ -184,8 +196,13 @@ export interface AttemptEvaluation {
   blind_spots: string
   improvement_areas: string
   question_scores: QuestionScore[]
-  rapid_fire_score: number
+  // Rapid fire is 3 independently-graded 1-mark questions (each worth 0,
+  // 0.5, or 1) rather than a single 0-100 score rescaled to a fraction.
+  rapid_fire_scores: RapidFireScore[]
   rapid_fire_feedback: string
+  // Separate from the six generic rubric dimensions above — scored against
+  // whichever capabilities this specific case targets.
+  capability_scores: CapabilityScore[]
   overall_grade: string
   grade_comment: string
   next_recommended_case_id: number | null

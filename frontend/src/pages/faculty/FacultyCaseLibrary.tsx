@@ -11,7 +11,6 @@ import {
   type FacultyAssignedCase,
   type FacultyCase,
 } from "../../api/faculty"
-import UploadCaseDialog from "../../components/bank/UploadCaseDialog"
 import AssignToClassDialog from "../../components/faculty/AssignToClassDialog"
 import BulkUploadCaseDialog from "../../components/faculty/BulkUploadCaseDialog"
 import FacultyLayout from "../../layouts/FacultyLayout"
@@ -46,7 +45,6 @@ export default function FacultyCaseLibrary() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [assigningCase, setAssigningCase] = useState<FacultyCase | null>(null)
-  const [showBankUpload, setShowBankUpload] = useState(false)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [assignedCases, setAssignedCases] = useState<FacultyAssignedCase[]>([])
@@ -199,14 +197,6 @@ export default function FacultyCaseLibrary() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setShowBankUpload(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
-              >
-                <FileUp size={17} aria-hidden="true" />
-                Upload case study
-              </button>
               <button
                 type="button"
                 onClick={() => setShowBulkUpload(true)}
@@ -425,23 +415,16 @@ export default function FacultyCaseLibrary() {
         <AssignToClassDialog
           caseStudy={assigningCase}
           onClose={() => setAssigningCase(null)}
-          onAssigned={(message) => {
+          onAssigned={(message, hadNoEffect) => {
             setAssigningCase(null)
-            setNotice(message)
-            setError("")
+            if (hadNoEffect) {
+              setError(message)
+              setNotice("")
+            } else {
+              setNotice(message)
+              setError("")
+            }
             loadAssignedCases()
-          }}
-        />
-      ) : null}
-
-      {showBankUpload ? (
-        <UploadCaseDialog
-          variant="faculty"
-          onClose={() => setShowBankUpload(false)}
-          onDone={() => {
-            setShowBankUpload(false)
-            setNotice("Case study uploaded to the shared Case Bank — find it under Cases → Case Bank.")
-            setError("")
           }}
         />
       ) : null}

@@ -1,10 +1,9 @@
-import { Download, Edit3, Eye, FileUp, Rocket, Search, Send, Sparkles, Trash2 } from "lucide-react"
+import { Download, Edit3, Eye, FileUp, Rocket, Search, Send, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import {
   deleteBankEntry,
-  generateBankEntry,
   getBankAttachment,
   getBankEntries,
   getBankEntry,
@@ -16,22 +15,19 @@ import {
 } from "../../api/bank"
 import { getCurrentUser } from "../../utils/auth"
 import AssignToClassDialog from "../faculty/AssignToClassDialog"
+import BulkUploadCaseDialog from "../faculty/BulkUploadCaseDialog"
 import PublishCaseDialog from "./PublishCaseDialog"
-import UploadCaseDialog from "./UploadCaseDialog"
 import ViewCaseDialog from "./ViewCaseDialog"
 import {
   ModalShell,
   SourceChip,
-  apiErrorDetail,
   bankTheme,
   cardClass,
   errorBanner,
   formatDate,
   inputClass,
-  labelClass,
   roleLabel,
   secondaryBtn,
-  textareaClass,
   type BankVariant,
 } from "./shared"
 
@@ -52,8 +48,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
   const [viewing, setViewing] = useState<BankEntryDetail | null>(null)
   const [publishing, setPublishing] = useState<BankEntryDetail | null>(null)
   const [assigning, setAssigning] = useState<BankEntry | null>(null)
-  const [showUpload, setShowUpload] = useState(false)
-  const [showGenerate, setShowGenerate] = useState(false)
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
 
   const loadEntries = useCallback(async () => {
     try {
@@ -170,12 +165,15 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={secondaryBtn} onClick={() => setShowGenerate(true)}>
-              <Sparkles size={16} aria-hidden="true" /> Generate with AI
-            </button>
-            <button type="button" className={t.primaryBtn} onClick={() => setShowUpload(true)}>
-              <FileUp size={16} aria-hidden="true" /> Upload case study
-            </button>
+            {/* Case Bank is a pure browse/publish/assign view now — Generate
+                with AI, Upload case study, and Bulk Upload all live only on
+                My Case Library / Case Builder / Case Bank's own Bulk Upload
+                (admin) elsewhere. Only Bulk Upload remains here, admin-only. */}
+            {variant === "admin" ? (
+              <button type="button" className={t.primaryBtn} onClick={() => setShowBulkUpload(true)}>
+                <FileUp size={16} aria-hidden="true" /> Bulk Upload
+              </button>
+            ) : null}
           </div>
         </div>
       </section>
@@ -251,17 +249,27 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
               <div key={entry.id}
                 className="grid gap-2 py-4 lg:grid-cols-[1.5fr_0.75fr_0.55fr_0.7fr_0.85fr_1fr_1.5fr] lg:items-center">
                 <div>
-                  {entry.linked_case_id ? (
-                    <Link to={`/faculty/case-builder/${entry.linked_case_id}`}
-                      className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
-                      {entry.title}
-                    </Link>
-                  ) : (
-                    <button type="button" onClick={() => void openView(entry)}
-                      className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
-                      {entry.title}
-                    </button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {entry.linked_case_id ? (
+                      <Link to={`/faculty/case-builder/${entry.linked_case_id}`}
+                        className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
+                        {entry.title}
+                      </Link>
+                    ) : (
+                      <button type="button" onClick={() => void openView(entry)}
+                        className={`text-left text-sm font-semibold ${t.accentText} hover:underline`}>
+                        {entry.title}
+                      </button>
+                    )}
+                    {!entry.linked_case_published ? (
+                      <span
+                        title="Not published yet — only visible to admin"
+                        className="rounded-full bg-[#fff7df] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#92702a]"
+                      >
+                        Draft
+                      </span>
+                    ) : null}
+                  </div>
                   {entry.brief ? (
                     <p className="mt-0.5 line-clamp-1 text-xs text-[#6b7280]">{entry.brief}</p>
                   ) : null}
@@ -331,15 +339,15 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
         <ViewCaseDialog entry={viewing} variant={variant} onClose={() => setViewing(null)}
           onPublish={() => { setPublishing(viewing); setViewing(null) }} />
       ) : null}
-      {showUpload ? (
-        <UploadCaseDialog variant={variant} meta={meta}
-          onClose={() => setShowUpload(false)}
-          onDone={() => { setShowUpload(false); setNotice("Case study added to the bank."); void loadEntries() }} />
-      ) : null}
-      {showGenerate ? (
-        <GenerateDialog meta={meta} primaryBtn={t.primaryBtn}
-          onClose={() => setShowGenerate(false)}
-          onDone={(title) => { setShowGenerate(false); setNotice(`AI generated "${title}" — it's now in the bank.`); void loadEntries() }} />
+      {showBulkUpload ? (
+        <BulkUploadCaseDialog
+          onClose={() => setShowBulkUpload(false)}
+          onDone={() => {
+            setShowBulkUpload(false)
+            setNotice("Bulk upload complete. New cases are saved as drafts for review before publishing.")
+            void loadEntries()
+          }}
+        />
       ) : null}
       {publishing ? (
         <PublishCaseDialog entry={publishing} variant={variant} meta={meta}
@@ -349,87 +357,18 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
         <AssignToClassDialog
           caseStudy={{ id: assigning.linked_case_id, title: assigning.title }}
           onClose={() => setAssigning(null)}
-          onAssigned={(message) => { setAssigning(null); setNotice(message); setError("") }}
+          onAssigned={(message, hadNoEffect) => {
+            setAssigning(null)
+            if (hadNoEffect) {
+              setError(message)
+              setNotice("")
+            } else {
+              setNotice(message)
+              setError("")
+            }
+          }}
         />
       ) : null}
     </div>
-  )
-}
-
-function GenerateDialog({ meta, primaryBtn, onClose, onDone }: {
-  meta: BankMeta
-  primaryBtn: string
-  onClose: () => void
-  onDone: (title: string) => void
-}) {
-  const [topic, setTopic] = useState("")
-  const [subject, setSubject] = useState("")
-  const [semester, setSemester] = useState("")
-  const [difficulty, setDifficulty] = useState("2")
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [error, setError] = useState("")
-
-  async function handleGenerate() {
-    setError("")
-    setIsGenerating(true)
-    try {
-      const result = await generateBankEntry({
-        topic: topic.trim() || undefined,
-        subject: subject.trim() || undefined,
-        semester_number: semester ? Number(semester) : null,
-        difficulty: Number(difficulty),
-      })
-      onDone(result.title)
-    } catch (generateError: unknown) {
-      setError(apiErrorDetail(generateError, "AI generation failed — try again."))
-      setIsGenerating(false)
-    }
-  }
-
-  return (
-    <ModalShell title="Generate a case study with AI" onClose={onClose}>
-      {error ? <div className={errorBanner}>{error}</div> : null}
-      <p className="mb-4 text-sm leading-6 text-[#6b7280]">
-        The AI writes a complete case (situation, data, questions, model answers) for the mapped
-        subject, semester and difficulty. It's stored in the shared bank, tagged
-        <span className="font-semibold text-[#111827]"> AI generated</span> with your name.
-      </p>
-      <div className="space-y-4">
-        <div>
-          <label className={labelClass}>Topic / brief (optional)</label>
-          <textarea className={textareaClass} value={topic}
-            onChange={(e) => setTopic(e.target.value)} placeholder="e.g. a D2C brand facing rising customer-acquisition costs" />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <label className={labelClass}>Subject</label>
-            <input className={inputClass} list="bank-subjects-gen" value={subject}
-              onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Marketing" />
-            <datalist id="bank-subjects-gen">
-              {meta.subjects.map((item) => <option key={item} value={item} />)}
-            </datalist>
-          </div>
-          <div>
-            <label className={labelClass}>Semester</label>
-            <select className={inputClass} value={semester} onChange={(e) => setSemester(e.target.value)}>
-              <option value="">Not set</option>
-              {meta.semesters.map((item) => <option key={item} value={item}>Semester {item}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelClass}>Difficulty</label>
-            <select className={inputClass} value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-              {meta.difficulties.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
-      <div className="mt-5 flex justify-end gap-2">
-        <button type="button" className={secondaryBtn} onClick={onClose} disabled={isGenerating}>Cancel</button>
-        <button type="button" className={primaryBtn} onClick={() => void handleGenerate()} disabled={isGenerating}>
-          <Sparkles size={15} aria-hidden="true" /> {isGenerating ? "Generating… (up to a minute)" : "Generate"}
-        </button>
-      </div>
-    </ModalShell>
   )
 }

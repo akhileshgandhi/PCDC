@@ -139,8 +139,12 @@ class EvaluationResult(BaseModel):
     # attempt showed the correct marks-based score — same data, two different
     # numbers depending on which response model happened to touch it.
     question_scores: List[Dict[str, Any]] = Field(default_factory=list)
-    rapid_fire_score: int = 0
+    # Rapid fire is 3 independently-graded 1-mark questions (replaces the old
+    # single 0-100 rapid_fire_score) — omitting this from the response model
+    # would silently strip it the same way the comment above describes.
+    rapid_fire_scores: List[Dict[str, Any]] = Field(default_factory=list)
     rapid_fire_feedback: str = ""
+    capability_scores: List[Dict[str, Any]] = Field(default_factory=list)
     overall_grade: str = ""
     grade_comment: str = ""
 

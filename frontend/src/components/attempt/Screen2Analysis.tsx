@@ -60,6 +60,26 @@ export default function Screen2Analysis({
     const isReady = summaryReady && questionsReady
     const summaryProgress = Math.min((summaryWords / INITIAL_ANALYSIS_MIN) * 100, 100)
 
+    // Precise reasons submission is still blocked — shown up front so a
+    // student isn't left guessing why the button is disabled when every
+    // per-question indicator still looks "done" (green) at a glance.
+    const blockingReasons: string[] = []
+    if (!summaryReady) {
+      blockingReasons.push(
+        `Initial Analysis needs ${INITIAL_ANALYSIS_MIN - summaryWords} more word${INITIAL_ANALYSIS_MIN - summaryWords === 1 ? "" : "s"} (minimum ${INITIAL_ANALYSIS_MIN}).`,
+      )
+    }
+    questions.forEach((q, i) => {
+      const wc = wordCounts[i]
+      const minWords = q.word_limit_min ?? DEFAULT_MIN
+      const maxWords = q.word_limit_max
+      if (wc < minWords) {
+        blockingReasons.push(`Question ${q.question_number} needs ${minWords - wc} more word${minWords - wc === 1 ? "" : "s"} (minimum ${minWords}).`)
+      } else if (maxWords != null && wc > maxWords) {
+        blockingReasons.push(`Question ${q.question_number} is ${wc - maxWords} word${wc - maxWords === 1 ? "" : "s"} over its ${maxWords}-word limit — trim it before submitting.`)
+      }
+    })
+
     return (
       // Fills the full width of its grid column (equal split with the Case
       // Reference panel) instead of capping to a fixed max-width, per the
@@ -165,16 +185,17 @@ export default function Screen2Analysis({
 
               <div className="mt-3">
                 <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className={met ? "text-[#16A34A]" : overMax ? "text-[#B91C1C]" : "text-[#F59E0B]"}>
-                    {wc} / {minWords} words minimum
-                    {overMax && ` (over ${maxWords} max)`}
+                  <span className={overMax ? "text-[#B91C1C]" : met ? "text-[#16A34A]" : "text-[#F59E0B]"}>
+                    {overMax
+                      ? `${wc} / ${maxWords} words — ${wc - maxWords} over the limit, please trim`
+                      : `${wc} / ${minWords} words minimum`}
                   </span>
-                  <span className="text-[#6B7280]">{Math.round(progress)}%</span>
+                  <span className="text-[#6B7280]">{overMax ? "Over limit" : `${Math.round(progress)}%`}</span>
                 </div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-[#E6EBEB]">
                   <div
-                    className={`h-1.5 rounded-full transition-all ${met ? "bg-[#16A34A]" : "bg-[#C9A227]"}`}
-                    style={{ width: `${progress}%` }}
+                    className={`h-1.5 rounded-full transition-all ${overMax ? "bg-[#B91C1C]" : met ? "bg-[#16A34A]" : "bg-[#C9A227]"}`}
+                    style={{ width: `${overMax ? 100 : progress}%` }}
                   />
                 </div>
               </div>
@@ -183,6 +204,18 @@ export default function Screen2Analysis({
         })}
 
         <div className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
+          {!isReady && blockingReasons.length > 0 ? (
+            <div className="mb-4 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] p-4">
+              <p className="text-sm font-semibold text-[#B91C1C]">
+                Fix the following before you can submit:
+              </p>
+              <ul className="mt-2 space-y-1 pl-5 text-sm text-[#7F1D1D]">
+                {blockingReasons.map((reason) => (
+                  <li key={reason} className="list-disc">{reason}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={onNext}

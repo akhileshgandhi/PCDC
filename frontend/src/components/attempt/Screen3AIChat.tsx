@@ -117,10 +117,18 @@ export default function Screen3AIChat({
             </button>
           </div>
         ) : allDone ? (
-          <div className="mt-4 flex flex-col items-center gap-3 py-6 text-center">
-            <CheckCircle size={40} className="text-[#16A34A]" />
-            <h3 className="text-lg font-semibold text-[#0B1D3A]">All questions answered!</h3>
-            <p className="text-sm text-[#6B7280]">
+          <div className="mt-4 flex flex-col items-center gap-4 py-10 text-center">
+            {isSubmitting ? (
+              <Loader2 size={56} className="animate-spin text-[#C9A227]" aria-hidden="true" />
+            ) : (
+              <CheckCircle size={56} className="text-[#16A34A]" aria-hidden="true" />
+            )}
+            <h3 className="text-3xl font-bold text-[#0B1D3A]">All questions answered!</h3>
+            <p
+              className={`text-lg font-medium ${
+                isSubmitting ? "animate-pulse text-[#C9A227]" : "text-[#16A34A]"
+              }`}
+            >
               {isSubmitting ? "AI is evaluating your performance…" : "Your answers have been submitted. Evaluation is ready."}
             </p>
             <div className="mt-4 w-full space-y-3 text-left">

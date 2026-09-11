@@ -58,18 +58,20 @@ You will be given THREE pieces of student work to judge together:
    the case (their first-take thinking: what's happening, causes, assumptions,
    missing info, tentative solution).
 2. "initial_analysis" — their answers to the structured written questions
-   (Q1, Q2, Q3), each with a model answer and marking scheme.
+   (Q1, Q2, Q3), each with a model answer for reference.
 3. The rapid fire answers — short responses probing the reasoning behind 1 and 2.
 
-You are also given the case study content, learning objectives, and the
-faculty-defined evaluation rubric (if provided).
+You are also given the case study content, the faculty-defined evaluation
+rubric (if provided), and "capabilities_targeted" — the specific 2-3
+capabilities (e.g. "Observation", "Negotiation") this case is designed to
+assess.
 
 Judge the rubric dimensions (thinking_depth, logic, creativity, practicality,
 risk_awareness, reflection) holistically across ALL THREE — reward consistent,
 well-reasoned thinking and penalise contradictions that surface between their
 initial analysis, their written answers, and their rapid fire responses. The
 per-question marks (question_scores) come ONLY from the structured written
-answers; rapid_fire_score comes ONLY from the rapid fire answers. The initial
+answers; rapid_fire_scores come ONLY from the rapid fire answers. The initial
 analysis carries no marks of its own but informs the rubric dimensions.
 
 CALIBRATION — every score below MUST be justified by specific evidence in
@@ -77,7 +79,8 @@ this student's own text, not a habitual "safe" number. Two different
 students should almost never land on the same score for a dimension unless
 their answers are genuinely equivalent in depth. Use these anchors for EACH
 0-100 dimension (thinking_depth, logic_score, creativity_score,
-practicality_score, risk_awareness_score, reflection_score, rapid_fire_score):
+practicality_score, risk_awareness_score, reflection_score, and each entry
+in capability_scores):
 - 0-30: Missing, off-topic, or just restates the case with no real analysis.
 - 31-50: Generic/textbook reasoning that could apply to almost any case —
   does not engage with THIS case's specific numbers, constraints, or facts.
@@ -98,18 +101,32 @@ minor gap might be 79 or 83, not automatically 85; two different "strong"
 answers of slightly different depth should get different scores, not the
 same one.
 
-For question_scores (marks_awarded): the marking scheme is a numbered list
-of specific criteria, each with its own point value (e.g. "1) Correctly
-identifies revenue and COGS (0.5) 2) ..."). Go through it criterion by
-criterion — for EACH one, decide yes/no whether the student's answer
-actually addresses it, and sum only the points for criteria met. Do not
-award marks_total just because the answer is well-written, fluent, or
-on-topic; a fluent answer that only covers 2 of 4 criteria gets half marks.
-If a marking scheme is missing or too vague to check criterion-by-criterion,
-fall back to judging depth and specificity the same way the calibration
-bands above do (generic/textbook coverage caps at half marks; only
-answers that are specific, complete, and use the case's own facts earn
-marks_total).
+For question_scores (marks_awarded, out of that question's marks_total):
+do NOT do a literal text-match against the model answer — it is a reference
+for what strong coverage looks like, not a checklist to copy. Judge each
+answer on:
+  1. Is it grounded in THIS case's own specific facts, numbers, and
+     constraints, or could it apply to any generic case?
+  2. Does it demonstrate the capabilities in "capabilities_targeted" (e.g. an
+     "Observation" capability expects the student to notice/report specific
+     details, not jump straight to a recommendation)?
+  3. Does it meet the depth expected by the evaluation rubric?
+Award partial credit freely and precisely (e.g. 0, 0.5, 1, 1.5 marks on a
+2-mark question) — an answer that is on-topic but generic, shallow, or only
+partly addresses the question should land in the middle, not at marks_total
+and not at 0. Do not award marks_total just because the answer is
+well-written or fluent; do not award 0 just because it's short, if what's
+there is specific and correct.
+
+For rapid_fire_scores: grade EACH rapid fire question independently, worth 1
+mark. Award 0, 0.5, or 1 per question based on whether the answer is correct,
+partially correct, or missing/wrong — using the same "grounded in this case,
+not generic" standard as above.
+
+For capability_scores: for EACH capability listed in "capabilities_targeted",
+score 0-100 how well the student's work AS A WHOLE (initial analysis, written
+answers, and rapid fire together) demonstrated that specific capability, with
+a one-sentence justification citing something concrete the student wrote.
 
 Return a JSON object with EXACTLY these keys:
 
@@ -127,8 +144,15 @@ Return a JSON object with EXACTLY these keys:
     {"question_number": 2, "marks_awarded": <number>, "marks_total": <number>, "feedback": "...", "improvement": "..."},
     {"question_number": 3, "marks_awarded": <number>, "marks_total": <number>, "feedback": "...", "improvement": "..."}
   ],
-  "rapid_fire_score": 0-100,
-  "rapid_fire_feedback": "1-2 sentences on rapid fire performance",
+  "rapid_fire_scores": [
+    {"sequence": 1, "marks_awarded": <0, 0.5, or 1>, "feedback": "1 sentence"},
+    {"sequence": 2, "marks_awarded": <0, 0.5, or 1>, "feedback": "1 sentence"},
+    {"sequence": 3, "marks_awarded": <0, 0.5, or 1>, "feedback": "1 sentence"}
+  ],
+  "rapid_fire_feedback": "1-2 sentences summarizing rapid fire performance overall",
+  "capability_scores": [
+    {"capability": "<name from capabilities_targeted>", "score": 0-100, "justification": "1 sentence"}
+  ],
   "strengths": "2-3 sentences on what the student did well",
   "weaknesses": "2-3 sentences on key gaps",
   "blind_spots": "1-2 sentences on what the student completely missed",
@@ -137,8 +161,7 @@ Return a JSON object with EXACTLY these keys:
   "grade_comment": "1 sentence overall summary"
 }
 
-For marks_awarded: use the marking scheme and model answer to assess how many marks the student deserves out of marks_total.
-Base all scoring on the rubric criteria if provided. Be strict but fair — do not give the benefit of the doubt to vague, generic, or filler content.
+Base all scoring on the rubric criteria if provided. Be strict but fair — do not give the benefit of the doubt to vague, generic, or filler content, but do give real partial credit for real partial coverage.
 """
 
 VALID_DOMAINS = {
@@ -452,10 +475,14 @@ def marks_from_evaluation(evaluation: Dict[str, Any]) -> Optional[tuple]:
     written_total = sum(float(qs.get("marks_total") or 0) for qs in question_scores)
     if written_total <= 0:
         return None
-    rapid_fire_score = float(evaluation.get("rapid_fire_score") or 0)
-    rapid_marks = round(rapid_fire_score / 100 * 3, 1)
+    # Rapid fire is 3 independently-graded 1-mark questions (see
+    # rapid_fire_scores) — sum what was actually awarded rather than
+    # rescaling a single holistic 0-100 score into a fraction of 3.
+    rapid_fire_scores = evaluation.get("rapid_fire_scores") or []
+    rapid_marks = round(sum(float(rf.get("marks_awarded") or 0) for rf in rapid_fire_scores), 1)
+    rapid_total = float(len(rapid_fire_scores)) if rapid_fire_scores else 3.0
     marks_scored = round(written_awarded + rapid_marks, 1)
-    marks_total = round(written_total + 3, 1)
+    marks_total = round(written_total + rapid_total, 1)
     return marks_scored, marks_total
 
 
@@ -1369,6 +1396,41 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
         db=db,
     )
     evaluation = normalize_evaluation(parse_json_response(response))
+    # Deterministic override, not a prompt instruction: tested asking the AI
+    # itself to recognize a blank rapid fire submission and it was unstable —
+    # it sometimes misjudged genuinely strong answers as blank too. Blankness
+    # is a fact we already know from the DB, so check it in code instead of
+    # trusting the AI's judgment on it.
+    if not (attempt_context.get("defense_responses") or "").strip():
+        blank_rf = json.loads(evaluation.get("rapid_fire_scores") or "[]")
+        for item in blank_rf:
+            item["marks_awarded"] = 0
+            item["feedback"] = "No answer was submitted."
+        evaluation["rapid_fire_scores"] = json.dumps(blank_rf)
+        evaluation["rapid_fire_feedback"] = "No rapid fire answers were submitted."
+    # Same deterministic guard for the structured written questions: tested
+    # this and the AI fabricates plausible-sounding full marks and feedback
+    # for a blank OR placeholder answer ("idk", "not sure") by drawing on the
+    # case content and the student's other work, instead of recognizing
+    # nothing real was written for THIS question. Word count is a fact we
+    # already have from case_question_responses — check it in code rather
+    # than trusting the AI's judgment on it. Only applies when that table
+    # actually has per-question rows for this attempt — older attempts that
+    # only ever stored one combined textarea (no structured answers table)
+    # have nothing here to check against, so skip rather than false-flag them.
+    per_question_answers = get_question_answers_for_response(db, attempt_id)
+    if per_question_answers:
+        answer_by_number = {
+            qa["question_number"]: (qa["answer_text"] or "").strip()
+            for qa in per_question_answers
+        }
+        question_scores = json.loads(evaluation.get("question_scores") or "[]")
+        for qs in question_scores:
+            answer_text = answer_by_number.get(qs.get("question_number"))
+            if answer_text is not None and len(answer_text.split()) < 5:
+                qs["marks_awarded"] = 0
+                qs["feedback"] = "No real answer was given for this question."
+        evaluation["question_scores"] = json.dumps(question_scores)
     save_evaluation(db, attempt_id, evaluation)
     # Return the SAME shape as the reloaded "View Results" path (question_scores
     # as a list, rapid-fire fields unpacked), so the report card is identical
@@ -1381,7 +1443,8 @@ def generate_and_save_evaluation(db: Session, attempt_id: int) -> Dict[str, Any]
 def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
     row = db.execute(
         text("""
-            SELECT c.title, c.content, c.description, c.evaluation_rubric,
+            SELECT c.id AS case_study_id, c.title, c.content, c.description,
+                   c.evaluation_rubric,
                    a.initial_summary, a.initial_analysis, a.final_solution,
                    a.defense_responses, a.reflection_text, a.initial_word_count,
                    a.time_taken_minutes
@@ -1393,6 +1456,10 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Attempt not found")
+
+    capabilities = [
+        tag["tag_value"] for tag in get_case_tags(db, row.case_study_id) if tag["tag_type"] == "capability"
+    ]
 
     # Fetch written questions with model answers
     q_rows = db.execute(
@@ -1422,6 +1489,7 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
         "case_description": row.description or "",
         "case_content": row.content,
         "evaluation_rubric": row.evaluation_rubric or "No rubric provided — use general academic standards.",
+        "capabilities_targeted": capabilities,
         "written_questions": [
             {
                 "question_number": qr.question_number,
@@ -1494,16 +1562,12 @@ def normalize_evaluation(data: Any) -> Dict[str, Any]:
     scores["weaknesses"] = flatten_ai_text(data.get("weaknesses"))
     scores["blind_spots"] = flatten_ai_text(data.get("blind_spots"))
     scores["improvement_areas"] = flatten_ai_text(data.get("improvement_areas"))
-    scores["rapid_fire_score"] = bounded_score(data.get("rapid_fire_score"))
     scores["rapid_fire_feedback"] = flatten_ai_text(data.get("rapid_fire_feedback"))
     scores["overall_grade"] = str(data.get("overall_grade", ""))
     scores["grade_comment"] = str(data.get("grade_comment", ""))
     scores["next_recommended_case_id"] = data.get("next_recommended_case_id")
     # Per-question scores — store as JSON string. Clamp marks_awarded into
-    # [0, marks_total]: the marking scheme's itemized point values are meant
-    # to sum to marks_total, but the AI doesn't always get that arithmetic
-    # right (e.g. four 1-point criteria on a 2-mark question), which would
-    # otherwise let a question show more marks awarded than it's worth.
+    # [0, marks_total] as a hard guarantee independent of the AI's own math.
     raw_qs = data.get("question_scores")
     clamped_qs = []
     if isinstance(raw_qs, list):
@@ -1521,6 +1585,33 @@ def normalize_evaluation(data: Any) -> Dict[str, Any]:
             item = {**item, "marks_awarded": max(0.0, min(marks_awarded, marks_total))}
             clamped_qs.append(item)
     scores["question_scores"] = json.dumps(clamped_qs)
+
+    # Rapid fire is now 3 independently-graded 1-mark questions, not a single
+    # 0-100 "vibe" score rescaled to a fraction — clamp each to [0, 1].
+    raw_rf = data.get("rapid_fire_scores")
+    clamped_rf = []
+    if isinstance(raw_rf, list):
+        for item in raw_rf:
+            if not isinstance(item, dict):
+                continue
+            try:
+                marks_awarded = float(item.get("marks_awarded") or 0)
+            except (TypeError, ValueError):
+                marks_awarded = 0.0
+            item = {**item, "marks_awarded": max(0.0, min(marks_awarded, 1.0))}
+            clamped_rf.append(item)
+    scores["rapid_fire_scores"] = json.dumps(clamped_rf)
+
+    # Capability-demonstration scores — one per capability the case actually
+    # targets, separate from the six generic rubric dimensions above.
+    raw_caps = data.get("capability_scores")
+    clamped_caps = []
+    if isinstance(raw_caps, list):
+        for item in raw_caps:
+            if not isinstance(item, dict) or not item.get("capability"):
+                continue
+            clamped_caps.append({**item, "score": bounded_score(item.get("score"))})
+    scores["capability_scores"] = json.dumps(clamped_caps)
     return scores
 
 
@@ -1549,8 +1640,9 @@ def save_evaluation(db: Session, attempt_id: int, evaluation: Dict[str, Any]) ->
     extra = {
         "text": evaluation.get("improvement_areas", ""),
         "question_scores": json.loads(evaluation.get("question_scores") or "[]"),
-        "rapid_fire_score": evaluation.get("rapid_fire_score", 0),
+        "rapid_fire_scores": json.loads(evaluation.get("rapid_fire_scores") or "[]"),
         "rapid_fire_feedback": evaluation.get("rapid_fire_feedback", ""),
+        "capability_scores": json.loads(evaluation.get("capability_scores") or "[]"),
         "overall_grade": evaluation.get("overall_grade", ""),
         "grade_comment": evaluation.get("grade_comment", ""),
     }
@@ -1607,14 +1699,16 @@ def get_evaluation(db: Session, attempt_id: int) -> Optional[Dict[str, Any]]:
 
 def evaluation_row_to_dict(row: Any) -> Dict[str, Any]:
     # Unpack extended fields from improvement_areas JSON
+    empty_extra = {
+        "text": row.improvement_areas or "", "question_scores": [], "rapid_fire_scores": [],
+        "rapid_fire_feedback": "", "capability_scores": [], "overall_grade": "", "grade_comment": "",
+    }
     try:
         extra = json.loads(row.improvement_areas or "{}")
         if not isinstance(extra, dict) or "text" not in extra:
-            extra = {"text": row.improvement_areas or "", "question_scores": [], "rapid_fire_score": 0,
-                     "rapid_fire_feedback": "", "overall_grade": "", "grade_comment": ""}
+            extra = empty_extra
     except (json.JSONDecodeError, TypeError):
-        extra = {"text": str(row.improvement_areas or ""), "question_scores": [], "rapid_fire_score": 0,
-                 "rapid_fire_feedback": "", "overall_grade": "", "grade_comment": ""}
+        extra = empty_extra
     return {
         "attempt_id": row.attempt_id,
         "thinking_depth": row.thinking_depth,
@@ -1631,8 +1725,13 @@ def evaluation_row_to_dict(row: Any) -> Dict[str, Any]:
         "blind_spots": row.blind_spots,
         "improvement_areas": extra.get("text", ""),
         "question_scores": extra.get("question_scores", []),
-        "rapid_fire_score": extra.get("rapid_fire_score", 0),
+        # Older evaluations only have the pre-rework scalar rapid_fire_score
+        # (0-100) — fall back to an empty per-question list for those rather
+        # than crashing; the frontend renders "no rapid fire breakdown" for
+        # an empty list, which is accurate for data that predates this shape.
+        "rapid_fire_scores": extra.get("rapid_fire_scores", []),
         "rapid_fire_feedback": extra.get("rapid_fire_feedback", ""),
+        "capability_scores": extra.get("capability_scores", []),
         "overall_grade": extra.get("overall_grade", ""),
         "grade_comment": extra.get("grade_comment", ""),
         "next_recommended_case_id": row.next_recommended_case_id,

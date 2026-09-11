@@ -72,7 +72,6 @@ const navGroups: NavGroup[] = [
     icon: BookMarked,
     items: [
       { label: "Case Bank", to: "/admin/case-bank", icon: BookMarked },
-      { label: "Case Import", to: "/admin/case-import", icon: BookMarked },
     ],
   },
   {

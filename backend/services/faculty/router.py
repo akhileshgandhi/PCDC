@@ -2,13 +2,14 @@ import csv
 import io
 import json
 import os
+import re
 import secrets
 import threading
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -128,16 +129,11 @@ case study simulation. Given the case's core fields and a short case summary,
 produce exactly 3 written questions with model answers and a marking scheme,
 calibrated to the stated difficulty and targeted capabilities.
 
-Write each "marking_scheme" as a numbered list of 2-4 SPECIFIC, checkable
-criteria, each tagged with its own point value in parentheses, summing
-exactly to that question's total marks (e.g. for a 2-mark question:
-"1) Correctly identifies revenue and COGS (0.5) 2) Correctly explains gross
-profit and its significance (0.5) 3) Correctly identifies operating expenses
-(0.5) 4) Correctly explains net profit as the bottom-line indicator (0.5)").
-Never write a single vague sentence like "marks for accurately describing
-the components" — a grader must be able to check each criterion yes/no
-against what the student actually wrote, and award partial marks whenever
-some but not all criteria are met.
+Write each "marking_scheme" as a short (1-2 sentence) description of what a
+strong answer covers — a reference for a human or AI grader, not a rigid
+checklist to text-match against. Grading judges whether the student's
+reasoning is grounded in the case's own facts and demonstrates the targeted
+capabilities, not whether it repeats specific phrases from this scheme.
 
 Output must match the provided JSON schema exactly.
 """
@@ -1091,6 +1087,7 @@ def call_openai_case_generation(
     client = get_llm_client()
     response = create_with_retry(client, {
         "model": get_llm_model(CASE_GENERATION_MODEL),
+        "temperature": 0,
         "messages": [
             {"role": "system", "content": CASE_GENERATION_PROMPT},
             {
@@ -1176,6 +1173,7 @@ def call_openai_generate_questions(
     client = get_llm_client()
     response = create_with_retry(client, {
         "model": get_llm_model(CASE_GENERATION_MODEL),
+        "temperature": 0,
         "messages": [
             {"role": "system", "content": GENERATE_QUESTIONS_PROMPT},
             {
@@ -1265,6 +1263,7 @@ def call_openai_generate_rapid_fire(
     client = get_llm_client()
     response = create_with_retry(client, {
         "model": get_llm_model(CASE_GENERATION_MODEL),
+        "temperature": 0,
         "messages": [
             {"role": "system", "content": GENERATE_RAPID_FIRE_PROMPT},
             {
@@ -1852,6 +1851,341 @@ def extract_text_from_upload(filename: str, content: bytes) -> str:
     raise ValueError("Unsupported file type — upload a .docx or .pdf file")
 
 
+# --- Bulk-upload template ---------------------------------------------------
+# A faculty-facing template with fixed, labeled sections. When a document
+# follows it, extraction is a direct deterministic parse (fast, free, and
+# immune to AI mis-inference) instead of relying on the AI to guess structure
+# from free-form prose. Documents that DON'T follow it still work exactly as
+# before — the parser below returns None on anything it can't confidently
+# read, which falls back to the existing AI-based splitting/extraction.
+BULK_TEMPLATE_CASE_SEPARATOR = "===CASE END==="
+
+BULK_TEMPLATE_TEXT = """PCDC CASE STUDY TEMPLATE
+=========================
+Fill in every section below (delete this instruction block once you're
+done). Keep each ALL-CAPS label exactly as shown, on its own line, with your
+content on the line(s) below it. To submit several case studies in one
+file, copy this whole template again further down and put the line
+===CASE END=== between each case.
+
+TITLE:
+
+
+SUBJECT:
+(e.g. Marketing Management)
+
+FUNCTIONAL AREA:
+(e.g. Channel Management & Negotiation)
+
+INDUSTRY:
+(one of: business, technology, healthcare, environment, geopolitics, sports, social, science)
+
+DIFFICULTY:
+(a single number from 1 to 5, where 1 = easiest and 5 = hardest)
+
+CAPABILITIES:
+(exactly 3, one per line, each starting with a dash)
+-
+-
+-
+
+CASE DESCRIPTION:
+(the full narrative: company background, situation, and facts/figures the
+student needs. Several paragraphs. This is the only place the case story
+appears, so make it complete.)
+
+
+EXPECTED OUTCOME:
+(1-2 sentences on what the student is expected to achieve or decide —
+describe the outcome, do not reveal or hint at the solution)
+
+
+DECISION OPTIONS:
+(3-4 realistic options available to the manager, one per line, each with a
+dash. None should read as obviously right or wrong.)
+-
+-
+-
+
+LEARNING TAKEAWAYS:
+(2-4 short points on what this case is meant to teach, one per line)
+-
+-
+
+STUDENT INSTRUCTIONS - BEFORE:
+(what the student should do before starting, optional)
+
+
+STUDENT INSTRUCTIONS - DURING:
+(what the student should keep in mind while working, optional)
+
+
+STUDENT INSTRUCTIONS - SUBMISSION:
+(what's expected in their final submission, optional)
+
+
+QUESTION 1:
+(the first structured written question)
+
+
+WORD LIMIT MIN 1:
+WORD LIMIT MAX 1:
+QUESTION INSTRUCTIONS 1:
+(optional guidance shown to the student under this question)
+
+MODEL ANSWER 1:
+(your faculty answer key for this question — the fuller and more specific,
+the better the AI can grade against it)
+
+
+MARKING GUIDANCE 1:
+(1-2 sentences on what a strong answer covers)
+
+
+QUESTION 2:
+
+
+WORD LIMIT MIN 2:
+WORD LIMIT MAX 2:
+QUESTION INSTRUCTIONS 2:
+
+
+MODEL ANSWER 2:
+
+
+MARKING GUIDANCE 2:
+
+
+QUESTION 3:
+
+
+WORD LIMIT MIN 3:
+WORD LIMIT MAX 3:
+QUESTION INSTRUCTIONS 3:
+
+
+MODEL ANSWER 3:
+
+
+MARKING GUIDANCE 3:
+
+
+RUBRIC CRITERIA:
+(up to 2 case-specific grading criteria, optional, one per line with a dash)
+-
+-
+"""
+
+# Mirrors CAPABILITY_CATEGORIES in frontend/src/components/faculty/
+# CapabilitySelector.tsx — the exact names the Case Builder's checkboxes use.
+# A capability tag that doesn't match one of these exactly can't render as a
+# checked pill anywhere in that UI (it only shows in a "not in the standard
+# list" fallback), so anything extracted from a document — whether via the
+# deterministic template parser or the AI fallback — is normalized against
+# this list before being saved.
+KNOWN_CAPABILITIES = [
+    "Observation", "Questioning", "Reasoning", "Diagnosis", "Analytical Thinking",
+    "Critical Thinking", "Judgment", "Trade-off Analysis", "Strategic Thinking",
+    "Systems Thinking", "Long-term Planning", "Decision Making",
+    "Communication", "Influence", "Empathy", "Negotiation", "Conflict Management",
+    "Team Management",
+    "Opportunity Recognition", "Innovation", "Business Model Thinking",
+    "Risk Assessment", "Resourcefulness",
+    "Professional Judgment", "Business Acumen", "Execution Orientation",
+    "Learning Agility", "Adaptability",
+]
+_KNOWN_CAPABILITIES_LOWER = {c.lower(): c for c in KNOWN_CAPABILITIES}
+
+
+def normalize_capability_list(raw_items: List[str]) -> List[str]:
+    """Match extracted capability strings against KNOWN_CAPABILITIES. A
+    combined item like "Critical & Analytical Thinking" is split on &/and/,//
+    into ["Critical", "Analytical Thinking"] — "Critical" alone isn't a known
+    capability, so each non-matching part additionally tries borrowing the
+    trailing word(s) from the LAST part ("Thinking"), covering the common
+    shared-suffix phrasing ("X & Y Thinking" meaning "X Thinking" + "Y
+    Thinking"). Anything that still doesn't match after that is kept as-is
+    (not dropped) — it'll just show under the CapabilitySelector's "not in
+    the standard list" section rather than as a checked pill."""
+    result: List[str] = []
+    for raw in raw_items:
+        item = raw.strip()
+        if not item:
+            continue
+        exact = _KNOWN_CAPABILITIES_LOWER.get(item.lower())
+        if exact:
+            result.append(exact)
+            continue
+        parts = [p.strip() for p in re.split(r"\s*(?:&|,|/|\band\b)\s*", item, flags=re.IGNORECASE) if p.strip()]
+        if len(parts) > 1:
+            last_words = parts[-1].split()
+            matched: List[str] = []
+            ok = True
+            for i, part in enumerate(parts):
+                direct = _KNOWN_CAPABILITIES_LOWER.get(part.lower())
+                if direct:
+                    matched.append(direct)
+                    continue
+                found = None
+                if i < len(parts) - 1:
+                    for suffix_len in range(len(last_words), 0, -1):
+                        candidate = f"{part} {' '.join(last_words[-suffix_len:])}".strip()
+                        found = _KNOWN_CAPABILITIES_LOWER.get(candidate.lower())
+                        if found:
+                            break
+                if found:
+                    matched.append(found)
+                else:
+                    ok = False
+                    break
+            if ok:
+                result.extend(matched)
+                continue
+        result.append(item)
+    # De-duplicate while preserving order (splitting could surface the same
+    # capability twice across different source lines).
+    seen = set()
+    deduped = []
+    for capability in result:
+        if capability not in seen:
+            seen.add(capability)
+            deduped.append(capability)
+    return deduped
+
+
+_TEMPLATE_LABELS = {
+    "TITLE": "title",
+    "SUBJECT": "subject",
+    "FUNCTIONAL AREA": "functional_area",
+    "INDUSTRY": "industry",
+    "DIFFICULTY": "difficulty",
+    "CAPABILITIES": "capabilities",
+    "CASE DESCRIPTION": "description",
+    "EXPECTED OUTCOME": "outcome_statement",
+    "DECISION OPTIONS": "decision_options",
+    "LEARNING TAKEAWAYS": "learning_takeaways",
+    "STUDENT INSTRUCTIONS - BEFORE": "student_instructions_before",
+    "STUDENT INSTRUCTIONS - DURING": "student_instructions_during",
+    "STUDENT INSTRUCTIONS - SUBMISSION": "student_instructions_submission",
+    "RUBRIC CRITERIA": "case_specific_criteria",
+}
+_TEMPLATE_LIST_KEYS = {"capabilities", "decision_options", "learning_takeaways", "case_specific_criteria"}
+_TEMPLATE_QUESTION_LABELS = {
+    "QUESTION": "question_text",
+    "WORD LIMIT MIN": "word_limit_min",
+    "WORD LIMIT MAX": "word_limit_max",
+    "QUESTION INSTRUCTIONS": "instructions",
+    "MODEL ANSWER": "model_answer",
+    "MARKING GUIDANCE": "marking_scheme",
+}
+
+
+def _template_list_items(raw: str) -> List[str]:
+    items = []
+    for line in raw.splitlines():
+        cleaned = re.sub(r"^[\s\-\*•]+", "", line).strip()
+        if cleaned:
+            items.append(cleaned)
+    return items
+
+
+def parse_template_case_text(text: str) -> Optional[Dict[str, Any]]:
+    """Deterministically parse one case out of BULK_TEMPLATE_TEXT's labeled
+    format. Returns None (never raises) for anything that doesn't look like
+    a filled-in template, so the caller can fall back to AI extraction."""
+    lines = text.splitlines()
+    label_pattern = re.compile(
+        r"^\s*(" + "|".join(re.escape(k) for k in _TEMPLATE_LABELS) + r")\s*:?\s*$",
+        re.IGNORECASE,
+    )
+    question_pattern = re.compile(
+        r"^\s*(" + "|".join(re.escape(k) for k in _TEMPLATE_QUESTION_LABELS) + r")\s*(\d)\s*:?\s*(.*)$",
+        re.IGNORECASE,
+    )
+
+    sections: Dict[str, List[str]] = {}
+    questions: Dict[int, Dict[str, List[str]]] = {1: {}, 2: {}, 3: {}}
+    current: Optional[tuple] = None  # ("section", key) or ("question", n, key)
+
+    def flush(buffer: List[str]) -> str:
+        return "\n".join(buffer).strip()
+
+    for line in lines:
+        label_match = label_pattern.match(line)
+        question_match = question_pattern.match(line)
+        if label_match:
+            key = _TEMPLATE_LABELS[label_match.group(1).upper()]
+            sections.setdefault(key, [])
+            current = ("section", key)
+            continue
+        if question_match:
+            qn = int(question_match.group(2))
+            field = _TEMPLATE_QUESTION_LABELS[question_match.group(1).upper()]
+            inline_value = question_match.group(3).strip()
+            questions.setdefault(qn, {}).setdefault(field, [])
+            if inline_value:
+                questions[qn][field].append(inline_value)
+            current = ("question", qn, field)
+            continue
+        if current is None:
+            continue
+        if current[0] == "section":
+            sections[current[1]].append(line)
+        else:
+            questions[current[1]][current[2]].append(line)
+
+    parsed: Dict[str, Any] = {}
+    for key in set(_TEMPLATE_LABELS.values()):
+        raw = flush(sections.get(key, []))
+        parsed[key] = _template_list_items(raw) if key in _TEMPLATE_LIST_KEYS else raw
+
+    if not parsed.get("title") or not parsed.get("description"):
+        return None
+    if len(parsed.get("capabilities") or []) < 3:
+        return None
+
+    try:
+        parsed["difficulty"] = max(1, min(5, int(parsed.get("difficulty") or 3)))
+    except (TypeError, ValueError):
+        parsed["difficulty"] = 3
+
+    # The legacy "objectives" field has no template section of its own (the
+    # modern Case Builder dropped it from the faculty-facing form) — reuse
+    # the expected-outcome text, which covers the same "what must the
+    # student analyse/decide" ground _create_case_from_extraction requires.
+    parsed["objectives"] = parsed.get("outcome_statement") or ""
+    parsed["data"] = ""
+
+    built_questions = []
+    for n in (1, 2, 3):
+        q = questions.get(n, {})
+        question_text = flush(q.get("question_text", []))
+        if not question_text:
+            return None
+        try:
+            word_min = int(flush(q.get("word_limit_min", [])) or 0) or None
+        except ValueError:
+            word_min = None
+        try:
+            word_max = int(flush(q.get("word_limit_max", [])) or 0) or None
+        except ValueError:
+            word_max = None
+        built_questions.append({
+            "question_text": question_text,
+            "word_limit_min": word_min,
+            "word_limit_max": word_max,
+            "instructions": flush(q.get("instructions", [])),
+            "model_answer": flush(q.get("model_answer", [])),
+            "alternative_answers": [],
+            "marking_scheme": flush(q.get("marking_scheme", [])),
+        })
+    if len(built_questions) < 3 or not all(q["model_answer"] for q in built_questions):
+        return None
+    parsed["questions"] = built_questions
+    parsed["reading_time_minutes"] = 8
+    return parsed
+
+
 BULK_SPLIT_PROMPT = """
 You are given the raw text extracted from a faculty-uploaded document that
 may contain ONE OR MORE separate business case studies concatenated together.
@@ -1862,6 +2196,24 @@ including its title and all its content. If the document contains only one
 case study, return an array with exactly one element containing the entire
 relevant text. Ignore boilerplate such as a cover page, table of contents,
 or footer that isn't part of any case's content.
+
+Watch specifically for these case-boundary signals — any one of them starting
+a new section means a NEW case begins there, even if the previous case's
+content looks similar in structure or subject:
+- A heading like "CASE 1", "CASE 2 -", "Case Study 3:", or similar, followed
+  by a title.
+- A repeated block of case metadata (Subject / Semester / Difficulty Level /
+  Bloom's Taxonomy / Capabilities) appearing again after an "Expected
+  Answer" or "Learning Takeaway" section — this always means a new case is
+  starting, not a continuation of the previous one.
+- The narrative restarting with a new company/organisation name and
+  situation after a previous case's questions and answers were already
+  given in full.
+Do NOT merge two case studies into one array element just because they
+share the same document formatting, similar section labels, or come from
+the same faculty/institution. Each one must be its own array element. If you
+are unsure whether two sections are the same case or different cases, treat
+a new "Subject:"/"Difficulty Level:"/heading block as the start of a new one.
 """
 
 
@@ -1875,9 +2227,24 @@ def build_bulk_split_schema() -> Dict[str, Any]:
 
 
 def split_bulk_upload_text(raw_text: str, db: Optional[Session] = None) -> List[str]:
+    # Deterministic fast path for documents following BULK_TEMPLATE_TEXT: no
+    # AI call, no risk of the AI mis-drawing case boundaries. Several cases
+    # are marked with the fixed separator; a single templated case has none
+    # (nothing to split), so the whole document IS the one chunk — only
+    # documents that don't look templated at all fall through to AI.
+    if re.search(r"^\s*TITLE\s*:?\s*$", raw_text, re.IGNORECASE | re.MULTILINE) and re.search(
+        r"^\s*CASE DESCRIPTION\s*:?\s*$", raw_text, re.IGNORECASE | re.MULTILINE
+    ):
+        if BULK_TEMPLATE_CASE_SEPARATOR in raw_text:
+            chunks = [c.strip() for c in raw_text.split(BULK_TEMPLATE_CASE_SEPARATOR) if c.strip()]
+        else:
+            chunks = [raw_text.strip()]
+        if chunks:
+            return chunks
     client = get_llm_client()
     response = create_with_retry(client, {
         "model": get_llm_model(CASE_GENERATION_MODEL),
+        "temperature": 0,
         "messages": [
             {"role": "system", "content": BULK_SPLIT_PROMPT},
             {"role": "user", "content": raw_text[:60000]},
@@ -1945,9 +2312,17 @@ Do not include markdown, comments, or any keys other than those listed."""
 
 
 def extract_bulk_case_fields(case_text: str, db: Optional[Session] = None) -> Dict[str, Any]:
+    # Deterministic fast path: if this chunk follows BULK_TEMPLATE_TEXT's
+    # labeled sections, parse it directly instead of asking the AI to infer
+    # structure — faster, free, and can't mis-map a field. Falls through to
+    # AI extraction for anything that isn't (or only partly is) templated.
+    templated = parse_template_case_text(case_text)
+    if templated is not None:
+        return templated
     client = get_llm_client()
     response = create_with_retry(client, {
         "model": get_llm_model(CASE_GENERATION_MODEL),
+        "temperature": 0,
         "messages": [
             {"role": "system", "content": BULK_EXTRACT_SYSTEM_PROMPT},
             {"role": "user", "content": case_text[:30000]},
@@ -1987,7 +2362,7 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
     except (TypeError, ValueError):
         difficulty = 3
 
-    capabilities = _list("capabilities")
+    capabilities = normalize_capability_list(_list("capabilities"))
     if not capabilities:
         raise ValueError("Could not determine a capability for this case")
 
@@ -2038,14 +2413,16 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
                 reading_time_minutes, answer_writing_time_minutes, rapid_fire_time_minutes,
                 total_marks, written_marks, rapid_fire_marks,
                 student_instructions_before, student_instructions_during,
-                student_instructions_submission
+                student_instructions_submission,
+                outcome_statement, decision_options, learning_takeaways
             )
             VALUES (
                 :title, :description, :content, :domain, :difficulty, :estimated_minutes,
                 'faculty', 'draft', :created_by, :subject, :functional_area, :blooms_levels,
                 :reading, :writing, :rapid_fire_time,
                 :total_marks, :written_marks, :rapid_fire_marks,
-                :ins_before, :ins_during, :ins_submission
+                :ins_before, :ins_during, :ins_submission,
+                :outcome_statement, :decision_options, :learning_takeaways
             )
             RETURNING id
         """),
@@ -2069,6 +2446,14 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
             "ins_before": _s("student_instructions_before") or None,
             "ins_during": _s("student_instructions_during") or None,
             "ins_submission": _s("student_instructions_submission") or None,
+            # These were previously extracted (the schema always asked for
+            # them) but never actually saved — bulk-uploaded cases silently
+            # lost their Expected Outcome/Decision Options/Learning Takeaway
+            # content. Fixed while wiring in the new template's matching
+            # sections.
+            "outcome_statement": _s("outcome_statement") or None,
+            "decision_options": json_text(_list("decision_options") or None),
+            "learning_takeaways": json_text(_list("learning_takeaways") or None),
         },
     ).fetchone()
     case_id = result.id
@@ -2088,51 +2473,56 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
 
 @faculty_router.post("/cases/bulk-upload")
 def faculty_cases_bulk_upload(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Upload a single Word (.docx) or PDF document containing one or more
-    case studies. The document is split (when it contains multiple cases)
-    and each case's fields are extracted by AI into the same structured
-    shape as manual case creation, then saved as a draft — same as any other
-    faculty-created case: faculty can view but not edit it afterward, only
-    an admin can review, edit, and publish it."""
+    """Upload one or more Word (.docx) or PDF documents, each containing one
+    or more case studies. Every document is split (when it contains multiple
+    cases) and each case's fields are extracted by AI into the same
+    structured shape as manual case creation, then saved as a draft — same
+    as any other faculty-created case: faculty can view but not edit it
+    afterward, only an admin can review, edit, and publish it. A failure on
+    one file or one case within a file does not stop the rest of the batch."""
     require_faculty(current_user)
     faculty_id = current_user["id"]
 
-    content = file.file.read()
-    try:
-        raw_text = extract_text_from_upload(file.filename or "", content)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-    if not raw_text.strip():
-        raise HTTPException(status_code=400, detail="No readable text found in this file")
-
-    try:
-        case_chunks = split_bulk_upload_text(raw_text, db=db)
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Could not process this document: {exc}")
-
     created: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
-    for i, chunk in enumerate(case_chunks, start=1):
-        title_guess = f"Case {i}"
+    row = 0
+    for upload in files:
+        file_name = upload.filename or "Untitled document"
+        content = upload.file.read()
         try:
-            parsed = extract_bulk_case_fields(chunk, db=db)
-            title_guess = str(parsed.get("title") or title_guess).strip() or title_guess
-            case_id = _create_case_from_extraction(db, faculty_id, parsed)
-            upsert_ai_bank_entry(db, case_id, current_user)
-            db.commit()
-            created.append({"row": i, "id": case_id, "title": title_guess})
+            raw_text = extract_text_from_upload(file_name, content)
+            if not raw_text.strip():
+                raise ValueError("No readable text found in this file")
+            case_chunks = split_bulk_upload_text(raw_text, db=db)
         except ValueError as error:
-            db.rollback()
-            errors.append({"row": i, "title": title_guess, "reason": str(error)})
-        except Exception:  # noqa: BLE001
-            db.rollback()
-            errors.append({"row": i, "title": title_guess, "reason": "Could not process this case"})
+            row += 1
+            errors.append({"row": row, "file": file_name, "title": file_name, "reason": str(error)})
+            continue
+        except Exception as exc:  # noqa: BLE001
+            row += 1
+            errors.append({"row": row, "file": file_name, "title": file_name, "reason": f"Could not process this document: {exc}"})
+            continue
+
+        for chunk in case_chunks:
+            row += 1
+            title_guess = f"Case {row}"
+            try:
+                parsed = extract_bulk_case_fields(chunk, db=db)
+                title_guess = str(parsed.get("title") or title_guess).strip() or title_guess
+                case_id = _create_case_from_extraction(db, faculty_id, parsed)
+                upsert_ai_bank_entry(db, case_id, current_user)
+                db.commit()
+                created.append({"row": row, "file": file_name, "id": case_id, "title": title_guess})
+            except ValueError as error:
+                db.rollback()
+                errors.append({"row": row, "file": file_name, "title": title_guess, "reason": str(error)})
+            except Exception:  # noqa: BLE001
+                db.rollback()
+                errors.append({"row": row, "file": file_name, "title": title_guess, "reason": "Could not process this case"})
 
     return {
         "created": created,
@@ -2140,6 +2530,28 @@ def faculty_cases_bulk_upload(
         "created_count": len(created),
         "error_count": len(errors),
     }
+
+
+@faculty_router.get("/cases/bulk-upload/template")
+def download_bulk_upload_template(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Response:
+    """A .docx with the labeled sections parse_template_case_text() reads
+    deterministically — filling this in (instead of writing free-form prose)
+    makes bulk-upload extraction instant and immune to AI mis-mapping."""
+    require_faculty(current_user)
+    from docx import Document as DocxDocument
+
+    document = DocxDocument()
+    for line in BULK_TEMPLATE_TEXT.splitlines():
+        document.add_paragraph(line)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": "attachment; filename=pcdc-case-study-template.docx"},
+    )
 
 
 @faculty_router.get("/cases/assigned")
@@ -2247,15 +2659,21 @@ def attempt_marks_summary(evaluation: Optional[Dict[str, Any]]) -> Optional[Dict
         float(q.get("marks_total") or 0) for q in question_scores if isinstance(q, dict)
     )
     written_total = round(written_total, 1) or float(WRITTEN_MARKS)
-    rapid_score = float(evaluation.get("rapid_fire_score") or 0)
-    rapid_awarded = round(rapid_score / 100 * RAPID_FIRE_MARKS, 1)
+    # Rapid fire is 3 independently-graded 1-mark questions — sum what was
+    # actually awarded rather than rescaling a single 0-100 score into a
+    # fraction of RAPID_FIRE_MARKS.
+    rapid_fire_scores = evaluation.get("rapid_fire_scores") or []
+    rapid_awarded = round(
+        sum(float(rf.get("marks_awarded") or 0) for rf in rapid_fire_scores if isinstance(rf, dict)), 1
+    )
+    rapid_total = float(len(rapid_fire_scores)) if rapid_fire_scores else float(RAPID_FIRE_MARKS)
     return {
         "written_awarded": round(written_awarded, 1),
         "written_total": written_total,
         "rapid_awarded": rapid_awarded,
-        "rapid_total": float(RAPID_FIRE_MARKS),
+        "rapid_total": rapid_total,
         "total_awarded": round(written_awarded + rapid_awarded, 1),
-        "total_max": round(written_total + RAPID_FIRE_MARKS, 1),
+        "total_max": round(written_total + rapid_total, 1),
     }
 
 
@@ -2815,14 +3233,10 @@ Guidelines:
   be acceptable given strong reasoning. Never write a superficial one-line answer like "the
   company should improve its marketing" — always explain what should change, why, what evidence
   supports it, what the alternatives/risks are, and how success would be measured.
-- Each "marking_scheme" is a numbered list of 2-4 SPECIFIC, checkable criteria, each tagged with
-  its own point value in parentheses, summing exactly to that question's total marks (e.g. for a
-  2-mark question: "1) Correctly identifies revenue and COGS (0.5) 2) Correctly explains gross
-  profit and its significance (0.5) 3) Correctly identifies operating expenses (0.5) 4) Correctly
-  explains net profit as the bottom-line indicator (0.5)"). Never write a single vague sentence
-  like "marks for accurately describing the components" — a grader must be able to check each
-  criterion yes/no against what the student actually wrote, and award partial marks whenever some
-  but not all criteria are met.
+- Each "marking_scheme" is a short (1-2 sentence) description of what a strong answer covers — a
+  reference for a human or AI grader, not a rigid checklist to text-match against. Grading judges
+  whether the student's reasoning is grounded in the case's own facts and demonstrates the
+  targeted capabilities, not whether it repeats specific phrases from this scheme.
 
 Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
 {
@@ -2890,9 +3304,15 @@ def _ai_fill_schema() -> Dict[str, Any]:
         "type": "object",
         "additionalProperties": False,
         "properties": props,
+        # OpenAI's strict json_schema mode requires EVERY property to be
+        # listed here (no true "optional" fields in strict mode) — missing
+        # case_specific_criteria silently broke the OpenAI fallback path
+        # (used whenever Gemini is down/rate-limited) with a 400 on every
+        # full-case generation and bulk-upload extraction call.
         "required": str_keys + ["decision_options", "learning_takeaways",
                                 "capabilities", "difficulty", "industry",
-                                "reading_time_minutes", "questions"],
+                                "reading_time_minutes", "questions",
+                                "case_specific_criteria"],
     }
 
 
@@ -2915,6 +3335,7 @@ def expand_description_if_short(client: Any, description: str, difficulty: int, 
     try:
         response = create_with_retry(client, {
             "model": get_llm_model(CASE_GENERATION_MODEL),
+            "temperature": 0,
             "messages": [
                 {"role": "system", "content": (
                     "You expand MBA case-study narratives without changing any facts, "
@@ -2986,6 +3407,7 @@ def run_ai_fill_job(
         try:
             response = create_with_retry(client, {
                 "model": get_llm_model(CASE_GENERATION_MODEL),
+                "temperature": 0,
                 "messages": [
                     {"role": "system", "content": AI_FILL_SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
@@ -3017,8 +3439,14 @@ def run_ai_fill_job(
         }
         section_meta = {key: "ai_generated" for key in sections}
 
-        # Marks: platform total is 10 (3 rapid fire), so written = 7 split across 3.
-        written_marks = _distribute_marks(TOTAL_MARKS - RAPID_FIRE_MARKS)
+        # Total Marks is faculty-configurable (set on the AI-brief screen at
+        # creation and already stored via normalize_case_marks) — rapid fire
+        # stays a fixed 3, written marks is whatever's left, split across the
+        # 3 questions. Fall back to the platform default only if the case
+        # somehow has no total_marks recorded.
+        case_total_marks = float(row.total_marks) if row.total_marks is not None else float(TOTAL_MARKS)
+        case_written_marks = int(row.written_marks) if row.written_marks is not None else (TOTAL_MARKS - RAPID_FIRE_MARKS)
+        written_marks = _distribute_marks(case_written_marks)
         raw_questions = parsed.get("questions")
         raw_questions = raw_questions if isinstance(raw_questions, list) else []
         questions = []
@@ -3053,7 +3481,7 @@ def run_ai_fill_job(
             industry = normalize_domain(_s("industry"))
         except HTTPException:
             industry = row.domain or "business"
-        ai_capabilities = _list("capabilities")
+        ai_capabilities = normalize_capability_list(_list("capabilities"))
         capabilities_out = capabilities or ai_capabilities or None
         existing_blooms = parse_json_or_lines(row.blooms_levels)
         blooms_levels_out = existing_blooms or json.loads(blooms_levels_for_difficulty(difficulty))
@@ -3077,7 +3505,7 @@ def run_ai_fill_job(
                 "blooms_levels": blooms_levels_out,
             },
             timing={"reading_time_minutes": reading, "answer_writing_time_minutes": answer_writing},
-            marks={"total_marks": TOTAL_MARKS},
+            marks={"total_marks": case_total_marks},
             instructions={
                 "student_instructions_before": _s("student_instructions_before"),
                 "student_instructions_during": _s("student_instructions_during"),

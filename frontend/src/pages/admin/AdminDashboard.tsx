@@ -33,9 +33,9 @@ const quickLinks = [
     icon: Users,
   },
   {
-    label: "Import Cases",
-    description: "Review external case import queue.",
-    to: "/admin/case-import",
+    label: "Case Bank",
+    description: "Upload, generate, and manage the shared case library.",
+    to: "/admin/case-bank",
     icon: FileUp,
   },
   {
@@ -159,8 +159,6 @@ export default function AdminDashboard() {
             icon={FileUp}
             isLoading={isLoading}
             description="Case studies uploaded for the library that are still in draft or awaiting your review."
-            to="/admin/case-import"
-            linkLabel="Review imports"
           />
         </section>
 

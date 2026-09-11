@@ -69,6 +69,7 @@ interface CoreFormState {
   bloomsLevels: string[]
   programIds: number[]
   semesters: number[]
+  totalMarks: string
 }
 
 const sectionDefinitions: Array<{ key: CaseSectionKey; label: string; required?: boolean }> = [
@@ -233,6 +234,7 @@ const emptyCoreForm: CoreFormState = {
   bloomsLevels: BLOOMS_BY_DIFFICULTY["3"],
   programIds: [],
   semesters: [],
+  totalMarks: "10",
 }
 
 export default function FacultyCaseBuilder() {
@@ -827,6 +829,7 @@ export default function FacultyCaseBuilder() {
           recommended_course_ids: coreForm.programIds,
           recommended_semesters: coreForm.semesters,
         },
+        marks: { total_marks: Number(coreForm.totalMarks) || 10 },
       })
       // Kick off generation as a background job (returns almost instantly —
       // it only enqueues), then navigate to the draft with the job attached
@@ -1209,6 +1212,20 @@ function AiBriefStep({
           onSemesterToggle={onSemesterToggle}
         />
         <CapabilitySelector selected={form.capabilities} onToggle={onCapabilityToggle} />
+        <label className="grid max-w-40 gap-1.5 text-sm font-semibold text-[#111827]">
+          <span>Total Marks</span>
+          <input
+            type="number"
+            min={3}
+            step={1}
+            value={form.totalMarks}
+            onChange={(event) => onFieldChange("totalMarks", event.target.value)}
+            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+          />
+          <span className="text-xs font-normal text-[#6b7280]">
+            Rapid Fire is fixed at 3; the rest splits across the 3 written questions.
+          </span>
+        </label>
       </div>
       <button
         type="button"
@@ -1692,8 +1709,14 @@ function EditorStep({
         onTimingChange={onTimingChange}
       />
 
-      <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-        <CapabilitySelector selected={coreForm.capabilities} onToggle={onCapabilityToggle} />
+      <section
+        className={`rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm ${readOnly ? "pointer-events-auto" : ""}`}
+      >
+        <CapabilitySelector
+          selected={coreForm.capabilities}
+          onToggle={onCapabilityToggle}
+          disabled={readOnly}
+        />
       </section>
 
       <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
@@ -2735,6 +2758,7 @@ function caseToCoreForm(caseData: FacultyCaseEditor): CoreFormState {
     bloomsLevels: caseData.metadata.blooms_levels ?? [],
     programIds: caseData.recommendation.recommended_course_ids,
     semesters: caseData.recommendation.recommended_semesters,
+    totalMarks: caseData.marks.total_marks != null ? String(caseData.marks.total_marks) : "10",
   }
 }
 

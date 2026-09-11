@@ -104,30 +104,6 @@ export async function getBankAttachment(id: number) {
   return response.data
 }
 
-export async function uploadBankEntry(payload: {
-  title: string
-  brief?: string
-  content_text?: string
-  subject?: string
-  semester_number?: number | null
-  difficulty?: number
-  attachment_name?: string | null
-  attachment_data?: string | null
-}) {
-  const response = await api.post<{ id: number }>("/bank/upload", payload)
-  return response.data
-}
-
-export async function generateBankEntry(payload: {
-  topic?: string
-  subject?: string
-  semester_number?: number | null
-  difficulty?: number
-}) {
-  const response = await api.post<{ id: number; title: string }>("/bank/generate", payload)
-  return response.data
-}
-
 export async function publishBankEntry(id: number, payload: BankPublishPayload) {
   const response = await api.post<BankPublishResult>(`/bank/${id}/publish`, payload)
   return response.data

@@ -491,21 +491,40 @@ export async function facultyBulkImportStudents(sectionId: number, file: File) {
 }
 
 export interface FacultyCaseBulkUploadResult {
-  created: Array<{ row: number; id: number; title: string }>
-  errors: Array<{ row: number; title: string; reason: string }>
+  created: Array<{ row: number; file: string; id: number; title: string }>
+  errors: Array<{ row: number; file: string; title: string; reason: string }>
   created_count: number
   error_count: number
 }
 
-export async function bulkUploadFacultyCases(file: File) {
+// Accepts one or more .docx/.pdf documents in a single upload — each may
+// contain one or several case studies (the backend AI-splits and extracts
+// them independently), so "one document" and "multiple documents" both
+// funnel through this same call.
+export async function bulkUploadFacultyCases(files: File[]) {
   const form = new FormData()
-  form.append("file", file)
+  files.forEach((file) => form.append("files", file))
   const response = await api.post<FacultyCaseBulkUploadResult>(
     "/faculty/cases/bulk-upload",
     form,
     { headers: { "Content-Type": "multipart/form-data" }, timeout: 300_000 },
   )
   return response.data
+}
+
+// Downloads a .docx with labeled sections the backend can parse directly
+// (no AI needed) — filling it in makes bulk-upload extraction instant and
+// immune to the AI mis-mapping a field from free-form prose.
+export async function downloadBulkUploadCaseTemplate() {
+  const response = await api.get("/faculty/cases/bulk-upload/template", { responseType: "blob" })
+  const url = window.URL.createObjectURL(response.data as Blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = "pcdc-case-study-template.docx"
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 export async function getFacultySections() {
@@ -646,6 +665,18 @@ export interface FacultyEvaluationQuestion {
   improvement: string
 }
 
+export interface FacultyRapidFireScore {
+  sequence: number
+  marks_awarded: number
+  feedback: string
+}
+
+export interface FacultyCapabilityScore {
+  capability: string
+  score: number
+  justification: string
+}
+
 export interface FacultyEvaluation {
   total_score: number
   thinking_depth: number
@@ -655,8 +686,11 @@ export interface FacultyEvaluation {
   risk_awareness_score: number
   reflection_score: number
   question_scores: FacultyEvaluationQuestion[]
-  rapid_fire_score: number
+  // Rapid fire is 3 independently-graded 1-mark questions, not a single
+  // 0-100 score rescaled to a fraction.
+  rapid_fire_scores: FacultyRapidFireScore[]
   rapid_fire_feedback: string
+  capability_scores: FacultyCapabilityScore[]
   strengths: string
   weaknesses: string
   blind_spots: string
