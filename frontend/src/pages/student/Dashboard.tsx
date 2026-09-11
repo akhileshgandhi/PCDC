@@ -269,29 +269,33 @@ export default function Dashboard() {
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Active Engagements</h2>
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            <Link to="/student/case-studies" className="block h-full">
-              <Card title="Active Case Study" className="border-sky-100 bg-sky-50 transition hover:border-sky-200">
-                <p className="mb-4 text-sm font-medium text-[#6b7280]">
-                  Apply strategic thinking to real business challenges.
-                </p>
-                <div className="flex flex-1 flex-col items-center justify-center py-2 text-center">
-                  {isLoading ? (
-                    <p className="text-sm font-medium text-[#6b7280]">Loading...</p>
-                  ) : summary.active_case_count > 0 ? (
-                    <>
-                      <div className="text-4xl font-semibold text-[#081d3a]">
-                        {summary.active_case_count}
-                      </div>
-                      <p className="mt-1 text-sm font-medium text-[#6b7280]">
-                        Active Case {summary.active_case_count === 1 ? "Study" : "Studies"}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium text-[#6b7280]">No active studies.</p>
-                  )}
-                </div>
-              </Card>
-            </Link>
+            <Card title="Active Case Study" className="border-sky-100 bg-sky-50">
+              <p className="mb-4 text-sm font-medium text-[#6b7280]">
+                Apply strategic thinking to real business challenges.
+              </p>
+              <div className="flex flex-1 flex-col items-center justify-center py-2 text-center">
+                {isLoading ? (
+                  <p className="text-sm font-medium text-[#6b7280]">Loading...</p>
+                ) : summary.active_case_count > 0 ? (
+                  <>
+                    <div className="text-4xl font-semibold text-[#081d3a]">
+                      {summary.active_case_count}
+                    </div>
+                    <p className="mt-1 text-sm font-medium text-[#6b7280]">
+                      Active Case {summary.active_case_count === 1 ? "Study" : "Studies"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm font-medium text-[#6b7280]">No active studies.</p>
+                )}
+              </div>
+              <Link
+                to="/student/case-studies"
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+              >
+                Browse Case Studies
+              </Link>
+            </Card>
 
             <Card title="Simulations" className="border-teal-100 bg-teal-50" comingSoon>
               <p className="flex-1 text-sm font-medium text-[#6b7280]">
