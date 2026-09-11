@@ -1473,16 +1473,37 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
         {"attempt_id": attempt_id},
     ).fetchall()
 
-    # Fetch rapid fire questions with answers
-    rf_rows = db.execute(
+    # The rapid fire round is generated fresh per attempt from THIS student's
+    # own analysis (see _generate_rapid_fire_questions/start_rapid_fire_round)
+    # and persisted to cs_ai_conversations, not to the rapid_fire_questions
+    # table — that table is a separate, mostly-vestigial faculty-authored
+    # preview mechanism unrelated to what was actually asked here. Grading
+    # against it (as this used to do) means an empty/mismatched table makes
+    # the evaluator think no rapid fire questions exist for this case at
+    # all, even when the student answered real, attempt-specific ones —
+    # producing a false "no rapid fire questions were answered" grade
+    # despite substantive answers sitting right there in defense_responses.
+    rf_conversation_row = db.execute(
         text("""
-            SELECT sequence, question_text, answer_text
-            FROM rapid_fire_questions
-            WHERE case_study_id = (SELECT case_study_id FROM case_study_attempts WHERE id = :attempt_id)
-            ORDER BY sequence
+            SELECT message FROM cs_ai_conversations
+            WHERE attempt_id = :attempt_id AND stage = :stage AND role = 'ai'
+            ORDER BY id
+            LIMIT 1
         """),
-        {"attempt_id": attempt_id},
-    ).fetchall()
+        {"attempt_id": attempt_id, "stage": RAPID_FIRE_STAGE},
+    ).fetchone()
+    rapid_fire_questions: List[Dict[str, Any]] = []
+    if rf_conversation_row is not None:
+        try:
+            generated_questions = json.loads(rf_conversation_row.message)
+        except (TypeError, ValueError):
+            generated_questions = []
+        if isinstance(generated_questions, list):
+            rapid_fire_questions = [
+                {"sequence": index + 1, "question_text": str(question).strip()}
+                for index, question in enumerate(generated_questions)
+                if str(question).strip()
+            ]
 
     return {
         "case_title": row.title,
@@ -1500,10 +1521,7 @@ def get_attempt_context(db: Session, attempt_id: int) -> Dict[str, Any]:
             }
             for qr in q_rows
         ],
-        "rapid_fire_questions": [
-            {"sequence": rfr.sequence, "question_text": rfr.question_text, "expected_answer": rfr.answer_text or ""}
-            for rfr in rf_rows
-        ],
+        "rapid_fire_questions": rapid_fire_questions,
         # Ungraded free-text the student wrote before the structured questions.
         "student_initial_analysis": row.initial_summary or "",
         # NOTE: the "initial_analysis" key below actually holds the student's
