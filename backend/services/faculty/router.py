@@ -1105,7 +1105,8 @@ def call_openai_case_generation(
             build_case_generation_schema(requested_sections), "faculty_case_generation"
         ),
         "timeout": 60,
-    }, db=db)
+    }, db=db, fallback_schema=build_case_generation_schema(requested_sections),
+        fallback_schema_name="faculty_case_generation")
     content = response.choices[0].message.content
     return validate_generated_sections(parse_json_content(content), requested_sections)
 
@@ -1187,7 +1188,7 @@ def call_openai_generate_questions(
             build_generate_questions_schema(), "faculty_generate_questions"
         ),
         "timeout": 60,
-    })
+    }, fallback_schema=build_generate_questions_schema(), fallback_schema_name="faculty_generate_questions")
     content = response.choices[0].message.content
     questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != 3:
@@ -1277,7 +1278,8 @@ def call_openai_generate_rapid_fire(
             build_generate_rapid_fire_schema(), "faculty_generate_rapid_fire"
         ),
         "timeout": 60,
-    }, db=db)
+    }, db=db, fallback_schema=build_generate_rapid_fire_schema(),
+        fallback_schema_name="faculty_generate_rapid_fire")
     content = response.choices[0].message.content
     questions = parse_json_content(content).get("questions")
     if not isinstance(questions, list) or len(questions) != RAPID_FIRE_GENERATION_COUNT:
@@ -2214,6 +2216,8 @@ share the same document formatting, similar section labels, or come from
 the same faculty/institution. Each one must be its own array element. If you
 are unsure whether two sections are the same case or different cases, treat
 a new "Subject:"/"Difficulty Level:"/heading block as the start of a new one.
+
+Return your answer as JSON matching the required schema.
 """
 
 
@@ -2252,7 +2256,7 @@ def split_bulk_upload_text(raw_text: str, db: Optional[Session] = None) -> List[
         "response_format": json_response_format(build_bulk_split_schema(), "bulk_case_split"),
         "max_tokens": 16000,
         "timeout": 120,
-    }, db=db)
+    }, db=db, fallback_schema=build_bulk_split_schema(), fallback_schema_name="bulk_case_split")
     parsed = parse_json_content(response.choices[0].message.content)
     cases = parsed.get("cases") if isinstance(parsed, dict) else None
     if not isinstance(cases, list) or not cases:
@@ -2330,7 +2334,7 @@ def extract_bulk_case_fields(case_text: str, db: Optional[Session] = None) -> Di
         "response_format": json_response_format(_ai_fill_schema(), "faculty_case_bulk_extract"),
         "max_tokens": 16000,
         "timeout": 180,
-    }, db=db)
+    }, db=db, fallback_schema=_ai_fill_schema(), fallback_schema_name="faculty_case_bulk_extract")
     parsed = parse_json_content(response.choices[0].message.content)
     if not isinstance(parsed, dict):
         raise ValueError("AI could not extract structured data from this case")
@@ -3415,7 +3419,7 @@ def run_ai_fill_job(
                 "response_format": json_response_format(_ai_fill_schema(), "faculty_case_ai_fill"),
                 "max_tokens": 16000,  # full case is large; avoid truncation (esp. Gemini "thinking")
                 "timeout": 180,
-            }, db=db)
+            }, db=db, fallback_schema=_ai_fill_schema(), fallback_schema_name="faculty_case_ai_fill")
             parsed = parse_json_content(response.choices[0].message.content)
         except Exception as exc:  # noqa: BLE001
             status = getattr(exc, "status_code", None)

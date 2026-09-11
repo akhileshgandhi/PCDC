@@ -404,7 +404,7 @@ def generate_into_bank(
             "response_format": json_response_format(_ai_fill_schema(), "bank_case_generate"),
             "max_tokens": 16000,
             "timeout": 180,
-        }, db=db)
+        }, db=db, fallback_schema=_ai_fill_schema(), fallback_schema_name="bank_case_generate")
         parsed = parse_json_content(response.choices[0].message.content)
     except Exception as exc:  # noqa: BLE001
         status = getattr(exc, "status_code", None)

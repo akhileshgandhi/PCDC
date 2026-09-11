@@ -89,7 +89,12 @@ _TRANSIENT_STATUS = {429, 500, 503}
 
 
 def create_with_retry(
-    client: OpenAI, kwargs: Dict[str, Any], attempts: int = 2, db: Optional[Session] = None
+    client: OpenAI,
+    kwargs: Dict[str, Any],
+    attempts: int = 2,
+    db: Optional[Session] = None,
+    fallback_schema: Optional[Dict[str, Any]] = None,
+    fallback_schema_name: Optional[str] = None,
 ) -> Any:
     # These calls routinely take 30s-3min+ (case generation, evaluation, full
     # rubric-scored feedback). If a caller's DB session is still checked out
@@ -121,10 +126,28 @@ def create_with_retry(
     # more informative one for whoever's debugging this.
     fallback_client = get_fallback_llm_client()
     if fallback_client is not None:
+        fallback_kwargs = {**kwargs, "model": get_fallback_llm_model()}
+        if fallback_schema is not None:
+            # The primary call's response_format was built for Gemini, whose
+            # OpenAI-compat endpoint only reliably supports the loose
+            # json_object mode (see json_response_format). Reusing that as-is
+            # against real OpenAI has two problems: OpenAI rejects json_object
+            # outright unless the word "json" appears in the messages, and
+            # even when it doesn't reject it, nothing enforces the expected
+            # key names, so the model can invent its own shape. OpenAI
+            # supports strict json_schema unconditionally, so the fallback
+            # rebuilds a proper schema-enforced request instead of reusing
+            # Gemini's format.
+            fallback_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": fallback_schema_name or "response",
+                    "strict": True,
+                    "schema": fallback_schema,
+                },
+            }
         try:
-            return fallback_client.chat.completions.create(
-                **{**kwargs, "model": get_fallback_llm_model()}
-            )
+            return fallback_client.chat.completions.create(**fallback_kwargs)
         except Exception:  # noqa: BLE001
             pass
     raise last_error
