@@ -82,10 +82,10 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
         {isDownloadingTemplate ? "Downloading…" : "Download case study template"}
       </button>
       <p className="mb-4 -mt-2 text-xs leading-5 text-[#6b7280]">
-        Filling in the template's labeled sections is read directly, with no AI guessing involved
-        — fastest and most reliable. Documents in your own format still work: AI reads them and
-        extracts each case's title, description, difficulty, capabilities, and all 3 written
-        questions from the free-form text instead. Larger batches can take a few minutes either way.
+        Every document must follow the template's labeled sections — download it, fill it in, and
+        upload that file. Parsing is done directly with no AI involved, so it's instant and can't
+        mis-map a field. A document that doesn't follow the template will fail with a clear error
+        instead of being guessed at.
       </p>
 
       <label className="block cursor-pointer rounded-md border-2 border-dashed border-[#e6e8eb] px-4 py-6 text-center text-sm text-[#6b7280] transition hover:border-[#c9a227] hover:bg-[#fdfaf1]">

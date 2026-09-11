@@ -2188,157 +2188,42 @@ def parse_template_case_text(text: str) -> Optional[Dict[str, Any]]:
     return parsed
 
 
-BULK_SPLIT_PROMPT = """
-You are given the raw text extracted from a faculty-uploaded document that
-may contain ONE OR MORE separate business case studies concatenated together.
-Identify each distinct case study and return each one's full original text
-as a separate array element, in document order. Copy the original text
-verbatim into each element (do not summarize, translate, or rewrite it),
-including its title and all its content. If the document contains only one
-case study, return an array with exactly one element containing the entire
-relevant text. Ignore boilerplate such as a cover page, table of contents,
-or footer that isn't part of any case's content.
-
-Watch specifically for these case-boundary signals — any one of them starting
-a new section means a NEW case begins there, even if the previous case's
-content looks similar in structure or subject:
-- A heading like "CASE 1", "CASE 2 -", "Case Study 3:", or similar, followed
-  by a title.
-- A repeated block of case metadata (Subject / Semester / Difficulty Level /
-  Bloom's Taxonomy / Capabilities) appearing again after an "Expected
-  Answer" or "Learning Takeaway" section — this always means a new case is
-  starting, not a continuation of the previous one.
-- The narrative restarting with a new company/organisation name and
-  situation after a previous case's questions and answers were already
-  given in full.
-Do NOT merge two case studies into one array element just because they
-share the same document formatting, similar section labels, or come from
-the same faculty/institution. Each one must be its own array element. If you
-are unsure whether two sections are the same case or different cases, treat
-a new "Subject:"/"Difficulty Level:"/heading block as the start of a new one.
-
-Return your answer as JSON matching the required schema.
-"""
-
-
-def build_bulk_split_schema() -> Dict[str, Any]:
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {"cases": {"type": "array", "items": {"type": "string"}}},
-        "required": ["cases"],
-    }
-
-
-def split_bulk_upload_text(raw_text: str, db: Optional[Session] = None) -> List[str]:
-    # Deterministic fast path for documents following BULK_TEMPLATE_TEXT: no
-    # AI call, no risk of the AI mis-drawing case boundaries. Several cases
-    # are marked with the fixed separator; a single templated case has none
-    # (nothing to split), so the whole document IS the one chunk — only
-    # documents that don't look templated at all fall through to AI.
-    if re.search(r"^\s*TITLE\s*:?\s*$", raw_text, re.IGNORECASE | re.MULTILINE) and re.search(
-        r"^\s*CASE DESCRIPTION\s*:?\s*$", raw_text, re.IGNORECASE | re.MULTILINE
+def split_bulk_upload_text(raw_text: str) -> List[str]:
+    """Bulk upload is template-only — no AI call, no AI-drawn case
+    boundaries, no dependency on any provider being up. A document must
+    follow BULK_TEMPLATE_TEXT's labeled sections; several cases in one file
+    are marked with the fixed separator, and a single templated case has
+    none (nothing to split), so the whole document IS the one chunk. Anything
+    that doesn't look templated raises immediately instead of guessing."""
+    if not (
+        re.search(r"^\s*TITLE\s*:?\s*$", raw_text, re.IGNORECASE | re.MULTILINE)
+        and re.search(r"^\s*CASE DESCRIPTION\s*:?\s*$", raw_text, re.IGNORECASE | re.MULTILINE)
     ):
-        if BULK_TEMPLATE_CASE_SEPARATOR in raw_text:
-            chunks = [c.strip() for c in raw_text.split(BULK_TEMPLATE_CASE_SEPARATOR) if c.strip()]
-        else:
-            chunks = [raw_text.strip()]
-        if chunks:
-            return chunks
-    client = get_llm_client()
-    response = create_with_retry(client, {
-        "model": get_llm_model(CASE_GENERATION_MODEL),
-        "temperature": 0,
-        "messages": [
-            {"role": "system", "content": BULK_SPLIT_PROMPT},
-            {"role": "user", "content": raw_text[:60000]},
-        ],
-        "response_format": json_response_format(build_bulk_split_schema(), "bulk_case_split"),
-        "max_tokens": 16000,
-        "timeout": 120,
-    }, db=db, fallback_schema=build_bulk_split_schema(), fallback_schema_name="bulk_case_split")
-    parsed = parse_json_content(response.choices[0].message.content)
-    cases = parsed.get("cases") if isinstance(parsed, dict) else None
-    if not isinstance(cases, list) or not cases:
+        raise ValueError(
+            "This document doesn't follow the required case study template. "
+            "Download the template, fill in its labeled sections, and upload that instead."
+        )
+    if BULK_TEMPLATE_CASE_SEPARATOR in raw_text:
+        chunks = [c.strip() for c in raw_text.split(BULK_TEMPLATE_CASE_SEPARATOR) if c.strip()]
+    else:
+        chunks = [raw_text.strip()]
+    if not chunks:
         raise ValueError("Could not detect any case studies in this document")
-    cleaned = [str(item).strip() for item in cases if str(item).strip()]
-    if not cleaned:
-        raise ValueError("Could not detect any case studies in this document")
-    return cleaned
+    return chunks
 
 
-BULK_EXTRACT_SYSTEM_PROMPT = """You are extracting a structured case study record from the raw text of an
-existing, already-written business case study document, for PCDC Case Studio.
-
-Unlike drafting a new case from a one-line brief, your job here is EXTRACTION,
-not invention: pull the title, narrative, data, objectives, and questions
-directly from the given text. Preserve the author's actual wording, numbers,
-and structure as closely as possible — do not invent new plot details,
-characters, or figures that are not present in the source text.
-
-Guidelines:
-- If the source clearly states difficulty, industry, subject, or capability,
-  use it. If it doesn't, infer the most reasonable value from the actual
-  content of the text — do not guess ungrounded from it.
-- Produce EXACTLY 3 written questions. If the source already poses discussion
-  questions, select or merge them into exactly 3 of increasing depth using
-  the source's own questions — do not invent unrelated new ones if the
-  source already provides usable questions. Where a model answer or marking
-  scheme isn't given in the source, write a concise one grounded in the
-  source's own facts.
-
-Return ONLY a single JSON object with EXACTLY these keys (no extra keys, no nesting other than where stated):
-{
-  "title": string,
-  "description": string — the case's full narrative as extracted/preserved from the source (company/industry context, situation, people, constraints, timeline — flowing prose),
-  "capabilities": array of 1-3 strings — the primary capability(ies) the case assesses,
-  "difficulty": integer 1-5 — 1: Remember/Understand (easy), 2: Apply, 3: Analyze (moderate), 4: Evaluate, 5: Create (hard),
-  "industry": one of ["business","technology","healthcare","environment","geopolitics","sports","social","science"],
-  "subject": string,
-  "functional_area": string,
-  "data": string — key facts and figures from the source,
-  "objectives": string — what the student must analyse, achieve, or decide,
-  "student_instructions_before": string,
-  "student_instructions_during": string,
-  "student_instructions_submission": string,
-  "reading_time_minutes": integer,
-  "questions": array of EXACTLY 3 objects, each with keys:
-      "question_text": string,
-      "word_limit_min": integer,
-      "word_limit_max": integer,
-      "instructions": string,
-      "model_answer": string,
-      "alternative_answers": array of strings,
-      "marking_scheme": string,
-  "case_specific_criteria": array of up to 2 short strings
-}
-Do not include markdown, comments, or any keys other than those listed."""
-
-
-def extract_bulk_case_fields(case_text: str, db: Optional[Session] = None) -> Dict[str, Any]:
-    # Deterministic fast path: if this chunk follows BULK_TEMPLATE_TEXT's
-    # labeled sections, parse it directly instead of asking the AI to infer
-    # structure — faster, free, and can't mis-map a field. Falls through to
-    # AI extraction for anything that isn't (or only partly is) templated.
+def extract_bulk_case_fields(case_text: str) -> Dict[str, Any]:
+    """Bulk upload is template-only — parse this chunk's BULK_TEMPLATE_TEXT
+    labeled sections directly, with no AI call and no dependency on any
+    provider being up. Anything that doesn't match the template closely
+    enough raises immediately instead of guessing at structure."""
     templated = parse_template_case_text(case_text)
-    if templated is not None:
-        return templated
-    client = get_llm_client()
-    response = create_with_retry(client, {
-        "model": get_llm_model(CASE_GENERATION_MODEL),
-        "temperature": 0,
-        "messages": [
-            {"role": "system", "content": BULK_EXTRACT_SYSTEM_PROMPT},
-            {"role": "user", "content": case_text[:30000]},
-        ],
-        "response_format": json_response_format(_ai_fill_schema(), "faculty_case_bulk_extract"),
-        "max_tokens": 16000,
-        "timeout": 180,
-    }, db=db, fallback_schema=_ai_fill_schema(), fallback_schema_name="faculty_case_bulk_extract")
-    parsed = parse_json_content(response.choices[0].message.content)
-    if not isinstance(parsed, dict):
-        raise ValueError("AI could not extract structured data from this case")
-    return parsed
+    if templated is None:
+        raise ValueError(
+            "This case doesn't follow the required case study template. "
+            "Download the template, fill in its labeled sections, and upload that instead."
+        )
+    return templated
 
 
 def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str, Any]) -> int:
@@ -2365,14 +2250,6 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
         difficulty = max(1, min(5, int(parsed.get("difficulty") or 3)))
     except (TypeError, ValueError):
         difficulty = 3
-
-    # A source document's narrative can fall short of the difficulty's
-    # publish-time minimum word count (this bites both template uploads with
-    # a brief description and AI-extracted free-form text) — without this,
-    # the case is created successfully but can never actually be published
-    # until someone notices and manually pads the description. Same rescue
-    # used by the AI-fill flow; no-ops instantly if already long enough.
-    description = expand_description_if_short(get_llm_client(), description, difficulty, db)
 
     capabilities = normalize_capability_list(_list("capabilities"))
     if not capabilities:
@@ -2490,12 +2367,15 @@ def faculty_cases_bulk_upload(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Upload one or more Word (.docx) or PDF documents, each containing one
-    or more case studies. Every document is split (when it contains multiple
-    cases) and each case's fields are extracted by AI into the same
-    structured shape as manual case creation, then saved as a draft — same
-    as any other faculty-created case: faculty can view but not edit it
-    afterward, only an admin can review, edit, and publish it. A failure on
-    one file or one case within a file does not stop the rest of the batch."""
+    or more case studies. This is template-only — no AI call is made and no
+    external AI provider needs to be up. Each document must follow
+    BULK_TEMPLATE_TEXT's labeled sections (download the template from the
+    sibling endpoint below); anything that doesn't match closely enough
+    fails with a clear reason rather than being guessed at. Parsed cases are
+    saved as a draft — same as any other faculty-created case: faculty can
+    view but not edit it afterward, only an admin can review, edit, and
+    publish it. A failure on one file or one case within a file does not
+    stop the rest of the batch."""
     require_faculty(current_user)
     faculty_id = current_user["id"]
 
@@ -2509,7 +2389,7 @@ def faculty_cases_bulk_upload(
             raw_text = extract_text_from_upload(file_name, content)
             if not raw_text.strip():
                 raise ValueError("No readable text found in this file")
-            case_chunks = split_bulk_upload_text(raw_text, db=db)
+            case_chunks = split_bulk_upload_text(raw_text)
         except ValueError as error:
             row += 1
             errors.append({"row": row, "file": file_name, "title": file_name, "reason": str(error)})
@@ -2523,7 +2403,7 @@ def faculty_cases_bulk_upload(
             row += 1
             title_guess = f"Case {row}"
             try:
-                parsed = extract_bulk_case_fields(chunk, db=db)
+                parsed = extract_bulk_case_fields(chunk)
                 title_guess = str(parsed.get("title") or title_guess).strip() or title_guess
                 case_id = _create_case_from_extraction(db, faculty_id, parsed)
                 upsert_ai_bank_entry(db, case_id, current_user)
