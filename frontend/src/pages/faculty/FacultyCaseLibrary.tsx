@@ -100,10 +100,16 @@ export default function FacultyCaseLibrary() {
       setError("")
     } catch (err) {
       const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+      const missingFields =
+        detail && typeof detail === "object" && Array.isArray((detail as { missing_fields?: unknown }).missing_fields)
+          ? ((detail as { missing_fields: string[] }).missing_fields)
+          : null
       setError(
         typeof detail === "string"
           ? detail
-          : "Unable to publish this case study. It may be missing required fields.",
+          : missingFields && missingFields.length
+            ? `Unable to publish — missing/incomplete: ${missingFields.join(", ")}.`
+            : "Unable to publish this case study. It may be missing required fields.",
       )
     }
   }

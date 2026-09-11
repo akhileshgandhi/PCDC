@@ -2366,6 +2366,14 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
     except (TypeError, ValueError):
         difficulty = 3
 
+    # A source document's narrative can fall short of the difficulty's
+    # publish-time minimum word count (this bites both template uploads with
+    # a brief description and AI-extracted free-form text) — without this,
+    # the case is created successfully but can never actually be published
+    # until someone notices and manually pads the description. Same rescue
+    # used by the AI-fill flow; no-ops instantly if already long enough.
+    description = expand_description_if_short(get_llm_client(), description, difficulty, db)
+
     capabilities = normalize_capability_list(_list("capabilities"))
     if not capabilities:
         raise ValueError("Could not determine a capability for this case")
