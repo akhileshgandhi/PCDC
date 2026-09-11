@@ -2226,6 +2226,44 @@ def extract_bulk_case_fields(case_text: str) -> Dict[str, Any]:
     return templated
 
 
+def describe_missing_publish_fields(
+    *,
+    title: str,
+    domain: Optional[str],
+    difficulty: Optional[int],
+    estimated_minutes: Optional[int],
+    capabilities: List[str],
+    description: str,
+    has_rubric: bool,
+) -> List[str]:
+    """Same readiness bar a case must clear to be published — shared so bulk
+    upload can enforce it BEFORE creating a row (a case that could never be
+    published shouldn't exist as a draft in the first place) and the publish
+    endpoint can enforce the identical check on hand-built/AI-filled cases."""
+    missing_fields: List[str] = []
+    if not title:
+        missing_fields.append("title")
+    if not domain:
+        missing_fields.append("industry")
+    if not difficulty:
+        missing_fields.append("difficulty")
+    if not estimated_minutes:
+        missing_fields.append("duration")
+    if not capabilities:
+        missing_fields.append("capabilities")
+    if not (description or "").strip():
+        missing_fields.append("description")
+    else:
+        min_words = MIN_DESCRIPTION_WORDS_BY_DIFFICULTY.get(difficulty, 250)
+        if word_count(description) < min_words:
+            missing_fields.append(
+                f"description (needs at least {min_words} words for this difficulty level)"
+            )
+    if not has_rubric:
+        missing_fields.append("rubric")
+    return missing_fields
+
+
 def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str, Any]) -> int:
     def _s(key: str) -> str:
         return str(parsed.get(key) or "").strip()
@@ -2268,6 +2306,23 @@ def _create_case_from_extraction(db: Session, faculty_id: int, parsed: Dict[str,
         reading = 8
     writing = 12
     duration = reading + writing + RAPID_FIRE_TIME_MINUTES
+
+    # Enforce the exact same readiness bar publishing does, BEFORE the row is
+    # created — a case that could never pass publish (e.g. too short a
+    # description for its difficulty) should never exist as a draft in the
+    # library in the first place. The rubric is always built further below
+    # with non-empty default weights, so it's never the failing field here.
+    readiness_issues = describe_missing_publish_fields(
+        title=title,
+        domain=industry,
+        difficulty=difficulty,
+        estimated_minutes=duration,
+        capabilities=capabilities,
+        description=description,
+        has_rubric=True,
+    )
+    if readiness_issues:
+        raise ValueError(f"Does not meet publishing requirements — {', '.join(readiness_issues)}")
 
     marks = normalize_case_marks({"total_marks": TOTAL_MARKS})
     written_marks_dist = _distribute_marks(TOTAL_MARKS - RAPID_FIRE_MARKS)
@@ -3519,28 +3574,15 @@ def publish_faculty_case(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     row = get_case_row_for_publish(db, case_id, current_user)
-    missing_fields: List[str] = []
-
-    if not row.title:
-        missing_fields.append("title")
-    if not row.domain:
-        missing_fields.append("industry")
-    if not row.difficulty:
-        missing_fields.append("difficulty")
-    if not row.estimated_minutes:
-        missing_fields.append("duration")
-    if not get_capability_tags(db, case_id):
-        missing_fields.append("capabilities")
-    if not (row.description or "").strip():
-        missing_fields.append("description")
-    else:
-        min_words = MIN_DESCRIPTION_WORDS_BY_DIFFICULTY.get(row.difficulty, 250)
-        if word_count(row.description) < min_words:
-            missing_fields.append(
-                f"description (needs at least {min_words} words for this difficulty level)"
-            )
-    if not row.evaluation_rubric:
-        missing_fields.append("rubric")
+    missing_fields = describe_missing_publish_fields(
+        title=row.title,
+        domain=row.domain,
+        difficulty=row.difficulty,
+        estimated_minutes=row.estimated_minutes,
+        capabilities=get_capability_tags(db, case_id),
+        description=row.description or "",
+        has_rubric=bool(row.evaluation_rubric),
+    )
 
     if missing_fields:
         raise HTTPException(
