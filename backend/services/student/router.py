@@ -135,11 +135,11 @@ def student_dashboard_summary(
     active_case_row = db.execute(
         text("""
             SELECT cs.id AS case_id, cs.title, cs.domain, cs.difficulty,
-                   cs.case_code, cs.subject, cs.difficulty_label, ac.due_date
+                   cs.case_code, cs.subject, cs.difficulty_label, ac.due_date, ac.status
             FROM assigned_cases ac
             JOIN case_studies cs ON cs.id = ac.case_study_id
-            WHERE ac.student_id = :student_id AND ac.status = 'active'
-            ORDER BY ac.assigned_at DESC
+            WHERE ac.student_id = :student_id AND ac.status IN ('pending', 'active')
+            ORDER BY (ac.status = 'active') DESC, ac.assigned_at DESC
             LIMIT 1
         """),
         {"student_id": student_id},
@@ -184,6 +184,7 @@ def student_dashboard_summary(
             "subject": active_case_row.subject,
             "difficulty_label": active_case_row.difficulty_label,
             "due_date": str(active_case_row.due_date) if active_case_row.due_date else None,
+            "started": active_case_row.status == "active",
         } if active_case_row else None,
         "upcoming_session": {
             "id": upcoming_session_row.id,
@@ -235,11 +236,11 @@ def student_active_engagements(
     active_case_row = db.execute(
         text("""
             SELECT cs.id AS case_id, cs.title, cs.domain, cs.difficulty,
-                   cs.case_code, cs.subject, cs.difficulty_label, ac.due_date
+                   cs.case_code, cs.subject, cs.difficulty_label, ac.due_date, ac.status
             FROM assigned_cases ac
             JOIN case_studies cs ON cs.id = ac.case_study_id
-            WHERE ac.student_id = :student_id AND ac.status = 'active'
-            ORDER BY ac.assigned_at DESC
+            WHERE ac.student_id = :student_id AND ac.status IN ('pending', 'active')
+            ORDER BY (ac.status = 'active') DESC, ac.assigned_at DESC
             LIMIT 1
         """),
         {"student_id": student_id},
@@ -274,6 +275,7 @@ def student_active_engagements(
             "subject": active_case_row.subject,
             "difficulty_label": active_case_row.difficulty_label,
             "due_date": str(active_case_row.due_date) if active_case_row.due_date else None,
+            "started": active_case_row.status == "active",
         } if active_case_row else None,
         "simulations": {
             "groups": [

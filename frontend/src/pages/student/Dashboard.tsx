@@ -231,7 +231,11 @@ export default function Dashboard() {
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e0b84e]"
               >
-                {summary.active_case ? "Continue Active Case" : "Browse Case Studies"}
+                {summary.active_case
+                  ? summary.active_case.started
+                    ? "Continue Active Case"
+                    : "Start Active Case"
+                  : "Browse Case Studies"}
                 <ArrowRight size={17} aria-hidden="true" />
               </Link>
               <Link
@@ -296,7 +300,7 @@ export default function Dashboard() {
                 ) : (
                   <div className="py-2 text-center">
                     <p className="text-sm font-medium text-[#6b7280]">
-                      {isLoading ? "Loading..." : "No case study in progress right now."}
+                      {isLoading ? "Loading..." : "No case study assigned."}
                     </p>
                   </div>
                 )}
@@ -306,7 +310,7 @@ export default function Dashboard() {
                   to={`/student/case-studies/${summary.active_case.case_id}/attempt`}
                   className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#e0b84e]"
                 >
-                  Continue Attempt
+                  {summary.active_case.started ? "Continue Attempt" : "Start Attempt"}
                   <ArrowRight size={17} aria-hidden="true" />
                 </Link>
               ) : (

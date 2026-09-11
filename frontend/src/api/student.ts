@@ -21,6 +21,7 @@ export interface StudentActiveCase {
   subject: string | null
   difficulty_label: string | null
   due_date: string | null
+  started: boolean
 }
 
 export interface StudentDashboardSummary {
