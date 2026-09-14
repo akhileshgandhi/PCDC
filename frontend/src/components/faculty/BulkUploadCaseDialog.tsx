@@ -8,12 +8,25 @@ import {
 } from "../../api/faculty"
 import { ModalShell, apiErrorDetail, errorBanner, secondaryBtn } from "../bank/shared"
 
+// Mirrors backend/services/faculty/router.py's DESCRIPTION_WORD_RANGE_BY_DIFFICULTY
+// (the lower bound of each range is enforced as a hard minimum at publish
+// time). This was previously enforced but never shown anywhere, so a case
+// that read as complete would silently fail — or get skipped during bulk
+// upload with a reason faculty had no way to anticipate.
+const MIN_DESCRIPTION_WORDS_BY_DIFFICULTY: Record<number, number> = {
+  1: 250,
+  2: 275,
+  3: 300,
+  4: 325,
+  5: 350,
+}
+
 /** Upload one or more Word (.docx) / PDF documents, each containing one or
- * more case studies. AI splits every document (if it holds multiple cases)
- * and extracts each case's fields — title, description, difficulty,
- * capabilities, objectives, and all 3 written questions — from the
- * document's own text. Every case lands as a draft for admin to review,
- * edit, and publish — same as any other faculty-created case. */
+ * more case studies. This is template-only — no AI is involved. Each
+ * document must follow the downloadable template's labeled sections;
+ * anything that doesn't match closely enough fails with a specific reason
+ * rather than being guessed at. Every case lands as a draft for admin to
+ * review, edit, and publish — same as any other faculty-created case. */
 export default function BulkUploadCaseDialog({ onClose, onDone }: {
   onClose: () => void
   onDone: () => void
@@ -87,6 +100,20 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
         mis-map a field. A document that doesn't follow the template will fail with a clear error
         instead of being guessed at.
       </p>
+
+      <div className="mb-4 rounded-md border border-[#e6e8eb] bg-[#f9fafb] px-4 py-3 text-xs leading-5 text-[#6b7280]">
+        <p className="mb-1.5 font-semibold text-[#374151]">
+          CASE DESCRIPTION has a minimum word count that scales with DIFFICULTY — a case
+          shorter than its level's minimum is rejected:
+        </p>
+        <div className="flex flex-wrap gap-x-5 gap-y-1">
+          {Object.entries(MIN_DESCRIPTION_WORDS_BY_DIFFICULTY).map(([level, minWords]) => (
+            <span key={level}>
+              Level {level}: <span className="font-semibold text-[#374151]">{minWords}+ words</span>
+            </span>
+          ))}
+        </div>
+      </div>
 
       <label className="block cursor-pointer rounded-md border-2 border-dashed border-[#e6e8eb] px-4 py-6 text-center text-sm text-[#6b7280] transition hover:border-[#c9a227] hover:bg-[#fdfaf1]">
         <input

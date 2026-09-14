@@ -1862,7 +1862,18 @@ def extract_text_from_upload(filename: str, content: bytes) -> str:
 # read, which falls back to the existing AI-based splitting/extraction.
 BULK_TEMPLATE_CASE_SEPARATOR = "===CASE END==="
 
-BULK_TEMPLATE_TEXT = """PCDC CASE STUDY TEMPLATE
+# Built from DESCRIPTION_WORD_RANGE_BY_DIFFICULTY so the template text can
+# never drift out of sync with the actual publish-time minimum enforced in
+# describe_missing_publish_fields() — this exact requirement was previously
+# enforced but never shown to faculty anywhere, so a case that read as
+# "complete" would silently fail (or be skipped during bulk upload) with no
+# way to know why.
+_DIFFICULTY_WORD_COUNT_LINES = "\n".join(
+    f"  Level {level}: at least {bounds[0]} words"
+    for level, bounds in sorted(DESCRIPTION_WORD_RANGE_BY_DIFFICULTY.items())
+)
+
+BULK_TEMPLATE_TEXT = f"""PCDC CASE STUDY TEMPLATE
 =========================
 Fill in every section below (delete this instruction block once you're
 done). Keep each ALL-CAPS label exactly as shown, on its own line, with your
@@ -1883,7 +1894,10 @@ INDUSTRY:
 (one of: business, technology, healthcare, environment, geopolitics, sports, social, science)
 
 DIFFICULTY:
-(a single number from 1 to 5, where 1 = easiest and 5 = hardest)
+(a single number from 1 to 5, where 1 = easiest and 5 = hardest. This also
+sets the MINIMUM word count required for CASE DESCRIPTION below:
+{_DIFFICULTY_WORD_COUNT_LINES}
+A case description shorter than its level's minimum will be rejected.)
 
 CAPABILITIES:
 (exactly 3, one per line, each starting with a dash)
@@ -1894,7 +1908,8 @@ CAPABILITIES:
 CASE DESCRIPTION:
 (the full narrative: company background, situation, and facts/figures the
 student needs. Several paragraphs. This is the only place the case story
-appears, so make it complete.)
+appears, so make it complete. MUST meet the minimum word count for the
+difficulty level you chose above, or this case will be rejected.)
 
 
 EXPECTED OUTCOME:
