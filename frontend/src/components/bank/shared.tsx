@@ -102,5 +102,10 @@ export function ModalShell({ title, onClose, children, wide }: {
 
 export function apiErrorDetail(error: unknown, fallback: string): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  return typeof detail === "string" ? detail : fallback
+  if (typeof detail === "string") return detail
+  if (detail && typeof detail === "object" && Array.isArray((detail as { missing_fields?: unknown }).missing_fields)) {
+    const missingFields = (detail as { missing_fields: string[] }).missing_fields
+    if (missingFields.length) return `Missing/incomplete: ${missingFields.join(", ")}.`
+  }
+  return fallback
 }

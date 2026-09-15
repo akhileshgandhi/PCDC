@@ -13,6 +13,7 @@ import {
   type BankMeta,
   type BankPublishResult,
 } from "../../api/bank"
+import { publishFacultyCase } from "../../api/faculty"
 import { getCurrentUser } from "../../utils/auth"
 import AssignToClassDialog from "../faculty/AssignToClassDialog"
 import BulkUploadCaseDialog from "../faculty/BulkUploadCaseDialog"
@@ -21,6 +22,7 @@ import ViewCaseDialog from "./ViewCaseDialog"
 import {
   ModalShell,
   SourceChip,
+  apiErrorDetail,
   bankTheme,
   cardClass,
   errorBanner,
@@ -99,6 +101,27 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
       setPublishing(await getBankEntry(entry.id))
     } catch {
       setError("Could not load that entry.")
+    }
+  }
+
+  // An entry with a linked_case_id already has a real case behind it (e.g.
+  // from bulk upload) — publishing it means publishing THAT case, not the
+  // "publish this bank template into my own library" flow below, which
+  // creates a brand-new duplicate case instead of touching the original.
+  const [publishingLinkedId, setPublishingLinkedId] = useState<number | null>(null)
+
+  async function publishLinkedCase(entry: BankEntry) {
+    if (!entry.linked_case_id) return
+    setPublishingLinkedId(entry.linked_case_id)
+    setError("")
+    try {
+      await publishFacultyCase(entry.linked_case_id)
+      setNotice(`Published "${entry.title}".`)
+      void loadEntries()
+    } catch (publishError: unknown) {
+      setError(apiErrorDetail(publishError, "Publish failed."))
+    } finally {
+      setPublishingLinkedId(null)
     }
   }
 
@@ -294,6 +317,13 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                     <button type="button" title="Assign to Class" onClick={() => setAssigning(entry)}
                       className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs`}>
                       <Send size={13} aria-hidden="true" /> Assign to Class
+                    </button>
+                  ) : entry.linked_case_id ? (
+                    <button type="button" title="Publish this case" onClick={() => void publishLinkedCase(entry)}
+                      disabled={publishingLinkedId === entry.linked_case_id}
+                      className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs disabled:opacity-60`}>
+                      <Rocket size={13} aria-hidden="true" />
+                      {publishingLinkedId === entry.linked_case_id ? "Publishing…" : "Publish"}
                     </button>
                   ) : (
                     <button type="button" title="Publish into my Case Library" onClick={() => void openPublish(entry)}
