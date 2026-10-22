@@ -1866,10 +1866,85 @@ def extract_text_from_upload(filename: str, content: bytes) -> str:
         from pypdf import PdfReader
 
         reader = PdfReader(io.BytesIO(content))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
+        return _reflow_pdf_text("\n".join(page.extract_text() or "" for page in reader.pages))
     if lower.endswith(".txt") or lower.endswith(".md"):
         return content.decode("utf-8", errors="ignore")
     raise ValueError("Unsupported file type — upload a .docx or .pdf file")
+
+
+_PDF_BULLET_RE = re.compile(r"^(?:[-*•▪◦–—]|\(?\d{1,2}[.)]|\(?[a-zA-Z][.)])\s+")
+_PDF_SENTENCE_END_RE = re.compile(r"[.!?:;][\"'”’)\]]*$")
+
+
+def _reflow_pdf_text(text: str) -> str:
+    """pypdf emits one line per *printed* line, so every PDF paragraph comes
+    out hard-wrapped at the page width and a list item that wrapped onto a
+    second line looks like two items. Rejoin wrapped lines so the result has
+    the same one-line-per-paragraph/item shape a .docx extraction has —
+    template labels, bullets, blank lines and the case separator always stay
+    on their own lines, so parse_template_case_text() reads it unchanged."""
+    label_re = re.compile(
+        r"^(" + "|".join(re.escape(k) for k in _TEMPLATE_LABELS) + r")\s*:?\s*$",
+        re.IGNORECASE,
+    )
+    question_re = re.compile(
+        r"^(" + "|".join(re.escape(k) for k in _TEMPLATE_QUESTION_LABELS) + r")\s*\d\s*:?\s*(.*)$",
+        re.IGNORECASE,
+    )
+    lines = [line.strip() for line in text.splitlines()]
+
+    def is_structural(line: str) -> bool:
+        return bool(BULK_TEMPLATE_CASE_SEPARATOR in line or label_re.match(line) or question_re.match(line))
+
+    # The wrap width is whatever the body text's longest lines reach; a line
+    # well short of it ended on purpose (end of paragraph/item), not by wrapping.
+    body_lengths = sorted(len(line) for line in lines if line and not is_structural(line))
+    if not body_lengths:
+        return text
+    long_line = body_lengths[min(len(body_lengths) - 1, int(len(body_lengths) * 0.9))] * 0.75
+
+    out: List[str] = []
+    in_list = False
+    can_continue = False  # whether the next line may be joined onto out[-1]
+    prev_len = 0  # length of the previous *printed* line, not the joined one
+    for line in lines:
+        if not line:
+            out.append("")
+            can_continue = False
+            continue
+        label_match = label_re.match(line)
+        question_match = question_re.match(line)
+        if BULK_TEMPLATE_CASE_SEPARATOR in line or label_match or question_match:
+            if label_match:
+                in_list = _TEMPLATE_LABELS[label_match.group(1).upper()] in _TEMPLATE_LIST_KEYS
+            elif question_match:
+                in_list = False
+            out.append(line)
+            # "QUESTION 1: How should..." can wrap; a bare label cannot.
+            can_continue = bool(question_match and question_match.group(2).strip())
+            prev_len = len(line)
+            continue
+
+        merge = False
+        if can_continue and not _PDF_BULLET_RE.match(line):
+            prev = out[-1]
+            if line[0].islower():
+                merge = True
+            elif prev_len < long_line:
+                merge = False
+            elif in_list:
+                merge = not _PDF_SENTENCE_END_RE.search(prev)
+            else:
+                merge = True
+        if merge:
+            prev = out[-1]
+            joiner = "" if prev.endswith("-") and len(prev) > 1 and prev[-2].isalpha() else " "
+            out[-1] = prev + joiner + line
+        else:
+            out.append(line)
+        can_continue = True
+        prev_len = len(line)
+    return "\n".join(out)
 
 
 # --- Bulk-upload template ---------------------------------------------------
