@@ -10,6 +10,7 @@ import {
   type AdminSectionListItem,
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
+import AdminStudentList from "./AdminStudentList"
 
 export default function AdminStudents() {
   const [sections, setSections] = useState<AdminSectionListItem[]>([])
@@ -19,9 +20,11 @@ export default function AdminStudents() {
   const [name, setName] = useState("")
   const [scholar, setScholar] = useState("")
   const [email, setEmail] = useState("")
+  const [tempPassword, setTempPassword] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [added, setAdded] = useState<AdminAddStudentResult[]>([])
+  const [listRefreshKey, setListRefreshKey] = useState(0)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
@@ -47,6 +50,14 @@ export default function AdminStudents() {
       setError("Section, name and scholar number are required.")
       return
     }
+    if (tempPassword && tempPassword.length < 8) {
+      setError("Temporary password must be at least 8 characters.")
+      return
+    }
+    if (tempPassword && tempPassword !== tempPassword.trim()) {
+      setError("Temporary password cannot start or end with a space.")
+      return
+    }
     setSaving(true)
     setError("")
     try {
@@ -55,14 +66,22 @@ export default function AdminStudents() {
         name: name.trim(),
         scholar_number: scholar.trim(),
         email: email.trim() || undefined,
+        temporary_password: tempPassword || undefined,
       })
       setAdded((a) => [result, ...a])
       setName("")
       setScholar("")
       setEmail("")
+      setTempPassword("")
+      setListRefreshKey((k) => k + 1)
       await loadSections()
-    } catch {
-      setError("Could not add this student. The email or scholar number may already exist.")
+    } catch (err) {
+      const detail = isAxiosError(err) ? err.response?.data?.detail : undefined
+      setError(
+        typeof detail === "string"
+          ? detail
+          : "Could not add this student. The email or scholar number may already exist.",
+      )
     } finally {
       setSaving(false)
     }
@@ -91,6 +110,7 @@ export default function AdminStudents() {
       const res = await adminBulkImportStudents(Number(sectionId), file)
       setAdded((a) => [...res.created, ...a])
       setSkipped(res.skipped)
+      setListRefreshKey((k) => k + 1)
       await loadSections()
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 400 && err.response.data?.detail?.mismatches) {
@@ -120,7 +140,7 @@ export default function AdminStudents() {
           <h1 className="text-3xl font-semibold text-[#17202a]">Students</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[#667085]">
             Add students to the sections you created in Academic Setup. Create a single login, or
-            import many at once, and hand out the credential slips.
+            import many at once, and hand out the credential slips. Find any student in the list below.
           </p>
         </div>
 
@@ -178,6 +198,20 @@ export default function AdminStudents() {
                 <label className={label}>
                   Email (optional)
                   <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional — students log in with their scholar number" />
+                </label>
+                <label className={label}>
+                  Temporary password (optional)
+                  <input
+                    className={field}
+                    value={tempPassword}
+                    onChange={(e) => setTempPassword(e.target.value)}
+                    placeholder="Leave blank to use the scholar number"
+                    autoComplete="new-password"
+                    spellCheck={false}
+                  />
+                  <span className="text-xs font-normal text-[#667085]">
+                    At least 8 characters. The student must change it at their first sign-in.
+                  </span>
                 </label>
                 {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
                 <button
@@ -237,8 +271,8 @@ export default function AdminStudents() {
               <h2 className="text-lg font-semibold text-[#17202a]">Credential slips</h2>
               <p className="mt-1 text-sm text-[#667085]">
                 {selectedSection
-                  ? `${selectedSection.name} currently has ${selectedSection.student_count} student(s). New logins below use the scholar number as the first password.`
-                  : "Hand these to students. The scholar number is the first password; students set a new one on first sign-in."}
+                  ? `${selectedSection.name} currently has ${selectedSection.student_count} student(s). New logins below show their temporary password; students must change it at first sign-in.`
+                  : "Hand these to students. The temporary password (the scholar number unless you set one) must be changed on first sign-in."}
               </p>
               {skipped.length > 0 ? (
                 <div className="mt-3 rounded-md border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-sm text-[#92702a]">
@@ -288,6 +322,8 @@ export default function AdminStudents() {
             </section>
           </div>
         )}
+
+        {loading ? null : <AdminStudentList sections={sections} refreshKey={listRefreshKey} />}
       </div>
     </AdminLayout>
   )

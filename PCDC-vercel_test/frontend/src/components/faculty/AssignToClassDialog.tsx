@@ -189,7 +189,7 @@ export default function AssignToClassDialog({ caseStudy, onClose, onAssigned }: 
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-semibold text-[#111827]">Assign to Class</h2>
+              <h2 className="text-2xl font-semibold text-[#111827]">Assign</h2>
               <p className="mt-1 text-sm text-[#6b7280]">{caseStudy.title}</p>
             </div>
             <button

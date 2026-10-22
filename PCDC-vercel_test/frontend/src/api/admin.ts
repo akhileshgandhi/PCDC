@@ -22,6 +22,9 @@ export interface AdminUser {
   course_name: string | null
   batch_name: string | null
   section_name: string | null
+  department_name?: string | null
+  institution_name?: string | null
+  semester_number?: number | null
 }
 
 export interface AdminUsersResponse {
@@ -36,6 +39,12 @@ export interface AdminUserFilters {
   status?: string
   batch?: string
   search?: string
+  institution_id?: number
+  department_id?: number
+  course_id?: number
+  batch_id?: number
+  semester?: number
+  section_id?: number
   page?: number
   page_size?: number
 }
@@ -268,6 +277,12 @@ export async function getAdminUsers(filters: AdminUserFilters = {}) {
       status: filters.status || undefined,
       batch: filters.batch || undefined,
       search: filters.search || undefined,
+      institution_id: filters.institution_id || undefined,
+      department_id: filters.department_id || undefined,
+      course_id: filters.course_id || undefined,
+      batch_id: filters.batch_id || undefined,
+      semester: filters.semester || undefined,
+      section_id: filters.section_id || undefined,
       page: filters.page || 1,
       page_size: filters.page_size || 25,
     },
@@ -667,6 +682,8 @@ export async function adminAddStudent(payload: {
   name: string
   scholar_number: string
   email?: string
+  /** Optional; the scholar number is used when omitted. */
+  temporary_password?: string
 }) {
   const response = await api.post<AdminAddStudentResult>("/admin/students/add", payload)
   return response.data

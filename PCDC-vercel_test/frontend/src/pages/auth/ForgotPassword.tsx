@@ -12,7 +12,8 @@ export default function ForgotPassword() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState("")
 
-  // A scholar number has no "@"; students then also enter an email for the link.
+  // A scholar number has no "@"; students then also enter the email registered
+  // on their account — the link is only sent when the two match.
   const looksLikeScholar = identifier.trim() !== "" && !identifier.includes("@")
   const linkEmail = looksLikeScholar ? studentEmail.trim() : identifier.trim()
 
@@ -23,7 +24,7 @@ export default function ForgotPassword() {
       return
     }
     if (looksLikeScholar && !studentEmail.trim()) {
-      setError("Enter your email — we'll send the reset link there.")
+      setError("Enter the email registered on your account.")
       return
     }
     setSubmitting(true)
@@ -34,7 +35,17 @@ export default function ForgotPassword() {
         email: looksLikeScholar ? studentEmail.trim() : undefined,
       })
       if (res.data.status === "email_required") {
-        setError("Enter a valid email to receive the reset link.")
+        setError("Enter the valid email registered on your account.")
+        setSubmitting(false)
+        return
+      }
+      if (res.data.status === "email_mismatch") {
+        setError("This email does not match the scholar number. Enter the email registered on your account.")
+        setSubmitting(false)
+        return
+      }
+      if (res.data.status === "no_email_on_file") {
+        setError("No email is registered for this scholar number. Ask your program administrator to reset your password.")
         setSubmitting(false)
         return
       }
@@ -54,15 +65,18 @@ export default function ForgotPassword() {
             <div className="text-sm">
               <p className="font-semibold text-slate-900">Check your email</p>
               <p className="mt-0.5 text-slate-600">
-                If an account exists, we've sent a link to reset your password to{" "}
+                {looksLikeScholar
+                  ? "If this scholar number and email belong to the same account, we've sent a link to reset your password to "
+                  : "If an account exists, we've sent a link to reset your password to "}
                 <span className="font-medium text-slate-900">{linkEmail}</span>. The link expires in
                 72 hours.
               </p>
             </div>
           </div>
           <p className="text-xs text-slate-500">
-            No email? It may be in spam, or your account may not have an email on file — in that
-            case, ask your program administrator to reset it.
+            No email? It may be in spam, the email may not match the one on your account, or your
+            account may not have an email on file — in that case, ask your program administrator to
+            reset it.
           </p>
           <Link
             to="/login"
@@ -82,8 +96,8 @@ export default function ForgotPassword() {
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Forgot your password?</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Faculty &amp; admins: enter your email. Students: enter your scholar number and an email —
-            we'll send the reset link there.
+            Faculty &amp; admins: enter your email. Students: enter your scholar number and the email
+            registered on your account.
           </p>
         </div>
         <div>
@@ -116,7 +130,7 @@ export default function ForgotPassword() {
               placeholder="you@example.com"
             />
             <p className="mt-1 text-xs text-slate-500">
-              We'll send your set-password link to this email.
+              Must be the email registered on your account — the link is only sent there.
             </p>
           </div>
         ) : null}

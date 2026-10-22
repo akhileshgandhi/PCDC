@@ -313,9 +313,9 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                 </span>
                 <div className="flex items-center justify-end gap-1.5">
                   {entry.linked_case_id && entry.linked_case_published ? (
-                    <button type="button" title="Assign to Class" onClick={() => setAssigning(entry)}
+                    <button type="button" title="Assign" onClick={() => setAssigning(entry)}
                       className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs`}>
-                      <Send size={13} aria-hidden="true" /> Assign to Class
+                      <Send size={13} aria-hidden="true" /> Assign
                     </button>
                   ) : entry.linked_case_id ? (
                     <button type="button" title="Publish this case" onClick={() => void publishLinkedCase(entry)}

@@ -490,10 +490,10 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
             onClick={onAssign}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#c9a227] px-3 py-2 text-xs font-semibold text-[#92702a] transition hover:bg-[#fff7df]"
             aria-label={`Assign ${caseStudy.title} to a class`}
-            title="Assign to Class"
+            title="Assign"
           >
             <Send size={14} aria-hidden="true" />
-            Assign to Class
+            Assign
           </button>
         ) : null}
         {caseStudy.status === "draft" ? (

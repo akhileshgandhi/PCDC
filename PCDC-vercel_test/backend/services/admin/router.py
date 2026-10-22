@@ -435,6 +435,9 @@ def user_response(row: Any) -> Dict[str, Any]:
         "course_name": row.course_name if "course_name" in row_keys else None,
         "batch_name": row.batch_name if "batch_name" in row_keys else None,
         "section_name": row.section_name if "section_name" in row_keys else None,
+        "department_name": row.department_name if "department_name" in row_keys else None,
+        "institution_name": row.institution_name if "institution_name" in row_keys else None,
+        "semester_number": row.semester_number if "semester_number" in row_keys else None,
     }
 
 
@@ -613,6 +616,14 @@ def list_admin_users(
     status: Optional[str] = None,
     batch: Optional[int] = None,
     search: Optional[str] = None,
+    # Student-listing filters (People > Students). Each narrows to students
+    # whose enrolment matches, so they only make sense alongside role=student.
+    institution_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+    course_id: Optional[int] = None,
+    batch_id: Optional[int] = None,
+    semester: Optional[int] = None,
+    section_id: Optional[int] = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -636,8 +647,21 @@ def list_admin_users(
         where_clauses.append("u.admission_year = :batch")
         params["batch"] = batch
     if search:
-        where_clauses.append("(u.name ILIKE :search OR u.email ILIKE :search)")
+        # college_id holds a student's scholar number (their login).
+        where_clauses.append("(u.name ILIKE :search OR u.email ILIKE :search OR u.college_id ILIKE :search)")
         params["search"] = f"%{search.strip()}%"
+    for column, value in (
+        ("sub.institution_id", institution_id),
+        ("sub.department_id", department_id),
+        ("sub.course_id", course_id),
+        ("sub.batch_id", batch_id),
+        ("sub.semester_number", semester),
+        ("sub.section_id", section_id),
+    ):
+        if value:
+            key = column.split(".")[1]
+            where_clauses.append(f"{column} = :{key}")
+            params[key] = value
     if admin_scope(current_user) is not None:
         where_clauses.append(user_in_scope_sql("u"))
         params.update(scope_params(current_user))
@@ -654,15 +678,23 @@ def list_admin_users(
                    COALESCE(sub.course_name, NULL) AS course_name,
                    COALESCE(sub.batch_name, NULL) AS batch_name,
                    COALESCE(sub.section_name, NULL) AS section_name,
+                   sub.department_name, sub.institution_name, sub.semester_number,
                    COALESCE(fac_sub.sections_teaching, 0) AS sections_teaching,
                    COUNT(*) OVER() AS _total
             FROM users u
             LEFT JOIN LATERAL (
-                SELECT c.name AS course_name, b.name AS batch_name, cs.name AS section_name
+                SELECT c.name AS course_name, b.name AS batch_name, cs.name AS section_name,
+                       s.course_id, s.batch_id, s.current_section_id AS section_id,
+                       c.department_id, d.name AS department_name,
+                       d.institution_id, inst.name AS institution_name,
+                       COALESCE(s.current_semester_number, sem.semester_number) AS semester_number
                 FROM students s
                 LEFT JOIN courses c ON c.id = s.course_id
+                LEFT JOIN departments d ON d.id = c.department_id
+                LEFT JOIN institutions inst ON inst.id = d.institution_id
                 LEFT JOIN batches b ON b.id = s.batch_id
                 LEFT JOIN class_sections cs ON cs.id = s.current_section_id
+                LEFT JOIN semesters sem ON sem.id = cs.semester_id
                 WHERE s.user_id = u.id
                 LIMIT 1
             ) sub ON TRUE
@@ -3324,6 +3356,9 @@ class AdminAddStudent(BaseModel):
     name: str
     scholar_number: str
     email: Optional[str] = None
+    # Optional; blank falls back to the scholar number. Must be changed at
+    # first login either way.
+    temporary_password: Optional[str] = None
 
 
 @admin_router.post("/students/add", status_code=201)
@@ -3333,8 +3368,8 @@ def admin_add_student(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Create a student login and enroll them into a section (admin-driven).
-    The initial password is the scholar number; the student is forced to change
-    it on first login."""
+    The initial password is the admin's temporary password if given, else the
+    scholar number; the student is forced to change it on first login."""
     require_admin(current_user)
     ensure_section_in_scope(db, current_user, data.section_id)
     ensure_section(db, data.section_id)
@@ -3342,13 +3377,23 @@ def admin_add_student(
     scholar = data.scholar_number.strip()
     if not name or not scholar:
         raise HTTPException(status_code=400, detail="Name and scholar number are required")
+    # Same rules the student's own change-password screen enforces.
+    temporary_password = data.temporary_password or None
+    if temporary_password is not None:
+        if temporary_password != temporary_password.strip():
+            raise HTTPException(status_code=400, detail="Temporary password cannot start or end with a space.")
+        if len(temporary_password) < 8:
+            raise HTTPException(status_code=400, detail="Temporary password must be at least 8 characters.")
+        if len(temporary_password.encode("utf-8")) > 72:
+            raise HTTPException(status_code=400, detail="Temporary password is too long (max 72 bytes).")
 
     # Reuse the faculty create+enroll helper (lazy import avoids any import cycle).
     from services.faculty.router import _create_and_enroll_student
 
     try:
         result = _create_and_enroll_student(
-            db, current_user["id"], data.section_id, name, scholar, data.email
+            db, current_user["id"], data.section_id, name, scholar, data.email,
+            temporary_password=temporary_password,
         )
     except ValueError as exc:
         db.rollback()

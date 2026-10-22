@@ -4383,6 +4383,7 @@ def _create_and_enroll_student(
     scholar: str,
     email: Optional[str],
     mobile_number: Optional[str] = None,
+    temporary_password: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a student login + enroll into a section. Does NOT commit.
     Raises ValueError with a human message on a recoverable problem."""
@@ -4401,9 +4402,10 @@ def _create_and_enroll_student(
         text("SELECT id FROM users WHERE college_id = :c AND role = 'student'"), {"c": scholar}
     ).fetchone():
         raise ValueError(f"Scholar number {scholar} already exists")
-    # First-time password IS the scholar number; the student is forced to set a
-    # new one on first login (must_change_password = TRUE).
-    password = scholar
+    # First-time password is the admin-chosen temporary password if one was
+    # given, otherwise the scholar number; either way the student is forced to
+    # set a new one on first login (must_change_password = TRUE).
+    password = temporary_password or scholar
     resolved_mobile = (mobile_number or "").strip() or None
     user = db.execute(
         text("""

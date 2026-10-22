@@ -965,7 +965,7 @@ export default function FacultyCaseBuilder() {
                 onClick={handleAssignClick}
                 title={
                   caseData.status === "published"
-                    ? "Assign to Class"
+                    ? "Assign"
                     : "Publish this case before assigning it to a class"
                 }
                 className={`inline-flex items-center justify-center gap-2 rounded-md border px-4 py-3 text-sm font-semibold transition ${
@@ -975,7 +975,7 @@ export default function FacultyCaseBuilder() {
                 }`}
               >
                 <Send size={17} aria-hidden="true" />
-                Assign to Class
+                Assign
               </button>
             </div>
           ) : null}

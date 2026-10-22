@@ -305,13 +305,16 @@ def send_password_reset(db: Session, identifier: str, email: str, base_url: str)
     """Start a password reset for the account matching `identifier` (email or
     scholar number).
 
-    - A STUDENT is identified by their scholar number and MUST supply an email;
-      the reset LINK is sent to that email (students often have no email on
-      file, so we don't match — we deliver to the address they give).
+    - A STUDENT is identified by their scholar number and MUST also supply the
+      email registered on that account; the LINK is sent only when the two
+      belong to the same student. Delivering to any typed-in address would let
+      anyone who knows a scholar number take over that account. Students with
+      no email on file can't self-reset — their admin resets them.
     - Faculty / admin are identified by email and get the LINK at that email.
 
-    In the email/unknown paths we always return a generic status so account
-    existence is never revealed.
+    A student whose email doesn't match gets "email_mismatch", and one with no
+    email on file gets "no_email_on_file". Every other failure (unknown account,
+    faculty/admin paths) returns the generic status.
     """
     from shared.email import password_reset_email, send_email
 
@@ -320,6 +323,9 @@ def send_password_reset(db: Session, identifier: str, email: str, base_url: str)
     generic = {"status": "ok"}
     if not ident:
         return generic
+    # A scholar number (no "@") always needs a valid-looking email alongside it.
+    if "@" not in ident and (not provided_email or "@" not in provided_email):
+        return {"status": "email_required"}
     user = db.execute(
         text(
             """
@@ -334,15 +340,19 @@ def send_password_reset(db: Session, identifier: str, email: str, base_url: str)
     if not user:
         return generic
 
-    # Student identified by scholar number -> email is required; send the reset
-    # link to the address they provide (not matched against any stored email).
+    # Student identified by scholar number -> the email given must be the one
+    # registered on THIS student's account; otherwise send nothing and say why
+    # (a product decision: students get a clear error rather than a silent
+    # "check your email"; the link still only ever goes to the email on file).
     if user.role == "student" and user.college_id and user.college_id == ident:
-        if not provided_email or "@" not in provided_email:
-            return {"status": "email_required"}
+        if not user.email:
+            return {"status": "no_email_on_file"}
+        if user.email.strip().lower() != provided_email.lower():
+            return {"status": "email_mismatch"}
         raw = create_setup_token(db, user.id, purpose="reset")
         reset_url = f"{base_url.rstrip('/')}/set-password?token={raw}"
-        subject, text_body, html_body = password_reset_email(user.name, provided_email, reset_url)
-        send_email(provided_email, subject, text_body, html_body)
+        subject, text_body, html_body = password_reset_email(user.name, user.email, reset_url)
+        send_email(user.email, subject, text_body, html_body)
         db.commit()
         return generic
 
