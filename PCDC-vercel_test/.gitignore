@@ -1,0 +1,38 @@
+# Environment files
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+PCDC/
+
+# Office lock files
+~$*
+
+# Full database dumps — contains real user data (password hashes, emails,
+# PII) and must never be committed
+pcdc_dump.sql
+*.sql.dump
+
+# Node
+node_modules/
+dist/
+build/
+
+# Local tooling metadata
+.agents/
+.codex/
+.claude/
+
+# Runtime logs
+backend/server.out.log
+backend/server.err.log
+backend/*.log
+.vercel
+.vercel.*.bak
+
+# Contains live secrets — never commit
+scripts/add_vercel_env.sh
