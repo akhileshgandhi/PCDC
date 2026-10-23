@@ -263,6 +263,17 @@ export interface FacultyCaseRubricResponse {
   updated_at: string
 }
 
+export interface FacultyProfile {
+  name: string
+  title: string | null
+  display_name: string
+}
+
+export async function getFacultyProfile() {
+  const response = await api.get<FacultyProfile>("/faculty/profile")
+  return response.data
+}
+
 export async function getFacultyDashboardSummary() {
   const response = await api.get<FacultyDashboardSummary>("/faculty/dashboard/summary")
   return response.data

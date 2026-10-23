@@ -38,11 +38,12 @@ const defaultCriteria: RubricCriterion[] = [
 
 interface RubricEditorProps {
   caseId: number | null
+  readOnly?: boolean
 }
 
 // Inline rubric editor embedded in the Case Builder (right after Capabilities).
 // Loads and saves this case's rubric via its own endpoint.
-export default function RubricEditor({ caseId }: RubricEditorProps) {
+export default function RubricEditor({ caseId, readOnly = false }: RubricEditorProps) {
   const [rubricData, setRubricData] = useState<FacultyCaseRubricResponse | null>(null)
   const [rubric, setRubric] = useState<FacultyRubric>({
     weights: defaultWeights,
@@ -137,7 +138,10 @@ export default function RubricEditor({ caseId }: RubricEditorProps) {
   }
 
   return (
-    <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+    <section
+      className={`rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm ${readOnly ? "pointer-events-none opacity-75" : ""}`}
+      aria-disabled={readOnly || undefined}
+    >
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-[#111827]">Evaluation Rubric</h2>
@@ -145,6 +149,7 @@ export default function RubricEditor({ caseId }: RubricEditorProps) {
             How this case is scored. Weights must total 100%. Add up to two case-specific checks.
           </p>
         </div>
+        {readOnly ? null : (
         <button
           type="button"
           onClick={saveRubric}
@@ -154,6 +159,7 @@ export default function RubricEditor({ caseId }: RubricEditorProps) {
           {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
           Save Rubric
         </button>
+        )}
       </div>
 
       {errors.length > 0 ? (

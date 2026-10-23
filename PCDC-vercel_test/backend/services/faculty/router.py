@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from services.admin.scope import (
     admin_scope,
     course_child_in_scope_sql,
+    course_in_scope_sql,
     ensure_section_in_scope,
     is_admin_role,
 )
@@ -998,10 +999,25 @@ def get_case_row_for_read(db: Session, case_id: int, current_user: Dict[str, Any
     return get_owned_case_row(db, case_id, current_user)
 
 
+def get_case_row_for_draft_edit(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
+    """Editing a case's content (sections, questions, rubric, AI regeneration):
+    admin can edit any case; faculty can edit only their own case while it is
+    still a draft. Once published, only an admin can change it."""
+    if current_user["role"] in ("admin", "superadmin"):
+        return get_case_row_for_mutation(db, case_id, current_user)
+    row = get_owned_case_row(db, case_id, current_user)
+    if row.status != "draft":
+        raise HTTPException(
+            status_code=403,
+            detail="This case is published — only an admin can edit it now",
+        )
+    return row
+
+
 def get_case_row_for_mutation(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
-    """Only an admin may mutate an existing case study — faculty cannot edit,
-    delete, or regenerate a case once it exists (even their own), regardless
-    of status. Publish is the one exception — see get_case_row_for_publish."""
+    """Admin-only access to an existing case study (e.g. delete). Content edits
+    go through get_case_row_for_draft_edit, which also lets faculty edit their
+    own drafts; publish goes through get_case_row_for_publish."""
     require_admin(current_user)
     row = db.execute(
         text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
@@ -1013,12 +1029,10 @@ def get_case_row_for_mutation(db: Session, case_id: int, current_user: Dict[str,
 
 
 def get_case_row_for_publish(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
-    """Admin can publish any case; faculty can publish only their own — the
-    one exception to the admin-only mutation rule. Faculty still can't edit
-    the case beforehand (only view it), but since "Start from Scratch" and
-    "Generate with AI" already collect the complete case in one shot, its
-    own creator publishing it doesn't bypass any review of content they
-    didn't already fully author themselves."""
+    """Admin can publish any case; faculty can publish only their own. Faculty
+    can edit their own case while it's a draft (get_case_row_for_draft_edit),
+    so its creator publishing it doesn't bypass review of content they didn't
+    author themselves; after publishing, only an admin can change it."""
     if current_user["role"] in ("admin", "superadmin"):
         row = db.execute(
             text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
@@ -1418,6 +1432,29 @@ def run_case_generation_job(
         db.close()
 
 
+@faculty_router.get("/profile")
+def faculty_profile(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Name and admin-set title for the portal greeting ("Welcome back, Dr. Sanjeev Patni").
+    Read live (not from the JWT) so a title change shows without re-login."""
+    require_faculty(current_user)
+    row = db.execute(
+        text("SELECT name, title FROM users WHERE id = :id"),
+        {"id": current_user["id"]},
+    ).fetchone()
+    name = (row.name if row else current_user.get("name")) or ""
+    title = row.title if row else None
+    # Don't double up if the stored name already starts with the title.
+    first_word = name.split(" ", 1)[0].rstrip(".").lower()
+    if title and first_word != title.rstrip(".").lower():
+        display_name = f"{title} {name}".strip()
+    else:
+        display_name = name
+    return {"name": name, "title": title, "display_name": display_name}
+
+
 @faculty_router.get("/dashboard/summary")
 def dashboard_summary(
     db: Session = Depends(get_db),
@@ -1685,13 +1722,18 @@ def faculty_courses(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_faculty(current_user)
+    # An institute (scoped) admin only gets their own institutes' courses;
+    # Central Admin / unrestricted admins and faculty get every active course.
+    scope = admin_scope(current_user) if is_admin_role(current_user) else None
+    scope_sql = "" if scope is None else f"AND {course_in_scope_sql('c')}"
     rows = db.execute(
-        text("""
-            SELECT id, name, code, total_semesters
-            FROM courses
-            WHERE status = 'active'
-            ORDER BY name
-        """)
+        text(f"""
+            SELECT c.id, c.name, c.code, c.total_semesters
+            FROM courses c
+            WHERE c.status = 'active' {scope_sql}
+            ORDER BY c.name
+        """),
+        {} if scope is None else {"scope_ids": scope},
     ).fetchall()
     return {
         "items": [
@@ -3052,7 +3094,7 @@ def save_faculty_case_rubric(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    get_case_row_for_mutation(db, case_id, current_user)
+    get_case_row_for_draft_edit(db, case_id, current_user)
     rubric = validate_rubric(data)
     result = db.execute(
         text("""
@@ -3259,7 +3301,7 @@ def update_faculty_case(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    existing = get_case_row_for_mutation(db, case_id, current_user)
+    existing = get_case_row_for_draft_edit(db, case_id, current_user)
     return _apply_case_update(db, case_id, data, existing)
 
 
@@ -3271,7 +3313,7 @@ def generate_faculty_case_sections(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    row = get_case_row_for_mutation(db, case_id, current_user)
+    row = get_case_row_for_draft_edit(db, case_id, current_user)
     parsed_content = parse_case_content(row.content)
     sections = parsed_content["sections"]
     section_meta = parsed_content["section_meta"]
@@ -3342,7 +3384,7 @@ def generate_faculty_case_questions(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    row = get_case_row_for_mutation(db, case_id, current_user)
+    row = get_case_row_for_draft_edit(db, case_id, current_user)
     if not data.summary.strip():
         raise HTTPException(status_code=400, detail="A case summary is required")
     capabilities = get_capability_tags(db, case_id)
@@ -3798,7 +3840,12 @@ def ai_fill_faculty_case(
     enqueues, so it returns immediately instead of holding the HTTP request
     open for the 30s-3min the actual generation can take."""
     require_faculty(current_user)
-    get_owned_case_row(db, case_id, current_user)
+    row = get_owned_case_row(db, case_id, current_user)
+    if row.status != "draft" and current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="This case is published — only an admin can edit it now",
+        )
     if not data.brief.strip():
         raise HTTPException(status_code=400, detail="A brief is required")
 
@@ -3837,7 +3884,7 @@ def generate_faculty_case_rapid_fire(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    row = get_case_row_for_mutation(db, case_id, current_user)
+    row = get_case_row_for_draft_edit(db, case_id, current_user)
     if not data.summary.strip():
         raise HTTPException(status_code=400, detail="A case summary is required")
     capabilities = get_capability_tags(db, case_id)
@@ -4181,6 +4228,12 @@ def get_faculty_teaching(
     scoped = len(scope_rows) > 0
     allowed_inst = {r.institution_id for r in scope_rows}
     inst_wide = {r.institution_id for r in scope_rows if r.department_id is None}
+    # An institute (scoped) admin is limited to the institutes they own.
+    admin_inst_scope = admin_scope(current_user) if is_admin_role(current_user) else None
+    if admin_inst_scope is not None:
+        scoped = True
+        allowed_inst = set(admin_inst_scope)
+        inst_wide = set(admin_inst_scope)
     allowed_depts_by_inst: Dict[int, set] = {}
     for r in scope_rows:
         if r.department_id is not None:

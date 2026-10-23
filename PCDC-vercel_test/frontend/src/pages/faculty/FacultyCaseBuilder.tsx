@@ -205,10 +205,9 @@ function describeAiFailure(error: unknown): string {
   return "AI generation failed. Please try again in a moment."
 }
 
-// Now that only an admin can mutate an existing case, a faculty member acting
-// on a stale page (or a leftover editable state) gets a 403 whose detail is
-// already a clear, specific message ("This case can only be edited by an
-// admin.") — surface it instead of a generic fallback so it isn't confusing.
+// Faculty can only edit their own drafts, so one acting on a stale page (e.g.
+// a case published meanwhile) gets a 403 whose detail is already a clear,
+// specific message — surface it instead of a generic fallback.
 function describeApiError(error: unknown, fallback: string): string {
   const err = error as { response?: { data?: { detail?: string } } }
   return err?.response?.data?.detail || fallback
@@ -248,14 +247,11 @@ export default function FacultyCaseBuilder() {
   const navState = location.state as { from?: string; fromLabel?: string } | null
   const backPath = navState?.from ?? (isAdminPortal ? "/admin/case-bank" : "/faculty/case-library")
   const backLabel = navState?.fromLabel ?? (isAdminPortal ? "Case Study Bank" : "My Case Library")
-  // Faculty can create a case (via the AI-brief flow below) but can never edit
-  // an existing one afterward, even their own drafts — only an admin can.
-  const isReadOnly = Boolean(caseId) && !isAdminRole(getCurrentUser()?.role)
   const [mode, setMode] = useState<BuilderMode | null>(caseId ? "scratch" : null)
   const [coreForm, setCoreForm] = useState<CoreFormState>(emptyCoreForm)
   // "Start from Scratch" fills the ENTIRE case — sections and questions
-  // included — before the case exists, since faculty lose edit access the
-  // moment it's created. These are local until Create Draft submits them.
+  // included — before the case exists. These are local until Create Draft
+  // submits them; faculty can keep editing the draft afterward.
   const [scratchSections, setScratchSections] = useState({ data: "", objectives: "" })
   const [scratchQuestions, setScratchQuestions] = useState<FacultyCaseQuestion[]>(() => padQuestions([]))
   const [scratchTotalMarks, setScratchTotalMarks] = useState<number | null>(10)
@@ -299,6 +295,10 @@ export default function FacultyCaseBuilder() {
   const [courses, setCourses] = useState<FacultyCourseOption[]>([])
   const [teachingSubjects, setTeachingSubjects] = useState<string[]>([])
   const [teachingCourseNames, setTeachingCourseNames] = useState<string[]>([])
+  // Every subject configured under each course (course id -> subjects). Admin
+  // has no My Teachings of their own, so they pick from this full catalog.
+  const [catalogSubjectsByCourse, setCatalogSubjectsByCourse] = useState<Record<number, string[]>>({})
+  const isAdminUser = isAdminRole(getCurrentUser()?.role)
 
   useEffect(() => {
     getFacultyCourses()
@@ -312,6 +312,19 @@ export default function FacultyCaseBuilder() {
         setTeachingCourseNames(
           Array.from(new Set(data.selections.map((selection) => selection.course_name))),
         )
+        const byCourse: Record<number, string[]> = {}
+        for (const institution of data.options) {
+          for (const department of institution.departments) {
+            for (const course of department.courses) {
+              const subjects = new Set(byCourse[course.id] ?? [])
+              for (const semester of course.semesters) {
+                for (const subject of semester.subjects) subjects.add(subject)
+              }
+              byCourse[course.id] = Array.from(subjects)
+            }
+          }
+        }
+        setCatalogSubjectsByCourse(byCourse)
       })
       .catch(() => undefined)
   }, [])
@@ -450,24 +463,43 @@ export default function FacultyCaseBuilder() {
   const canPublish =
     isAdminRole(getCurrentUser()?.role) ||
     (Boolean(caseData) && caseData?.created_by === currentUserId)
+  // Admin can edit any case. Faculty can edit every section of their own case
+  // while it's still a draft (AI-generated, scratch or bulk-uploaded); once
+  // published it's read-only for them.
+  const isReadOnly =
+    Boolean(caseId) &&
+    !isAdminRole(getCurrentUser()?.role) &&
+    !(caseData?.created_by === currentUserId && caseData?.status === "draft")
 
   // Union with any already-selected subjects so a value set before My
   // Teachings changed (or by another faculty on an existing case) never
   // disappears from view, even if it's no longer in the faculty's list.
-  const subjectOptions = useMemo(
-    () => Array.from(new Set([...teachingSubjects, ...coreForm.subjectAreas])).sort(),
-    [teachingSubjects, coreForm.subjectAreas],
-  )
+  // Admin instead picks from every subject configured under the selected
+  // specializations (or under all of them while none is selected).
+  const subjectOptions = useMemo(() => {
+    let base = teachingSubjects
+    if (isAdminUser) {
+      const courseIds =
+        coreForm.programIds.length > 0
+          ? coreForm.programIds
+          : Object.keys(catalogSubjectsByCourse).map(Number)
+      base = courseIds.flatMap((id) => catalogSubjectsByCourse[id] ?? [])
+    }
+    return Array.from(new Set([...base, ...coreForm.subjectAreas])).sort()
+  }, [isAdminUser, teachingSubjects, catalogSubjectsByCourse, coreForm.programIds, coreForm.subjectAreas])
 
   // Same idea for Program: only the courses this faculty teaches, plus
-  // whatever is already selected so nothing disappears from view.
+  // whatever is already selected so nothing disappears from view. Admin sees
+  // every active course.
   const programOptions = useMemo(
     () =>
-      courses.filter(
-        (course) =>
-          teachingCourseNames.includes(course.name) || coreForm.programIds.includes(course.id),
-      ),
-    [courses, teachingCourseNames, coreForm.programIds],
+      isAdminUser
+        ? courses
+        : courses.filter(
+            (course) =>
+              teachingCourseNames.includes(course.name) || coreForm.programIds.includes(course.id),
+          ),
+    [isAdminUser, courses, teachingCourseNames, coreForm.programIds],
   )
 
   function updateCoreField(field: keyof CoreFormState, value: string) {
@@ -854,7 +886,7 @@ export default function FacultyCaseBuilder() {
     }
   }
 
-  // Faculty can't hand-edit an existing case, but they can re-run AI generation
+  // Whole-case AI regeneration (in addition to hand-editing a draft) — re-runs AI generation
   // on their own still-draft case — e.g. when the AI fell short of a target
   // (word count, etc.) and there's no admin involved yet to fix it.
   async function handleRegenerateWithAi() {
@@ -1346,7 +1378,7 @@ function CoreFieldsStep({
             <p className="mt-1 text-sm text-[#6b7280]">
               {mode === "ai"
                 ? "AI generation starts only after these fields are saved."
-                : "Fill in the whole case here — sections, questions, rapid fire, instructions, and the rubric included. Faculty can't edit it once it's created, only view it; an admin reviews and publishes it."}
+                : "Fill in the whole case here — sections, questions, rapid fire, instructions, and the rubric included. You can keep editing it while it's a draft; once it's published, only an admin can change it."}
             </p>
           </div>
           <button type="button" onClick={onBack} className="text-sm font-semibold text-[#6b7280]">
@@ -1636,7 +1668,8 @@ function EditorStep({
     <div className="space-y-5">
       {readOnly ? (
         <div className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] px-4 py-3 text-sm font-medium text-[#374151]">
-          You're viewing this case in read-only mode. Only an admin can edit it.
+          You're viewing this case in read-only mode. It has been published, so only an admin can
+          edit it now.
           {ownedDraft
             ? " Since you created it, you can still publish it as-is using the button above, or regenerate it with AI below."
             : ""}
@@ -1736,7 +1769,7 @@ function EditorStep({
         />
       </section>
 
-      <RubricEditor caseId={caseData.id} />
+      <RubricEditor caseId={caseData.id} readOnly={readOnly} />
 
       <InstructionsPanel
         instructions={caseData.instructions}
@@ -2040,7 +2073,9 @@ function TaxonomyFields({
           <span>Specialization</span>
           {courses.length === 0 ? (
             <span className="max-w-56 text-xs font-normal text-[#6b7280]">
-              No specializations found in My Teachings yet — add your teaching assignments first.
+              {isAdminRole(getCurrentUser()?.role)
+                ? "No active specializations configured yet — add them under Academic Setup."
+                : "No specializations found in My Teachings yet — add your teaching assignments first."}
             </span>
           ) : (
             <div className="flex flex-wrap gap-1.5">
@@ -2066,7 +2101,9 @@ function TaxonomyFields({
           <span>Subject</span>
           {subjectOptions.length === 0 ? (
             <span className="max-w-56 text-xs font-normal text-[#6b7280]">
-              No subjects found in My Teachings yet — add your teaching assignments first.
+              {isAdminRole(getCurrentUser()?.role)
+                ? "No subjects configured for the selected specialization — add them under Academic Setup."
+                : "No subjects found in My Teachings yet — add your teaching assignments first."}
             </span>
           ) : (
             <div className="flex flex-wrap gap-1.5">

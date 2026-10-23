@@ -13,6 +13,7 @@ import {
 import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 import { EditUserDialog, StatusBadge, formatDate, titleCase } from "./AdminUsers"
+import FacultyActivitySection from "./FacultyActivitySection"
 
 export default function AdminUserDetail() {
   const { id } = useParams()
@@ -201,6 +202,7 @@ export default function AdminUserDetail() {
                 ) : null}
                 {user.role === "faculty" ? (
                   <>
+                    <DetailField label="Title" value={user.title} />
                     <DetailField label="Program" value={user.department} />
                     <DetailField label="Designation" value={user.designation} />
                     <DetailField label="Employee ID" value={user.employee_id} />
@@ -221,6 +223,8 @@ export default function AdminUserDetail() {
                 <DetailField label="Joined" value={formatDate(user.created_at)} />
               </div>
             </section>
+
+            {user.role === "faculty" ? <FacultyActivitySection facultyId={user.id} /> : null}
 
             <section className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm sm:p-6">
               <h2 className="text-base font-semibold text-[#17202a]">Login history</h2>

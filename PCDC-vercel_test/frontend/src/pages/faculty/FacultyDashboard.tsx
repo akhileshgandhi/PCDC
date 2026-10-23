@@ -15,6 +15,7 @@ import { Link } from "react-router-dom"
 
 import {
   getFacultyDashboardSummary,
+  getFacultyProfile,
   getFacultySections,
   type FacultyDashboardSummary,
   type FacultySection,
@@ -68,10 +69,17 @@ export default function FacultyDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const currentUser = getCurrentUser()
-  const firstName = currentUser?.name?.split(" ")[0] ?? "Faculty"
+  // Full name from the token right away; swapped for "Title Full Name" once the profile loads.
+  const [greetingName, setGreetingName] = useState(currentUser?.name?.trim() || "Faculty")
 
   useEffect(() => {
     let isMounted = true
+
+    getFacultyProfile()
+      .then((profile) => {
+        if (isMounted && profile.display_name) setGreetingName(profile.display_name)
+      })
+      .catch(() => undefined)
 
     async function loadSummary() {
       try {
@@ -113,7 +121,7 @@ export default function FacultyDashboard() {
               Faculty workspace
             </div>
             <h2 className="mt-7 text-3xl font-semibold leading-tight sm:text-4xl">
-              Welcome back, {firstName}
+              Welcome back, {greetingName}
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-white/82 sm:text-base">
               Track active student work, keep case studies moving, and review

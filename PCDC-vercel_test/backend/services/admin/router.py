@@ -52,12 +52,14 @@ admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
 VALID_ROLES = {"student", "faculty", "admin", "superadmin"}
 VALID_STATUSES = {"active", "inactive"}
+VALID_TITLES = ("Dr.", "Prof.", "Mr.", "Mrs.", "Ms.")
 
 
 class AdminUserCreate(BaseModel):
     name: str
     email: EmailStr
     role: str
+    title: Optional[str] = None
     admission_year: Optional[int] = None
     career_track_id: Optional[int] = None
     section_id: Optional[int] = None
@@ -212,6 +214,17 @@ def check_user_placement(
     ensure_institution_ids_in_scope(current_user, institution_ids or [])
     for department_id in department_ids or []:
         ensure_department_in_scope(db, current_user, department_id)
+
+
+def normalize_title(title: Optional[str]) -> Optional[str]:
+    """'dr', 'Dr', 'DR.' -> 'Dr.'; blank -> None; anything else is rejected."""
+    cleaned = (title or "").strip().rstrip(".").lower()
+    if not cleaned:
+        return None
+    for valid in VALID_TITLES:
+        if valid.rstrip(".").lower() == cleaned:
+            return valid
+    raise HTTPException(status_code=400, detail=f"Title must be one of {', '.join(VALID_TITLES)}")
 
 
 def normalize_status(status: str) -> str:
@@ -385,7 +398,7 @@ def fetch_full_user_row(db: Session, user_id: int) -> Any:
     # response never silently drops fields a narrower RETURNING clause omitted.
     return db.execute(
         text("""
-            SELECT u.id, u.name, u.email, u.role,
+            SELECT u.id, u.name, u.email, u.role, u.title,
                    u.admission_year, u.status, u.last_login_at, u.created_at, u.updated_at,
                    u.department, u.designation, u.employee_id, u.experience_years,
                    u.college_id,
@@ -421,6 +434,7 @@ def user_response(row: Any) -> Dict[str, Any]:
         "name": row.name,
         "email": row.email,
         "role": row.role,
+        "title": row.title if "title" in row_keys else None,
         "admission_year": row.admission_year,
         "department": row.department if "department" in row_keys else None,
         "designation": row.designation if "designation" in row_keys else None,
@@ -671,7 +685,7 @@ def list_admin_users(
     total = 0
     rows = db.execute(
         text(f"""
-            SELECT u.id, u.name, u.email, u.role,
+            SELECT u.id, u.name, u.email, u.role, u.title,
                    u.admission_year, u.status, u.last_login_at, u.created_at, u.updated_at,
                    u.department, u.designation, u.employee_id, u.experience_years,
                    u.college_id,
@@ -806,16 +820,16 @@ def create_admin_user(
     result = db.execute(
         text("""
             INSERT INTO users (
-                name, email, password_hash, role,
+                name, email, password_hash, role, title,
                 admission_year, department, designation, employee_id,
                 experience_years, college_id, status, updated_at
             )
             VALUES (
-                :name, :email, :password_hash, :role,
+                :name, :email, :password_hash, :role, :title,
                 :admission_year, :department, :designation, :employee_id,
                 :experience_years, :college_id, 'active', NOW()
             )
-            RETURNING id, name, email, role,
+            RETURNING id, name, email, role, title,
                       admission_year, department, designation, employee_id,
                       experience_years, college_id, status, last_login_at,
                       created_at, updated_at
@@ -825,6 +839,7 @@ def create_admin_user(
             "email": str(data.email).lower(),
             "password_hash": hash_password(temporary_secret),
             "role": role,
+            "title": normalize_title(data.title) if role == "faculty" else None,
             "admission_year": data.admission_year,
             "department": data.department.strip() if data.department else None,
             "designation": data.designation.strip() if data.designation else None,
@@ -1070,6 +1085,8 @@ async def import_admin_users(
                 specialization = row.get("Specialization") or None
                 department = row.get("Department") or None
                 designation = row.get("Designation") or None
+                # Optional column; templates without it import exactly as before.
+                title_val = normalize_title(row.get("Title")) if role == "faculty" else None
                 employee_id_val = row.get("EmployeeID") or None
                 college_id_val = row.get("CollegeID") or None
                 experience_years_raw = row.get("ExperienceYears")
@@ -1083,13 +1100,13 @@ async def import_admin_users(
                 inserted = db.execute(
                     text("""
                         INSERT INTO users (
-                            name, email, password_hash, role, program,
+                            name, email, password_hash, role, title, program,
                             specialization, admission_year, department,
                             designation, employee_id, experience_years,
                             college_id, status, updated_at
                         )
                         VALUES (
-                            :name, :email, :password_hash, :role, :program,
+                            :name, :email, :password_hash, :role, :title, :program,
                             :specialization, :admission_year, :department,
                             :designation, :employee_id, :experience_years,
                             :college_id, 'active', NOW()
@@ -1101,6 +1118,7 @@ async def import_admin_users(
                         "email": email,
                         "password_hash": hash_password(temporary_secret),
                         "role": role,
+                        "title": title_val,
                         "program": row.get("Program") or None,
                         "specialization": specialization,
                         "admission_year": admission_year,
@@ -1163,6 +1181,7 @@ async def import_admin_users(
 
 class AdminUserUpdate(BaseModel):
     name: Optional[str] = None
+    title: Optional[str] = None
     admission_year: Optional[int] = None
     department: Optional[str] = None
     designation: Optional[str] = None
@@ -1226,6 +1245,10 @@ def update_admin_user(
             raise HTTPException(status_code=400, detail="Name cannot be empty")
         sets.append("name = :name")
         params["name"] = data.name.strip()
+    if data.title is not None:
+        # Empty string clears the title.
+        sets.append("title = :title")
+        params["title"] = normalize_title(data.title)
     if data.admission_year is not None:
         sets.append("admission_year = :admission_year")
         params["admission_year"] = data.admission_year if data.admission_year > 0 else None
@@ -1773,6 +1796,313 @@ def list_admin_faculty(
             }
         )
     return {"items": items, "total": len(items)}
+
+
+def ensure_faculty_target(db: Session, current_user: Dict[str, Any], faculty_id: int) -> None:
+    """Admin guard for the read-only faculty activity views: in scope and a faculty account."""
+    require_admin(current_user)
+    guard_target_user(db, current_user, faculty_id)
+    role = db.execute(text("SELECT role FROM users WHERE id = :id"), {"id": faculty_id}).scalar()
+    if role != "faculty":
+        raise HTTPException(status_code=404, detail="Faculty not found")
+
+
+def _float_or_none(value: Any) -> Optional[float]:
+    return None if value is None else round(float(value), 1)
+
+
+def _str_or_none(value: Any) -> Optional[str]:
+    return None if value is None else str(value)
+
+
+@admin_router.get("/faculty/{faculty_id}/activity")
+def get_admin_faculty_activity(
+    faculty_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Everything a faculty member has done, derived from the records they own.
+    Read-only: no faculty workflow writes anything new for this."""
+    ensure_faculty_target(db, current_user, faculty_id)
+    params = {"fid": faculty_id}
+
+    summary = db.execute(
+        text("""
+            SELECT
+                (SELECT COUNT(*) FROM case_studies WHERE created_by = :fid) AS cases_total,
+                (SELECT COUNT(*) FROM case_studies WHERE created_by = :fid AND status = 'published') AS cases_published,
+                (SELECT COUNT(*) FROM case_studies WHERE created_by = :fid AND status = 'draft') AS cases_draft,
+                (SELECT COUNT(*) FROM case_study_bank WHERE created_by = :fid) AS bank_items,
+                (SELECT COUNT(*) FROM case_section_assignments WHERE assigned_by = :fid) AS section_assignments,
+                (SELECT COUNT(*) FROM assigned_cases
+                  WHERE assigned_by = :fid AND section_assignment_id IS NULL) AS student_assignments,
+                (SELECT COUNT(*) FROM case_study_attempts csa
+                   JOIN case_studies cs ON cs.id = csa.case_study_id
+                  WHERE cs.created_by = :fid) AS attempts_total,
+                (SELECT COUNT(DISTINCT csa.student_id) FROM case_study_attempts csa
+                   JOIN case_studies cs ON cs.id = csa.case_study_id
+                  WHERE cs.created_by = :fid) AS students_reached,
+                (SELECT AVG(csa.marks_total) FROM case_study_attempts csa
+                   JOIN case_studies cs ON cs.id = csa.case_study_id
+                  WHERE cs.created_by = :fid) AS avg_marks,
+                (SELECT COUNT(*) FROM login_events WHERE user_id = :fid) AS login_count
+        """),
+        params,
+    ).fetchone()
+
+    teaching_rows = db.execute(
+        text("""
+            SELECT fs.id, fs.subject, COALESCE(fs.status, 'active') AS status, fs.assigned_at,
+                   sec.id AS section_id, sec.name AS section_name,
+                   c.name AS course_name, se.name AS semester_name, b.name AS batch_name,
+                   (SELECT COUNT(*) FROM student_sections ss
+                     WHERE ss.section_id = sec.id AND ss.status = 'active') AS student_count
+            FROM faculty_sections fs
+            JOIN class_sections sec ON sec.id = fs.section_id
+            LEFT JOIN courses c ON c.id = sec.course_id
+            LEFT JOIN semesters se ON se.id = sec.semester_id
+            LEFT JOIN batches b ON b.id = sec.batch_id
+            WHERE fs.faculty_id = :fid
+            ORDER BY fs.assigned_at DESC NULLS LAST
+        """),
+        params,
+    ).fetchall()
+
+    case_rows = db.execute(
+        text("""
+            SELECT cs.id, cs.title, cs.status, cs.subject, cs.difficulty, cs.created_at, cs.updated_at,
+                   COUNT(csa.id) AS attempts, AVG(csa.marks_total) AS avg_marks,
+                   (SELECT COUNT(*) FROM case_section_assignments a
+                     WHERE a.case_study_id = cs.id) AS section_count
+            FROM case_studies cs
+            LEFT JOIN case_study_attempts csa ON csa.case_study_id = cs.id
+            WHERE cs.created_by = :fid
+            GROUP BY cs.id
+            ORDER BY COALESCE(cs.updated_at, cs.created_at) DESC
+            LIMIT 200
+        """),
+        params,
+    ).fetchall()
+
+    section_assignment_rows = db.execute(
+        text("""
+            SELECT a.id, a.case_study_id, cs.title AS case_title, sec.name AS section_name,
+                   c.name AS course_name, a.assigned_at, a.due_date, a.status,
+                   (SELECT COUNT(*) FROM assigned_cases ac
+                     WHERE ac.section_assignment_id = a.id) AS student_count,
+                   (SELECT COUNT(*) FROM assigned_cases ac
+                     WHERE ac.section_assignment_id = a.id AND ac.status = 'completed') AS completed_count
+            FROM case_section_assignments a
+            LEFT JOIN case_studies cs ON cs.id = a.case_study_id
+            LEFT JOIN class_sections sec ON sec.id = a.section_id
+            LEFT JOIN courses c ON c.id = sec.course_id
+            WHERE a.assigned_by = :fid
+            ORDER BY a.assigned_at DESC NULLS LAST
+            LIMIT 200
+        """),
+        params,
+    ).fetchall()
+
+    student_assignment_rows = db.execute(
+        text("""
+            SELECT ac.id, ac.case_study_id, cs.title AS case_title, u.name AS student_name,
+                   ac.assigned_at, ac.status, ac.completed_at
+            FROM assigned_cases ac
+            LEFT JOIN case_studies cs ON cs.id = ac.case_study_id
+            LEFT JOIN students s ON s.id = ac.student_id
+            LEFT JOIN users u ON u.id = s.user_id
+            WHERE ac.assigned_by = :fid AND ac.section_assignment_id IS NULL
+            ORDER BY ac.assigned_at DESC NULLS LAST
+            LIMIT 200
+        """),
+        params,
+    ).fetchall()
+
+    bank_rows = db.execute(
+        text("""
+            SELECT id, title, subject, semester_number, difficulty, source, status, created_at
+            FROM case_study_bank
+            WHERE created_by = :fid
+            ORDER BY created_at DESC
+            LIMIT 200
+        """),
+        params,
+    ).fetchall()
+
+    return {
+        "summary": {
+            "cases_total": int(summary.cases_total or 0),
+            "cases_published": int(summary.cases_published or 0),
+            "cases_draft": int(summary.cases_draft or 0),
+            "bank_items": int(summary.bank_items or 0),
+            "section_assignments": int(summary.section_assignments or 0),
+            "student_assignments": int(summary.student_assignments or 0),
+            "attempts_total": int(summary.attempts_total or 0),
+            "students_reached": int(summary.students_reached or 0),
+            "avg_marks": _float_or_none(summary.avg_marks),
+            "login_count": int(summary.login_count or 0),
+        },
+        "teaching": [
+            {
+                "id": r.id,
+                "subject": r.subject,
+                "status": r.status,
+                "assigned_at": _str_or_none(r.assigned_at),
+                "section_id": r.section_id,
+                "section_name": r.section_name,
+                "course_name": r.course_name,
+                "semester_name": r.semester_name,
+                "batch_name": r.batch_name,
+                "student_count": int(r.student_count or 0),
+            }
+            for r in teaching_rows
+        ],
+        "cases": [
+            {
+                "id": r.id,
+                "title": r.title,
+                "status": r.status,
+                "subject": r.subject,
+                "difficulty": r.difficulty,
+                "created_at": _str_or_none(r.created_at),
+                "updated_at": _str_or_none(r.updated_at),
+                "attempts": int(r.attempts or 0),
+                "avg_marks": _float_or_none(r.avg_marks),
+                "section_count": int(r.section_count or 0),
+            }
+            for r in case_rows
+        ],
+        "section_assignments": [
+            {
+                "id": r.id,
+                "case_study_id": r.case_study_id,
+                "case_title": r.case_title,
+                "section_name": r.section_name,
+                "course_name": r.course_name,
+                "assigned_at": _str_or_none(r.assigned_at),
+                "due_date": _str_or_none(r.due_date),
+                "status": r.status,
+                "student_count": int(r.student_count or 0),
+                "completed_count": int(r.completed_count or 0),
+            }
+            for r in section_assignment_rows
+        ],
+        "student_assignments": [
+            {
+                "id": r.id,
+                "case_study_id": r.case_study_id,
+                "case_title": r.case_title,
+                "student_name": r.student_name,
+                "assigned_at": _str_or_none(r.assigned_at),
+                "status": r.status,
+                "completed_at": _str_or_none(r.completed_at),
+            }
+            for r in student_assignment_rows
+        ],
+        "bank_items": [
+            {
+                "id": r.id,
+                "title": r.title,
+                "subject": r.subject,
+                "semester_number": r.semester_number,
+                "difficulty": r.difficulty,
+                "source": r.source,
+                "status": r.status,
+                "created_at": _str_or_none(r.created_at),
+            }
+            for r in bank_rows
+        ],
+    }
+
+
+@admin_router.get("/faculty/{faculty_id}/timeline")
+def get_admin_faculty_timeline(
+    faculty_id: int,
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    all: bool = Query(False, description="Return every remaining item from offset, ignoring limit"),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """One chronological feed of a faculty member's activity, newest first,
+    stitched together from the tables that already record it."""
+    limit_sql = "" if all else "LIMIT :limit"
+    ensure_faculty_target(db, current_user, faculty_id)
+    rows = db.execute(
+        text(f"""
+            SELECT type, title, detail, ref_id, occurred_at FROM (
+                SELECT 'login' AS type, 'Logged in' AS title,
+                       NULL::text AS detail, NULL::int AS ref_id, le.created_at AS occurred_at
+                FROM login_events le WHERE le.user_id = :fid
+
+                UNION ALL
+                SELECT 'case_created', 'Created case study', cs.title, cs.id, cs.created_at
+                FROM case_studies cs WHERE cs.created_by = :fid
+
+                UNION ALL
+                SELECT 'case_updated', 'Last updated case study', cs.title, cs.id, cs.updated_at
+                FROM case_studies cs
+                WHERE cs.created_by = :fid AND cs.updated_at IS NOT NULL
+                  AND cs.updated_at > cs.created_at + INTERVAL '1 minute'
+
+                UNION ALL
+                SELECT 'case_assigned_section', 'Assigned case to section',
+                       COALESCE(cs.title, 'Case') || ' → ' || COALESCE(sec.name, 'section'),
+                       a.case_study_id, a.assigned_at
+                FROM case_section_assignments a
+                LEFT JOIN case_studies cs ON cs.id = a.case_study_id
+                LEFT JOIN class_sections sec ON sec.id = a.section_id
+                WHERE a.assigned_by = :fid
+
+                UNION ALL
+                SELECT 'case_assigned_student', 'Assigned case to student',
+                       COALESCE(cs.title, 'Case') || ' → ' || COALESCE(u.name, 'student'),
+                       ac.case_study_id, ac.assigned_at
+                FROM assigned_cases ac
+                LEFT JOIN case_studies cs ON cs.id = ac.case_study_id
+                LEFT JOIN students s ON s.id = ac.student_id
+                LEFT JOIN users u ON u.id = s.user_id
+                WHERE ac.assigned_by = :fid AND ac.section_assignment_id IS NULL
+
+                UNION ALL
+                SELECT 'bank_contribution', 'Added to Case Bank', b.title, NULL, b.created_at
+                FROM case_study_bank b WHERE b.created_by = :fid
+
+                UNION ALL
+                SELECT 'teaching', 'Teaching selection',
+                       COALESCE(fs.subject || ' · ', '') || COALESCE(sec.name, 'section'),
+                       NULL, fs.assigned_at
+                FROM faculty_sections fs
+                LEFT JOIN class_sections sec ON sec.id = fs.section_id
+                WHERE fs.faculty_id = :fid
+
+                UNION ALL
+                SELECT 'system', e.event_type, e.message, NULL, e.created_at
+                FROM system_events e WHERE e.actor_user_id = :fid
+            ) feed
+            WHERE occurred_at IS NOT NULL
+            ORDER BY occurred_at DESC, type, ref_id NULLS LAST, title, detail NULLS LAST
+            {limit_sql} OFFSET :offset
+        """),
+        {"fid": faculty_id, "limit": limit + 1, "offset": offset},
+    ).fetchall()
+
+    has_more = not all and len(rows) > limit
+    page = rows if all else rows[:limit]
+    return {
+        "items": [
+            {
+                "type": r.type,
+                "title": r.title,
+                "detail": r.detail,
+                "ref_id": r.ref_id,
+                "occurred_at": str(r.occurred_at),
+            }
+            for r in page
+        ],
+        "has_more": has_more,
+        "next_offset": offset + len(page) if has_more else None,
+    }
 
 
 @admin_router.post("/faculty/{faculty_id}/resend-invite")

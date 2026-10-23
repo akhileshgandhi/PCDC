@@ -8,6 +8,7 @@ export interface AdminUser {
   name: string
   email: string
   role: AdminUserRole
+  title?: string | null
   admission_year: number | null
   department: string | null
   designation: string | null
@@ -53,6 +54,7 @@ export interface CreateAdminUserPayload {
   name: string
   email: string
   role: AdminUserRole
+  title?: string
   admission_year?: number
   career_track_id?: number
   section_id?: number
@@ -67,6 +69,7 @@ export interface CreateAdminUserPayload {
 
 export interface UpdateAdminUserPayload {
   name?: string
+  title?: string
   admission_year?: number
   department?: string
   designation?: string
@@ -308,6 +311,114 @@ export interface AdminUserDetail extends AdminUser {
 
 export async function getAdminUser(userId: number) {
   const response = await api.get<AdminUserDetail>(`/admin/users/${userId}`)
+  return response.data
+}
+
+export interface FacultyActivitySummary {
+  cases_total: number
+  cases_published: number
+  cases_draft: number
+  bank_items: number
+  section_assignments: number
+  student_assignments: number
+  attempts_total: number
+  students_reached: number
+  avg_marks: number | null
+  login_count: number
+}
+
+export interface FacultyTeachingItem {
+  id: number
+  subject: string | null
+  status: string
+  assigned_at: string | null
+  section_id: number
+  section_name: string
+  course_name: string | null
+  semester_name: string | null
+  batch_name: string | null
+  student_count: number
+}
+
+export interface FacultyCaseItem {
+  id: number
+  title: string
+  status: string
+  subject: string | null
+  difficulty: number | string | null
+  created_at: string | null
+  updated_at: string | null
+  attempts: number
+  avg_marks: number | null
+  section_count: number
+}
+
+export interface FacultySectionAssignmentItem {
+  id: number
+  case_study_id: number | null
+  case_title: string | null
+  section_name: string | null
+  course_name: string | null
+  assigned_at: string | null
+  due_date: string | null
+  status: string
+  student_count: number
+  completed_count: number
+}
+
+export interface FacultyStudentAssignmentItem {
+  id: number
+  case_study_id: number | null
+  case_title: string | null
+  student_name: string | null
+  assigned_at: string | null
+  status: string
+  completed_at: string | null
+}
+
+export interface FacultyBankItem {
+  id: number
+  title: string
+  subject: string | null
+  semester_number: number | null
+  difficulty: number | null
+  source: string
+  status: string
+  created_at: string | null
+}
+
+export interface FacultyActivity {
+  summary: FacultyActivitySummary
+  teaching: FacultyTeachingItem[]
+  cases: FacultyCaseItem[]
+  section_assignments: FacultySectionAssignmentItem[]
+  student_assignments: FacultyStudentAssignmentItem[]
+  bank_items: FacultyBankItem[]
+}
+
+export interface FacultyTimelineItem {
+  type: string
+  title: string
+  detail: string | null
+  ref_id: number | null
+  occurred_at: string
+}
+
+export interface FacultyTimelineResponse {
+  items: FacultyTimelineItem[]
+  has_more: boolean
+  next_offset: number | null
+}
+
+export async function getFacultyActivity(facultyId: number) {
+  const response = await api.get<FacultyActivity>(`/admin/faculty/${facultyId}/activity`)
+  return response.data
+}
+
+export async function getFacultyTimeline(facultyId: number, offset = 0, limit = 10, all = false) {
+  const response = await api.get<FacultyTimelineResponse>(`/admin/faculty/${facultyId}/timeline`, {
+    params: { offset, limit, all: all || undefined },
+  })
   return response.data
 }
 

@@ -14,7 +14,7 @@ import {
   type FacultyState,
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
-import { DESIGNATION_OPTIONS } from "../../constants/designations"
+import { DESIGNATION_OPTIONS, TITLE_OPTIONS } from "../../constants/designations"
 
 type FilterKey = "all" | FacultyState
 
@@ -268,6 +268,7 @@ function initials(name: string): string {
 }
 
 function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onInvited: () => void }) {
+  const [title, setTitle] = useState("")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [designation, setDesignation] = useState("")
@@ -332,6 +333,7 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
         name: name.trim(),
         email: email.trim(),
         role: "faculty",
+        title: title || undefined,
         department: departmentNames || undefined,
         designation: designation.trim() || undefined,
         institution_ids: selectedInstitutions,
@@ -369,10 +371,21 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
           </button>
         </div>
         <div className="grid gap-4 px-6 py-5">
-          <label className={label}>
-            <span>Name <span className="text-[#d92d20]">*</span></span>
-            <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Prof. Anand Iyer" />
-          </label>
+          <div className="grid grid-cols-[110px_1fr] gap-3">
+            <label className={label}>
+              Title
+              <select className={field} value={title} onChange={(e) => setTitle(e.target.value)}>
+                <option value="">—</option>
+                {TITLE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </label>
+            <label className={label}>
+              <span>Full name <span className="text-[#d92d20]">*</span></span>
+              <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Anand Iyer" />
+            </label>
+          </div>
           <label className={label}>
             <span>Email <span className="text-[#d92d20]">*</span></span>
             <input type="email" className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="anand.iyer@pcdc.example" />

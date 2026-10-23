@@ -29,7 +29,7 @@ import {
 import ConfirmDialog from "../../components/ConfirmDialog"
 import { useAdminScope } from "../../hooks/useAdminScope"
 import AdminLayout from "../../layouts/AdminLayout"
-import { DESIGNATION_OPTIONS } from "../../constants/designations"
+import { DESIGNATION_OPTIONS, TITLE_OPTIONS } from "../../constants/designations"
 
 const roles: Array<{ label: string; value: "" | AdminUserRole }> = [
   { label: "All Roles", value: "" },
@@ -575,6 +575,7 @@ export interface EditUserDialogProps {
 
 export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) {
   const [name, setName] = useState(user.name)
+  const [title, setTitle] = useState(user.title || "")
   const [admissionYear, setAdmissionYear] = useState(
     user.admission_year ? String(user.admission_year) : "",
   )
@@ -600,6 +601,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
     try {
       const updated = await updateAdminUser(user.id, {
         name: name !== user.name ? name : undefined,
+        title: title !== (user.title || "") ? title : undefined,
         admission_year:
           admissionYear !== (user.admission_year ? String(user.admission_year) : "")
             ? admissionYear
@@ -649,14 +651,31 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
           </div>
 
           <div className="mt-5 grid gap-4">
-            <Field label="Name">
-              <input
-                required
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-              />
-            </Field>
+            <div className={user.role === "faculty" ? "grid grid-cols-[110px_1fr] gap-4" : ""}>
+              {user.role === "faculty" ? (
+                <Field label="Title">
+                  <select
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  >
+                    <option value="">—</option>
+                    {title && !TITLE_OPTIONS.includes(title) ? <option value={title}>{title}</option> : null}
+                    {TITLE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
+              <Field label={user.role === "faculty" ? "Full name" : "Name"}>
+                <input
+                  required
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                />
+              </Field>
+            </div>
 
             {user.role === "faculty" ? (
               <div className="grid gap-4 sm:grid-cols-2">
