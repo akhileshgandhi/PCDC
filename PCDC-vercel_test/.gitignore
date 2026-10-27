@@ -1,6 +1,8 @@
 # Environment files
 .env
 *.env
+.env.local
+.env.*.local
 
 # Python
 __pycache__/
@@ -36,3 +38,4 @@ backend/*.log
 
 # Contains live secrets — never commit
 scripts/add_vercel_env.sh
+PCDC-vercel_test

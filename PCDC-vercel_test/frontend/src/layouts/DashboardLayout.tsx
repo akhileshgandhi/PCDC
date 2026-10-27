@@ -52,7 +52,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { label: "Dashboard", icon: LayoutDashboard, to: "/student/dashboard", end: true },
     { label: "My Case Studies", icon: BookOpen, to: "/student/case-studies" },
     { label: "Capability Profile", icon: TrendingUp, to: "/student/capability-profile" },
-    { label: "AI Coaches", icon: MessageSquare, to: "/student/ai-coach" },
+    { label: "Aish Coaches", icon: MessageSquare, to: "/student/ai-coach" },
     { label: "Achievements", icon: Trophy, to: "/student/achievements" },
     { label: "Career Pathway", icon: Compass, to: "/student/career-pathway" },
   ]

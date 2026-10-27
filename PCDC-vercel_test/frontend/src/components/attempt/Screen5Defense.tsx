@@ -1,6 +1,8 @@
 import { ArrowRight } from "lucide-react"
 import { useState } from "react"
 
+import { AISH_NAME, AishAvatar, AishIntro } from "../aish/Aish"
+
 interface Screen5DefenseProps {
   questions: string[]
   defenseAnswers: string[]
@@ -37,11 +39,11 @@ export default function Screen5Defense({
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
         Defend Your Solution
       </p>
-      <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">AI Challenge</h2>
-      <p className="mt-3 text-sm leading-6 text-[#6B7280]">
-        The AI will now challenge your recommendation. Answer each question before the next one
+      <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">{AISH_NAME}'s Challenge</h2>
+      <AishIntro className="mt-4">
+        I'm going to challenge your recommendation. Answer each question before the next one
         appears.
-      </p>
+      </AishIntro>
 
       <div className="mt-6 rounded-xl bg-[#F6F7F9] p-5">
         <div className="flex items-center justify-between gap-3 text-sm font-semibold">
@@ -50,9 +52,12 @@ export default function Screen5Defense({
           </span>
           <span className="text-[#6B7280]">{defenseAnswers.length} answered</span>
         </div>
-        <blockquote className="mt-4 border-l-4 border-[#C9A227] pl-4 text-lg font-medium leading-8 text-[#111827]">
-          {questions[currentDefenseQ]}
-        </blockquote>
+        <div className="mt-4 flex items-start gap-3">
+          <AishAvatar size={32} className="mt-1" />
+          <blockquote className="border-l-4 border-[#C9A227] pl-4 text-lg font-medium leading-8 text-[#111827]">
+            {questions[currentDefenseQ]}
+          </blockquote>
+        </div>
       </div>
 
       <textarea

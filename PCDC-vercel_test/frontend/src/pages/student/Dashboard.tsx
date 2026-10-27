@@ -31,6 +31,7 @@ import {
   type StudentProfile,
   type StudentRecentEvaluation,
 } from "../../api/student"
+import { AISH_NAME, AishIntro } from "../../components/aish/Aish"
 import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
 import { getCurrentUser } from "../../utils/auth"
@@ -348,7 +349,10 @@ export default function Dashboard() {
         </section>
 
         <section className="grid gap-5">
-          <Card title="AI Coaches">
+          <Card title={`${AISH_NAME} Coaches`}>
+            <AishIntro size="sm" className="mb-2">
+              I'm your coach in six areas. Pick one to start a session.
+            </AishIntro>
             <div className="divide-y divide-[#e6e8eb]">
               {coaches.map((coach) => {
                 const Icon = coach.icon
@@ -363,7 +367,9 @@ export default function Dashboard() {
                       <Icon size={17} aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold">{coach.name}</span>
+                      <span className="block text-sm font-semibold">
+                        {AISH_NAME} · {coach.name}
+                      </span>
                       <span className="block truncate text-xs text-[#6b7280]">
                         {coach.description}
                       </span>

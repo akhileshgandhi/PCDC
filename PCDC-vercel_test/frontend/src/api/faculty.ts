@@ -770,9 +770,51 @@ export interface FacultyAttemptDetail {
   rapid_fire_answers: string | null
   evaluation: FacultyEvaluation | null
   marks: FacultyAttemptMarks | null
+  /** Copied-content check per written question (flag-only, never affects marks). */
+  originality?: FacultyAnswerOriginality[]
+}
+
+export interface FacultyAnswerOriginality {
+  question_number: number
+  word_count: number
+  /** false when the answer is too short (< 20 words) to judge fairly. */
+  checked: boolean
+  case_copied_pct: number | null
+  peer_copied_pct: number | null
+  peer_attempt_id: number | null
+  peer_student_name: string | null
+  /** More than 50% copied from the case or another student. */
+  flagged: boolean
+  source: "case" | "peer" | null
 }
 
 export async function getFacultyAttemptDetail(attemptId: number) {
   const response = await api.get<FacultyAttemptDetail>(`/faculty/attempts/${attemptId}`)
+  return response.data
+}
+
+/** AI-written-content estimate for one written answer (faculty only). */
+export interface FacultyAnswerAiCheck {
+  question_number: number
+  word_count: number
+  /** true once an estimate exists for this answer. */
+  checked: boolean
+  /** Fewer than 40 words — too short to judge fairly. */
+  too_short: boolean
+  /** 0–100 likelihood that the answer was written by an AI tool. */
+  ai_pct: number | null
+  reason: string | null
+  /** More than 50% likely AI-written. */
+  flagged: boolean
+}
+
+export interface FacultyAttemptAiCheck {
+  /** "unavailable" when the AI service could not be reached. */
+  status: "ok" | "unavailable"
+  results: FacultyAnswerAiCheck[]
+}
+
+export async function getFacultyAttemptAiCheck(attemptId: number) {
+  const response = await api.get<FacultyAttemptAiCheck>(`/faculty/attempts/${attemptId}/ai-check`)
   return response.data
 }

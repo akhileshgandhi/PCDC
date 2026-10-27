@@ -1,0 +1,11 @@
+# Secrets are passed in at runtime (env_file), never baked into the image.
+.env
+*.env
+__pycache__/
+*.py[cod]
+*.log
+PCDC/
+.venv/
+venv/
+start_backend.bat
+web.config

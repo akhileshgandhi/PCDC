@@ -1,6 +1,7 @@
 import { ArrowRight, CheckCircle, MessageSquare, TrendingUp, Zap } from "lucide-react"
 import { Link } from "react-router-dom"
 
+import { AISH_NAME, AishAvatar, AishIntro, AishSays } from "../aish/Aish"
 import RadarChart, { type RadarMetric } from "./RadarChart"
 import type { CapabilityScore, QuestionScore, RapidFireScore } from "../../api/cases"
 import { scoreColorClass } from "../../utils/scoreColor"
@@ -121,6 +122,14 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
   return (
     <section className="space-y-5">
 
+      {/* Aish introduces the AI-written feedback on this page. */}
+      <article className="rounded-xl border border-[#E6EBEB] bg-white p-5 shadow-sm">
+        <AishIntro>
+          I've reviewed your attempt. Here's your report card with my feedback on every
+          answer, what you did well, and where you can grow next.
+        </AishIntro>
+      </article>
+
       {/* Header — Grade + Marks */}
       <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">Report Card</p>
@@ -143,7 +152,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
               </p>
             )}
             {evaluation.grade_comment && (
-              <p className="mt-2 text-sm text-[#6B7280]">{evaluation.grade_comment}</p>
+              <AishSays className="mt-2">{evaluation.grade_comment}</AishSays>
             )}
           </div>
           {grade !== "—" && (
@@ -187,7 +196,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
                 <div className="mt-3">
                   <ScoreBar score={qs.marks_awarded} max={qs.marks_total} />
                 </div>
-                <p className="mt-3 text-sm leading-6 text-[#374151]">{qs.feedback}</p>
+                {qs.feedback && <AishSays className="mt-3">{qs.feedback}</AishSays>}
                 {qs.improvement && (
                   <div className="mt-2 flex gap-2 rounded-lg bg-[#FFFBEB] p-3">
                     <TrendingUp size={15} className="mt-0.5 shrink-0 text-[#C9A227]" />
@@ -212,7 +221,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
             </span>
           </div>
           {evaluation.rapid_fire_feedback && (
-            <p className="mt-3 text-sm leading-6 text-[#374151]">{evaluation.rapid_fire_feedback}</p>
+            <AishSays className="mt-3">{evaluation.rapid_fire_feedback}</AishSays>
           )}
           {evaluation.rapid_fire_scores.length > 0 && (
             <div className="mt-4 space-y-3 border-t border-[#E6EBEB] pt-4">
@@ -243,7 +252,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
                       <ScoreBar score={rf.marks_awarded} max={1} />
                     </div>
                     {rf.feedback && (
-                      <p className="mt-3 text-sm leading-6 text-[#374151]">{rf.feedback}</p>
+                      <AishSays className="mt-3">{rf.feedback}</AishSays>
                     )}
                   </div>
                 )
@@ -292,7 +301,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
                   <ScoreBar score={cap.score} max={100} />
                 </div>
                 {cap.justification && (
-                  <p className="mt-1.5 text-sm leading-6 text-[#6B7280]">{cap.justification}</p>
+                  <AishSays className="mt-1.5">{cap.justification}</AishSays>
                 )}
               </div>
             ))}
@@ -310,7 +319,12 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
       {/* Improvement Areas */}
       {evaluation.improvement_areas && (
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-[#111827]">Specific Improvement Actions</h3>
+          <div className="flex items-center gap-2">
+            <AishAvatar size={26} />
+            <h3 className="text-lg font-semibold text-[#111827]">
+              {AISH_NAME}'s Specific Improvement Actions
+            </h3>
+          </div>
           <ul className="mt-3 space-y-2 text-sm leading-7 text-[#374151]">
             {toBulletItems(evaluation.improvement_areas).map((item, index) => (
               <li key={index} className="flex gap-2">
@@ -370,6 +384,10 @@ function InsightCard({ title, text, tone, icon }: InsightCardProps) {
       <div className={`flex items-center gap-1.5 ${styles}`}>
         {icon}
         <h3 className="text-xs font-semibold uppercase tracking-wide">{title}</h3>
+        <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold normal-case text-[#92702A]">
+          <AishAvatar size={18} />
+          {AISH_NAME}
+        </span>
       </div>
       <p className="mt-3 text-sm leading-6 text-[#6B7280]">{text || "—"}</p>
     </article>

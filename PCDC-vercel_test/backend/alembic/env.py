@@ -17,7 +17,10 @@ load_dotenv(ENV_PATH)
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
     raise RuntimeError("DATABASE_URL is not set")
-config.set_main_option("sqlalchemy.url", database_url)
+# Alembic's config is an .ini parser that treats "%" as special, so a URL-
+# encoded password (e.g. "Password%40123" for "Password@123") must have its
+# "%" doubled here. The app's own engine reads DATABASE_URL unchanged.
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

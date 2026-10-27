@@ -3021,6 +3021,58 @@ def faculty_report_case_students(
     }
 
 
+def faculty_can_view_attempt(
+    db: Session, current_user: Dict[str, Any], case_created_by: Optional[int], student_user_id: int
+) -> bool:
+    # Either the faculty authored the case (their own Case Library), or the
+    # attempt's student is in one of this faculty's own sections — the latter
+    # covers shared Case Bank cases a faculty didn't write themselves.
+    if case_created_by == current_user["id"]:
+        return True
+    teaches_student = db.execute(
+        text("""
+            SELECT 1
+            FROM faculty_sections fs
+            JOIN student_sections ss ON ss.section_id = fs.section_id AND ss.status = 'active'
+            JOIN students s ON s.id = ss.student_id
+            WHERE fs.faculty_id = :fid AND fs.status = 'active' AND s.user_id = :uid
+            LIMIT 1
+        """),
+        {"fid": current_user["id"], "uid": student_user_id},
+    ).fetchone()
+    return teaches_student is not None
+
+
+@faculty_router.get("/attempts/{attempt_id}/ai-check")
+def faculty_attempt_ai_check(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Faculty-only AI-written-content estimate per written answer. Loaded
+    separately from the report because the first check calls the AI (slow);
+    results are stored, so later views are instant. Never shown to students."""
+    require_faculty(current_user)
+    row = db.execute(
+        text("""
+            SELECT csa.student_id, cs.created_by
+            FROM case_study_attempts csa
+            JOIN case_studies cs ON cs.id = csa.case_study_id
+            WHERE csa.id = :aid
+        """),
+        {"aid": attempt_id},
+    ).fetchone()
+    if not row or not faculty_can_view_attempt(db, current_user, row.created_by, row.student_id):
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    from services.simulation.ai_detection import check_attempt_ai_content
+
+    try:
+        return check_attempt_ai_content(db, attempt_id)
+    except Exception:
+        db.rollback()
+        return {"status": "unavailable", "results": []}
+
+
 @faculty_router.get("/attempts/{attempt_id}")
 def faculty_attempt_detail(
     attempt_id: int,
@@ -3042,26 +3094,19 @@ def faculty_attempt_detail(
         """),
         {"aid": attempt_id},
     ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Attempt not found")
-    # Either the faculty authored the case (their own Case Library), or the
-    # attempt's student is in one of this faculty's own sections — the latter
-    # covers shared Case Bank cases a faculty didn't write themselves.
-    is_owner = row.created_by == current_user["id"]
-    teaches_student = db.execute(
-        text("""
-            SELECT 1
-            FROM faculty_sections fs
-            JOIN student_sections ss ON ss.section_id = fs.section_id AND ss.status = 'active'
-            JOIN students s ON s.id = ss.student_id
-            WHERE fs.faculty_id = :fid AND fs.status = 'active' AND s.user_id = :uid
-            LIMIT 1
-        """),
-        {"fid": current_user["id"], "uid": row.student_id},
-    ).fetchone()
-    if not is_owner and not teaches_student:
+    if not row or not faculty_can_view_attempt(db, current_user, row.created_by, row.student_id):
         raise HTTPException(status_code=404, detail="Attempt not found")
     evaluation = get_evaluation(db, attempt_id)
+    # Flag-only copied-content check (>50% from the case or another student).
+    # Never allowed to break the report: on any error faculty simply see no
+    # originality section.
+    from services.simulation.originality import check_attempt_originality
+
+    try:
+        originality = check_attempt_originality(db, attempt_id)
+    except Exception:
+        db.rollback()
+        originality = []
     return {
         "attempt_id": row.id,
         "student_name": row.name,
@@ -3073,6 +3118,7 @@ def faculty_attempt_detail(
         "rapid_fire_answers": row.defense_responses,
         "evaluation": evaluation,
         "marks": attempt_marks_summary(evaluation),
+        "originality": originality,
     }
 
 

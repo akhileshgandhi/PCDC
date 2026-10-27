@@ -9,8 +9,8 @@ import {
   decodeJwtPayload,
   getToken,
   isAuthenticated,
-  portalPathForRole,
   setToken,
+  takePostLoginPath,
 } from "../../utils/auth"
 
 export default function ChangePassword() {
@@ -45,8 +45,9 @@ export default function ChangePassword() {
       const accessToken = res.data.access_token
       setToken(accessToken)
       const payload = decodeJwtPayload(accessToken)
-      const portalPath = portalPathForRole(payload?.role) ?? "/login"
-      window.location.assign(portalPath)
+      // Back to the page they were on before their session expired, if any.
+      const nextPath = takePostLoginPath(payload?.role) ?? "/login"
+      window.location.assign(nextPath)
     } catch (err) {
       const detail = axios.isAxiosError(err) ? err.response?.data?.detail : null
       setError(typeof detail === "string" ? detail : "Could not update your password. Please try again.")

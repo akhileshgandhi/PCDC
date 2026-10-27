@@ -9,11 +9,15 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { AISH_NAME, AishAvatar } from "../aish/Aish"
+
 export interface Coach {
   id: string
   name: string
   tagline: string
   description: string
+  /** Focus areas shown as tags on the card. */
+  focus: string[]
   icon: keyof typeof iconMap
   color: string
   system_prompt: string
@@ -43,16 +47,34 @@ export default function CoachCard({ coach, isActive, onSelect }: CoachCardProps)
         isActive ? "border-[#C9A227] ring-2 ring-[#C9A227]/20" : "border-[#E6EBEB]"
       }`}
     >
-      <div
-        className="grid size-12 place-items-center rounded-xl text-white"
-        style={{ backgroundColor: coach.color }}
-      >
-        <Icon size={24} aria-hidden="true" />
+      {/* Aish's face with this coach's icon as a badge — same Aish, six hats. */}
+      <div className="relative w-fit">
+        <AishAvatar size={52} />
+        <span
+          className="absolute -bottom-1 -right-1 grid size-6 place-items-center rounded-full text-white ring-2 ring-white"
+          style={{ backgroundColor: coach.color }}
+        >
+          <Icon size={13} aria-hidden="true" />
+        </span>
       </div>
 
-      <h2 className="mt-5 text-lg font-semibold text-[#111827]">{coach.name}</h2>
+      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-[#92702A]">
+        {AISH_NAME}
+      </p>
+      <h2 className="mt-0.5 text-lg font-semibold text-[#111827]">{coach.name}</h2>
       <p className="mt-1 text-sm font-semibold text-[#6B7280]">{coach.tagline}</p>
       <p className="mt-4 min-h-20 text-sm leading-6 text-[#6B7280]">{coach.description}</p>
+      <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Focus areas">
+        {coach.focus.map((area) => (
+          <span
+            key={area}
+            className="rounded-full px-2.5 py-1 text-xs font-medium"
+            style={{ backgroundColor: `${coach.color}14`, color: coach.color }}
+          >
+            {area}
+          </span>
+        ))}
+      </div>
 
       <button
         type="button"

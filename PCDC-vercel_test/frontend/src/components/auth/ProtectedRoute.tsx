@@ -1,9 +1,15 @@
 import type { ReactNode } from "react"
 import { useEffect } from "react"
-import { Navigate } from "react-router-dom"
+import { Navigate, useLocation } from "react-router-dom"
 
 import type { UserRole } from "../../types/user"
-import { getUserRole, isAuthenticated, mustChangePassword } from "../../utils/auth"
+import {
+  expireSession,
+  getUserRole,
+  isAuthenticated,
+  isSessionExpired,
+  mustChangePassword,
+} from "../../utils/auth"
 
 interface ProtectedRouteProps {
   allowedRole: UserRole | UserRole[]
@@ -37,7 +43,19 @@ function useBlockClipboardForStudent(active: boolean) {
 
 export default function ProtectedRoute({ allowedRole, children }: ProtectedRouteProps) {
   const role = getUserRole()
-  useBlockClipboardForStudent(role === "student")
+  const location = useLocation()
+  // Testing escape hatch: VITE_ALLOW_STUDENT_CLIPBOARD=true in a local
+  // .env.local re-enables copy/paste for students. Leave it unset everywhere
+  // else so the anti-cheating block stays on.
+  const allowStudentClipboard = import.meta.env.VITE_ALLOW_STUDENT_CLIPBOARD === "true"
+  useBlockClipboardForStudent(role === "student" && !allowStudentClipboard)
+
+  // Had a session but it ran out (JWT expired or idle too long): show the
+  // "session expired" login and come back to this exact page afterwards.
+  if (isSessionExpired()) {
+    expireSession(`${location.pathname}${location.search}${location.hash}`)
+    return null
+  }
 
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />

@@ -1,8 +1,15 @@
-import { ArrowLeft } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Bot, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { getFacultyAttemptDetail, type FacultyAttemptDetail } from "../../api/faculty"
+import {
+  getFacultyAttemptAiCheck,
+  getFacultyAttemptDetail,
+  type FacultyAnswerAiCheck,
+  type FacultyAnswerOriginality,
+  type FacultyAttemptAiCheck,
+  type FacultyAttemptDetail,
+} from "../../api/faculty"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { scoreColorHex } from "../../utils/scoreColor"
 
@@ -39,6 +46,10 @@ export default function FacultyAttemptReport() {
   const [data, setData] = useState<FacultyAttemptDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
+  // AI-written-content estimate loads after the report: the first check of an
+  // attempt calls the AI and can take a few seconds.
+  const [aiCheck, setAiCheck] = useState<FacultyAttemptAiCheck | null>(null)
+  const [isAiChecking, setIsAiChecking] = useState(false)
 
   useEffect(() => {
     const id = Number(attemptId)
@@ -59,7 +70,33 @@ export default function FacultyAttemptReport() {
     }
   }, [attemptId])
 
+  useEffect(() => {
+    const id = Number(attemptId)
+    if (!id) return
+    let active = true
+    setIsAiChecking(true)
+    getFacultyAttemptAiCheck(id)
+      .then((result) => {
+        if (active) setAiCheck(result)
+      })
+      .catch(() => {
+        if (active) setAiCheck({ status: "unavailable", results: [] })
+      })
+      .finally(() => {
+        if (active) setIsAiChecking(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [attemptId])
+
   const evaluation = data?.evaluation ?? null
+  const originality = data?.originality ?? []
+  const originalityByQuestion = new Map(originality.map((item) => [item.question_number, item]))
+  const flaggedCount = originality.filter((item) => item.flagged).length
+  const aiResults = aiCheck?.results ?? []
+  const aiByQuestion = new Map(aiResults.map((item) => [item.question_number, item]))
+  const aiFlaggedCount = aiResults.filter((item) => item.flagged).length
 
   return (
     <FacultyLayout>
@@ -91,6 +128,56 @@ export default function FacultyAttemptReport() {
               <p className="mt-1 text-sm text-[#6b7280]">
                 {data.student_email} · {data.case_title}
               </p>
+              {flaggedCount > 0 ? (
+                <div
+                  role="status"
+                  className="mt-4 flex items-start gap-2 rounded-md border border-[#fcd9b6] bg-[#fff7ed] px-3 py-2.5 text-sm text-[#9a3412]"
+                >
+                  <AlertTriangle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    <span className="font-semibold">Copied content detected</span> in {flaggedCount}{" "}
+                    {flaggedCount === 1 ? "answer" : "answers"}: more than 50% matches the case
+                    text or another student's answer. Marks are unchanged; please review below.
+                  </span>
+                </div>
+              ) : null}
+              {aiFlaggedCount > 0 ? (
+                <div
+                  role="status"
+                  className="mt-3 flex items-start gap-2 rounded-md border border-[#ddd6fe] bg-[#f5f3ff] px-3 py-2.5 text-sm text-[#5b21b6]"
+                >
+                  <Bot size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    <span className="font-semibold">Possible AI-written content</span> in {aiFlaggedCount}{" "}
+                    {aiFlaggedCount === 1 ? "answer" : "answers"}: more than 50% likely written with an
+                    AI tool. This is an estimate, not proof — marks are unchanged; please review below.
+                  </span>
+                </div>
+              ) : null}
+              {isAiChecking ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="mt-3 flex items-center gap-2.5 rounded-md border border-[#c4b5fd] bg-[#f5f3ff] px-3 py-2.5 text-sm text-[#5b21b6]"
+                >
+                  <Loader2 size={17} className="shrink-0 animate-spin" aria-hidden="true" />
+                  <span>
+                    <span className="font-semibold">Checking answers for AI-written content…</span> This
+                    can take a few seconds the first time.
+                  </span>
+                </div>
+              ) : aiCheck?.status === "unavailable" ? (
+                <div
+                  role="status"
+                  className="mt-3 flex items-start gap-2 rounded-md border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2.5 text-sm text-[#4b5563]"
+                >
+                  <Bot size={17} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    <span className="font-semibold">AI-written content check is unavailable right now.</span>{" "}
+                    Reload the page to try again.
+                  </span>
+                </div>
+              ) : null}
             </section>
 
             {evaluation ? (
@@ -172,6 +259,8 @@ export default function FacultyAttemptReport() {
                             {question.marks_awarded} / {question.marks_total} marks
                           </span>
                         </div>
+                        <OriginalityBadge result={originalityByQuestion.get(question.question_number)} />
+                        <AiContentBadge result={aiByQuestion.get(question.question_number)} />
                         <p className="mt-2 text-sm text-[#374151]">{question.feedback}</p>
                         {question.improvement ? (
                           <p className="mt-2 rounded-md bg-[#fff8ec] px-3 py-2 text-sm text-[#8a5a00]">
@@ -252,6 +341,70 @@ export default function FacultyAttemptReport() {
         )}
       </div>
     </FacultyLayout>
+  )
+}
+
+// Copied-content result for one written answer: an orange warning when more
+// than 50% matches the case or another student, otherwise a quiet "original"
+// line so faculty can see the check ran.
+function OriginalityBadge({ result }: { result?: FacultyAnswerOriginality }) {
+  if (!result) return null
+  if (!result.checked) {
+    return (
+      <p className="mt-2 text-xs text-[#9ca3af]">
+        Originality: too short to check ({result.word_count} words)
+      </p>
+    )
+  }
+  const casePct = result.case_copied_pct ?? 0
+  const peerPct = result.peer_copied_pct ?? 0
+  if (!result.flagged) {
+    return (
+      <p className="mt-2 text-xs text-[#16a34a]">
+        Original · {casePct}% matches case
+        {result.peer_copied_pct != null ? ` · ${peerPct}% matches closest classmate` : ""}
+      </p>
+    )
+  }
+  const detail =
+    result.source === "peer"
+      ? `${peerPct}% matches ${result.peer_student_name ?? "another student"}'s answer`
+      : `${casePct}% copied from the case text`
+  return (
+    <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-[#fff7ed] px-2.5 py-1 text-xs font-semibold text-[#c2410c]">
+      <AlertTriangle size={13} aria-hidden="true" />
+      Copied content: {detail}
+    </p>
+  )
+}
+
+// AI-written-content estimate for one written answer: a purple warning above
+// 50%, otherwise a quiet line so faculty can see the check ran.
+function AiContentBadge({ result }: { result?: FacultyAnswerAiCheck }) {
+  if (!result) return null
+  if (result.too_short) {
+    return (
+      <p className="mt-1 text-xs text-[#9ca3af]">
+        AI check: too short to check ({result.word_count} words)
+      </p>
+    )
+  }
+  if (!result.checked || result.ai_pct == null) return null
+  if (!result.flagged) {
+    return (
+      <p className="mt-1 text-xs text-[#16a34a]" title={result.reason ?? undefined}>
+        Likely student-written · {result.ai_pct}% AI likelihood
+      </p>
+    )
+  }
+  return (
+    <div className="mt-1">
+      <p className="inline-flex items-center gap-1.5 rounded-md bg-[#f5f3ff] px-2.5 py-1 text-xs font-semibold text-[#6d28d9]">
+        <Bot size={13} aria-hidden="true" />
+        Possible AI-written content: {result.ai_pct}% likelihood
+      </p>
+      {result.reason ? <p className="mt-1 text-xs text-[#6b7280]">{result.reason}</p> : null}
+    </div>
   )
 }
 

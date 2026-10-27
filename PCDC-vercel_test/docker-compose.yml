@@ -1,0 +1,46 @@
+# PCDC full stack: PostgreSQL + FastAPI backend + nginx-served frontend.
+#
+#   docker compose up -d --build      -> http://localhost:8080
+#
+# Secrets (AI keys, SMTP, JWT secret...) come from backend/.env — copy
+# backend/.env.example to backend/.env and fill it in first.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pcdc}
+      POSTGRES_USER: ${POSTGRES_USER:-pcdc}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pcdc_password}
+    volumes:
+      - pcdc_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      # Points at the bundled Postgres container. To use an external database
+      # (e.g. Neon), set DATABASE_URL in a root .env file next to this one.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://pcdc:pcdc_password@db:5432/pcdc}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pcdc_db_data:

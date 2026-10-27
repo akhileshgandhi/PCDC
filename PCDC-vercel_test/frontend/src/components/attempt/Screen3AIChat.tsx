@@ -1,6 +1,7 @@
 ﻿import { ArrowRight, CheckCircle, Loader2, Zap } from "lucide-react"
 import { useEffect, useState } from "react"
 import type { RapidFireQuestion } from "../../api/cases"
+import { AISH_NAME, AishAvatar, AishIntro } from "../aish/Aish"
 import CountdownTimer from "./CountdownTimer"
 
 function marksLabel(marks: number | null | undefined): string {
@@ -91,14 +92,25 @@ export default function Screen3AIChat({
           ) : null}
         </div>
 
+        {submitted ? (
+          <AishIntro className="mt-4">
+            Great effort finishing the rapid fire round! I'm reviewing your answers now.
+          </AishIntro>
+        ) : (
+          <AishIntro className="mt-4">
+            I'll fire a few quick questions at you based on your analysis. Answer each one
+            crisply. The clock is ticking!
+          </AishIntro>
+        )}
+
         {isGenerating && total === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-3 py-12 text-center text-[#6B7280]">
             <Loader2 size={32} className="animate-spin text-[#C9A227]" />
             <p className="text-sm font-medium text-[#0B1D3A]">
-              Preparing your rapid fire questions…
+              {AISH_NAME} is preparing your rapid fire questions…
             </p>
             <p className="text-xs text-[#9CA3AF]">
-              The AI is generating questions from your analysis. Your timer starts once
+              {AISH_NAME} is writing questions from your analysis. Your timer starts once
               they appear.
             </p>
           </div>
@@ -129,7 +141,7 @@ export default function Screen3AIChat({
                 isSubmitting ? "animate-pulse text-[#C9A227]" : "text-[#16A34A]"
               }`}
             >
-              {isSubmitting ? "AI is evaluating your performance…" : "Your answers have been submitted. Evaluation is ready."}
+              {isSubmitting ? `${AISH_NAME} is evaluating your performance…` : "Your answers have been submitted. Evaluation is ready."}
             </p>
             <div className="mt-4 w-full space-y-3 text-left">
               {rapidFireQuestions.map((q, i) => (
@@ -162,10 +174,14 @@ export default function Screen3AIChat({
                 ))}
               </div>
             </div>
-            <div className="rounded-lg bg-[#F6F7F9] p-5">
-              <p className="text-base font-semibold text-[#0B1D3A]">
-                {rapidFireQuestions[currentQ].question_text}
-              </p>
+            <div className="flex items-start gap-3">
+              <AishAvatar size={36} />
+              <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm bg-[#F6F7F9] p-5">
+                <p className="text-xs font-semibold text-[#92702A]">{AISH_NAME} asks</p>
+                <p className="mt-1 text-base font-semibold text-[#0B1D3A]">
+                  {rapidFireQuestions[currentQ].question_text}
+                </p>
+              </div>
             </div>
             <textarea
               value={currentAnswer}

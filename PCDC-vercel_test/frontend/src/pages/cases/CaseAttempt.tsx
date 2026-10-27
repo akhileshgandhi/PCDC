@@ -17,6 +17,7 @@ import {
   type RapidFireQuestion,
   type WrittenQuestion,
 } from "../../api/cases"
+import { AISH_NAME, AishAvatar } from "../../components/aish/Aish"
 import CaseReferencePanel from "../../components/attempt/CaseReferencePanel"
 import ProgressBar from "../../components/attempt/ProgressBar"
 import ReflectionStep from "../../components/attempt/ReflectionStep"
@@ -529,8 +530,8 @@ export default function CaseAttempt() {
         ) : null}
         {currentScreen === 4 && !evaluation ? (
           <div className="flex flex-col items-center gap-3 py-16 text-[#6B7280]">
-            <div className="size-8 animate-spin rounded-full border-4 border-[#E6EBEB] border-t-[#C9A227]" />
-            <p className="text-sm font-medium">AI is generating your evaluation…</p>
+            <AishAvatar size={56} className="animate-pulse" />
+            <p className="text-sm font-medium">{AISH_NAME} is reviewing your attempt and writing your evaluation…</p>
           </div>
         ) : null}
       </main>

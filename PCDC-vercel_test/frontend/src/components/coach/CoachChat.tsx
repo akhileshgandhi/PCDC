@@ -1,6 +1,7 @@
 import { Send } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import { AISH_NAME, AishAvatar } from "../aish/Aish"
 import type { Coach } from "./CoachCard"
 
 export interface CoachMessage {
@@ -20,15 +21,6 @@ interface CoachChatProps {
   sessionHistory: SessionHistoryItem[]
   onSendMessage: (message: string) => void
   onNewSession: () => void
-}
-
-const iconInitials: Record<string, string> = {
-  capability: "CC",
-  leadership: "LC",
-  communication: "CO",
-  career: "CR",
-  startup: "SM",
-  reflection: "RC",
 }
 
 export default function CoachChat({
@@ -56,14 +48,12 @@ export default function CoachChat({
     <section className="rounded-xl border border-[#E6EBEB] bg-white shadow-sm">
       <div className="flex flex-col gap-4 border-b border-[#E6EBEB] p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div
-            className="grid size-12 place-items-center rounded-xl text-sm font-semibold text-white"
-            style={{ backgroundColor: coach.color }}
-          >
-            {iconInitials[coach.id] ?? "AI"}
-          </div>
+          <AishAvatar size={48} />
           <div>
-            <h2 className="text-xl font-semibold text-[#111827]">{coach.name}</h2>
+            <h2 className="text-xl font-semibold text-[#111827]">
+              {AISH_NAME}
+              <span className="font-medium" style={{ color: coach.color }}> · {coach.name}</span>
+            </h2>
             <p className="text-sm font-medium text-[#6B7280]">{coach.tagline}</p>
           </div>
         </div>
@@ -90,8 +80,9 @@ export default function CoachChat({
         {messages.map((message, index) => (
           <div
             key={`${message.role}-${index}`}
-            className={`flex ${message.role === "student" ? "justify-end" : "justify-start"}`}
+            className={`flex items-start gap-2 ${message.role === "student" ? "justify-end" : "justify-start"}`}
           >
+            {message.role === "ai" ? <AishAvatar size={32} className="mt-1" /> : null}
             <div
               className={`max-w-[82%] rounded-xl px-4 py-3 text-sm leading-6 ${
                 message.role === "student"
@@ -100,7 +91,7 @@ export default function CoachChat({
               }`}
             >
               <p className="mb-1 text-xs font-semibold uppercase opacity-70">
-                {message.role === "student" ? "Student" : "AI"}
+                {message.role === "student" ? "You" : AISH_NAME}
               </p>
               {message.text}
             </div>

@@ -1,14 +1,16 @@
-import { Eye, EyeOff, LoaderCircle, LogIn } from "lucide-react"
+import { Clock, Eye, EyeOff, LoaderCircle, LogIn } from "lucide-react"
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 
 import { useAuth } from "../../context/AuthContext"
 import AuthLayout from "../../layouts/AuthLayout"
-import { decodeJwtPayload, portalPathForRole } from "../../utils/auth"
+import { SESSION_EXPIRED_REASON, decodeJwtPayload, takePostLoginPath } from "../../utils/auth"
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const sessionExpired = searchParams.get("reason") === SESSION_EXPIRED_REASON
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -29,8 +31,9 @@ export default function Login() {
         return
       }
 
-      const portalPath = portalPathForRole(payload?.role)
-      navigate(portalPath ?? "/unauthorized", { replace: true })
+      // Back to the page they were on when the session expired, else their portal.
+      const nextPath = takePostLoginPath(payload?.role)
+      navigate(nextPath ?? "/unauthorized", { replace: true })
     } catch (loginError) {
       setError(
         loginError instanceof Error
@@ -45,6 +48,19 @@ export default function Login() {
   return (
     <AuthLayout>
       <form className="space-y-4" onSubmit={handleSubmit}>
+        {sessionExpired ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+          >
+            <Clock size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span>
+              <span className="font-semibold">Session expired.</span> Please log in again to
+              continue where you left off.
+            </span>
+          </div>
+        ) : null}
+
         <div>
           <label
             htmlFor="email"
