@@ -544,15 +544,17 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           >
             <Archive size={16} aria-hidden="true" />
           </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#b42318] transition hover:border-[#b42318] hover:bg-[#fff5f5]"
-            aria-label={`Delete ${caseStudy.title}`}
-            title="Delete"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-          </button>
+          {caseStudy.can_delete !== false ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#b42318] transition hover:border-[#b42318] hover:bg-[#fff5f5]"
+              aria-label={`Delete ${caseStudy.title}`}
+              title="Delete"
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
     </article>

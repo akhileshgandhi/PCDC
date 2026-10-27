@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
-from services.bank.service import parse_snapshot
+from services.bank.service import parse_snapshot, restore_deleted_case
 from services.faculty.router import (
     AI_FILL_SYSTEM_PROMPT,
     ANSWER_WORD_RANGE_BY_DIFFICULTY,
@@ -29,9 +29,11 @@ from services.faculty.router import (
     DESCRIPTION_WORD_RANGE_BY_DIFFICULTY,
     _ai_fill_schema,
     blooms_levels_for_difficulty,
+    case_delete_owner_ids,
     delete_case_and_dependents,
     difficulty_label_for,
     difficulty_word_for,
+    ensure_can_delete_case,
     expand_description_if_short,
     normalize_domain,
     require_faculty,
@@ -174,6 +176,16 @@ def _linked_case(row: Any) -> tuple:
     return None, False
 
 
+def _case_owner_id(row: Any) -> Optional[int]:
+    """Creator of the real case behind this entry (see _linked_case), or of
+    the entry itself when there is no case — used for delete permissions."""
+    if row.origin_case_id is not None:
+        return row.origin_created_by
+    if row.used_case_id is not None:
+        return row.used_created_by
+    return row.created_by
+
+
 def entry_list_item(row: Any) -> Dict[str, Any]:
     snapshot = parse_snapshot(row.case_snapshot)
     linked_case_id, linked_case_published = _linked_case(row)
@@ -195,6 +207,13 @@ def entry_list_item(row: Any) -> Dict[str, Any]:
         "has_attachment": bool(row.attachment_name),
         "attachment_name": row.attachment_name,
         "has_full_case": bool(snapshot.get("questions")),
+        # Set when the case behind this entry was deleted from a Case Library
+        # (admin-only view; faculty never see such entries).
+        "case_deleted": {
+            "deleted_by_name": row.case_deleted_by_name,
+            "deleted_by_role": row.case_deleted_by_role,
+            "deleted_at": str(row.case_deleted_at),
+        } if row.deleted_archive_id is not None else None,
         "created_at": str(row.created_at),
     }
 
@@ -205,13 +224,24 @@ ENTRY_COLUMNS = """
     b.used_case_id, b.origin_case_id, b.attachment_name, b.created_at,
     b.updated_at, u.role AS creator_role,
     cs2.recommended_semesters AS origin_semesters, cs2.status AS origin_status,
-    cs3.status AS used_status
+    cs3.status AS used_status, cs2.created_by AS origin_created_by,
+    cs3.created_by AS used_created_by,
+    del.id AS deleted_archive_id, del.deleted_at AS case_deleted_at,
+    del.deleted_by_name AS case_deleted_by_name, del.deleted_by_role AS case_deleted_by_role
 """
 
 ENTRY_JOINS = """
     LEFT JOIN users u ON u.id = b.created_by
     LEFT JOIN case_studies cs2 ON cs2.id = b.origin_case_id
     LEFT JOIN case_studies cs3 ON cs3.id = b.used_case_id
+    LEFT JOIN LATERAL (
+        SELECT d.id, d.deleted_at, du.name AS deleted_by_name, du.role AS deleted_by_role
+        FROM deleted_case_studies d
+        LEFT JOIN users du ON du.id = d.deleted_by
+        WHERE d.bank_entry_id = b.id AND d.restored_at IS NULL AND b.origin_case_id IS NULL
+        ORDER BY d.deleted_at DESC
+        LIMIT 1
+    ) del ON TRUE
 """
 
 # The bank listing only ever shows entries tied to an already-published case
@@ -278,7 +308,14 @@ def list_bank_entries(
         """),
         params,
     ).fetchall()
-    return {"items": [entry_list_item(row) for row in rows], "total": len(rows)}
+    is_admin = current_user["role"] in ("admin", "superadmin")
+    deletable_owners = case_delete_owner_ids(db, current_user) if is_admin else set()
+    items = []
+    for row in rows:
+        item = entry_list_item(row)
+        item["can_delete"] = is_admin and (deletable_owners is None or _case_owner_id(row) in deletable_owners)
+        items.append(item)
+    return {"items": items, "total": len(rows)}
 
 
 @bank_router.get("/meta")
@@ -769,6 +806,28 @@ def publish_from_bank(
     }
 
 
+@bank_router.post("/{entry_id}/restore-case")
+def restore_bank_entry_case(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Admin undoes a Case Library delete: the case comes back to its
+    creator's library with its content, questions and status. Student
+    attempts and assignments removed by the delete are not restored."""
+    require_faculty(current_user)
+    if current_user["role"] not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Only an admin can restore a deleted case")
+    row = get_bank_entry_row(db, entry_id)
+    if row.deleted_archive_id is None:
+        raise HTTPException(status_code=404, detail="This entry has no deleted case to restore")
+    # Same rule as delete: an Institute Admin only for their own faculty's cases.
+    ensure_can_delete_case(db, current_user, row.created_by)
+    case_id = restore_deleted_case(db, row.deleted_archive_id, current_user["id"])
+    db.commit()
+    return {"status": "restored", "case_id": case_id, "title": row.title}
+
+
 @bank_router.delete("/{entry_id}")
 def delete_bank_entry(
     entry_id: int,
@@ -782,6 +841,8 @@ def delete_bank_entry(
             status_code=403,
             detail="Only an admin can delete a case bank entry",
         )
+    # Institute Admins may only remove cases created by their own faculty.
+    ensure_can_delete_case(db, current_user, _case_owner_id(row))
     # Same "which case does this entry point at" resolution as _linked_case():
     # origin_case_id (entry mirrored FROM an existing case) if set, else
     # used_case_id (entry published INTO a new case). Checking only

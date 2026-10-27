@@ -11,6 +11,7 @@ import {
 } from "../../api/admin"
 import ConfirmDialog from "../../components/ConfirmDialog"
 import { useAdminScope } from "../../hooks/useAdminScope"
+import { notifyTeachingApprovalsChanged, useAdminAlertRefresh } from "../../hooks/usePendingTeachingCount"
 import AdminLayout from "../../layouts/AdminLayout"
 
 export default function AdminTeachingApprovals() {
@@ -41,10 +42,15 @@ export default function AdminTeachingApprovals() {
     getTeachingApprovals().then(apply).catch(() => undefined)
   }
 
+  // New faculty requests appear without reloading the page (the first load
+  // is the effect above).
+  useAdminAlertRefresh(reload, false)
+
   async function decide(id: number, approve: boolean) {
     if (approve) await approveTeachingSelection(id)
     else await rejectTeachingSelection(id)
     reload()
+    notifyTeachingApprovalsChanged()
   }
 
   async function confirmRevoke() {
@@ -52,6 +58,7 @@ export default function AdminTeachingApprovals() {
     await removeTeachingSelection(revoking.id)
     setRevoking(null)
     reload()
+    notifyTeachingApprovalsChanged()
   }
 
   async function toggle() {

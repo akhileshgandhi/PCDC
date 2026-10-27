@@ -15,6 +15,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  UserCheck,
   UserCircle,
   Users,
 } from "lucide-react"
@@ -22,9 +23,24 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getAdminNotifications, type AdminNotification } from "../api/admin"
 import { clearAdminScope, useAdminScope } from "../hooks/useAdminScope"
+import { useAdminAlertRefresh, usePendingTeachingCount } from "../hooks/usePendingTeachingCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
 const NOTIF_SEEN_KEY = "pcdc_admin_notif_last_seen_id"
+const TEACHING_APPROVALS_PATH = "/admin/people/teaching-approvals"
+const TEACHING_REQUEST_EVENT = "teaching_approval_requested"
+
+// Red count of teaching selections waiting for approval.
+function PendingBadge({ count }: { count: number }) {
+  return (
+    <span
+      className="grid min-w-5 place-items-center rounded-full bg-[#d92d20] px-1.5 text-[10px] font-bold leading-5 text-white"
+      aria-label={`${count} pending teaching ${count === 1 ? "approval" : "approvals"}`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  )
+}
 
 function timeAgo(iso: string): string {
   const then = new Date(iso.endsWith("Z") ? iso : `${iso}Z`).getTime()
@@ -171,11 +187,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const notifRef = useRef<HTMLDivElement>(null)
   const unreadCount = notifications.filter((n) => n.id > lastSeenId).length
 
-  useEffect(() => {
+  // Re-checked every 30s (and on returning to the tab) so a new approval
+  // request reaches the admin within a minute without a page reload.
+  useAdminAlertRefresh(() => {
     getAdminNotifications(20)
       .then((data) => setNotifications(data.items))
       .catch(() => undefined)
-  }, [])
+  })
+  const pendingApprovals = usePendingTeachingCount() ?? 0
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -262,6 +281,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 >
                   <GroupIcon size={18} aria-hidden="true" />
                   <span className="flex-1">{group.label}</span>
+                  {!isOpen && pendingApprovals > 0 && group.items.some((item) => item.to === TEACHING_APPROVALS_PATH) ? (
+                    <PendingBadge count={pendingApprovals} />
+                  ) : null}
                   <ChevronDown
                     size={16}
                     aria-hidden="true"
@@ -272,7 +294,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   <div className="mt-1 space-y-1">
                     {group.items.map((item) => (
                       <NavLink key={item.to} to={item.to} className={navLinkClass(true)}>
-                        <span>{item.label}</span>
+                        <span className="flex-1">{item.label}</span>
+                        {item.to === TEACHING_APPROVALS_PATH && pendingApprovals > 0 ? (
+                          <PendingBadge count={pendingApprovals} />
+                        ) : null}
                       </NavLink>
                     ))}
                   </div>
@@ -365,12 +390,30 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       </p>
                     ) : (
                       <ul className="divide-y divide-[#eef2f7]">
-                        {notifications.map((n) => (
-                          <li key={n.id} className="px-4 py-3 hover:bg-[#f9fafb]">
-                            <p className="text-sm text-[#17202a]">{n.message}</p>
-                            <p className="mt-1 text-xs text-[#98a2b3]">{timeAgo(n.created_at)}</p>
-                          </li>
-                        ))}
+                        {notifications.map((n) =>
+                          n.event_type === TEACHING_REQUEST_EVENT ? (
+                            <li key={n.id} className="bg-[#fffbeb] hover:bg-[#fef3c7]">
+                              <Link
+                                to={TEACHING_APPROVALS_PATH}
+                                onClick={() => setNotifOpen(false)}
+                                className="flex gap-2.5 px-4 py-3"
+                              >
+                                <UserCheck size={16} className="mt-0.5 shrink-0 text-[#b45309]" aria-hidden="true" />
+                                <span>
+                                  <span className="block text-sm text-[#17202a]">{n.message}</span>
+                                  <span className="mt-1 block text-xs text-[#98a2b3]">
+                                    {timeAgo(n.created_at)} · <span className="font-semibold text-[#b45309]">Review</span>
+                                  </span>
+                                </span>
+                              </Link>
+                            </li>
+                          ) : (
+                            <li key={n.id} className="px-4 py-3 hover:bg-[#f9fafb]">
+                              <p className="text-sm text-[#17202a]">{n.message}</p>
+                              <p className="mt-1 text-xs text-[#98a2b3]">{timeAgo(n.created_at)}</p>
+                            </li>
+                          ),
+                        )}
                       </ul>
                     )}
                   </div>

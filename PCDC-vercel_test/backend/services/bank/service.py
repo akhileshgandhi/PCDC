@@ -204,3 +204,77 @@ def release_used_entries(db: Session, case_id: int) -> None:
         """),
         {"cid": case_id},
     )
+
+
+# Case content kept when a case is deleted from a library, so an admin can
+# restore it. Student work (attempts, assignments) is never kept.
+_ARCHIVED_CHILD_TABLES = {
+    "questions": "case_questions",
+    "rapid_fire_questions": "rapid_fire_questions",
+    "tags": "case_study_tags",
+}
+
+
+def archive_deleted_case(db: Session, case_id: int, deleted_by: int) -> None:
+    """Save a full copy of the case (row, questions, rapid-fire questions,
+    tags) before it is deleted. Must run before the delete."""
+    children = ",\n".join(
+        f"COALESCE((SELECT jsonb_agg(to_jsonb(t)) FROM {table} t WHERE t.case_study_id = cs.id), '[]'::jsonb)"
+        for table in _ARCHIVED_CHILD_TABLES.values()
+    )
+    db.execute(
+        text(f"""
+            INSERT INTO deleted_case_studies (
+                case_id, title, created_by, deleted_by, bank_entry_id,
+                case_data, {", ".join(_ARCHIVED_CHILD_TABLES)}
+            )
+            SELECT cs.id, cs.title, cs.created_by, :uid,
+                   (SELECT b.id FROM case_study_bank b WHERE b.origin_case_id = cs.id LIMIT 1),
+                   to_jsonb(cs),
+                   {children}
+            FROM case_studies cs WHERE cs.id = :cid
+        """),
+        {"cid": case_id, "uid": deleted_by},
+    )
+
+
+def restore_deleted_case(db: Session, archive_id: int, restored_by: int) -> int:
+    """Put an archived case back with its original id, content and creator
+    (the restoring admin if that account no longer exists), and re-link its
+    Case Bank entry. Returns the case id. Caller commits."""
+    archive = db.execute(
+        text("SELECT id, case_id, created_by, bank_entry_id FROM deleted_case_studies WHERE id = :aid"),
+        {"aid": archive_id},
+    ).fetchone()
+    owner_id = archive.created_by if archive.created_by is not None else restored_by
+    db.execute(
+        text("""
+            INSERT INTO case_studies
+            SELECT * FROM jsonb_populate_record(
+                NULL::case_studies,
+                (SELECT jsonb_set(case_data, '{created_by}', to_jsonb(CAST(:owner AS INTEGER)))
+                 FROM deleted_case_studies WHERE id = :aid)
+            )
+        """),
+        {"aid": archive_id, "owner": owner_id},
+    )
+    for column, table in _ARCHIVED_CHILD_TABLES.items():
+        db.execute(
+            text(f"""
+                INSERT INTO {table}
+                SELECT * FROM jsonb_populate_recordset(
+                    NULL::{table}, (SELECT {column} FROM deleted_case_studies WHERE id = :aid)
+                )
+            """),
+            {"aid": archive_id},
+        )
+    if archive.bank_entry_id is not None:
+        db.execute(
+            text("UPDATE case_study_bank SET origin_case_id = :cid, updated_at = NOW() WHERE id = :bid"),
+            {"cid": archive.case_id, "bid": archive.bank_entry_id},
+        )
+    db.execute(
+        text("UPDATE deleted_case_studies SET restored_at = NOW(), restored_by = :uid WHERE id = :aid"),
+        {"aid": archive_id, "uid": restored_by},
+    )
+    return archive.case_id

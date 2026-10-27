@@ -17,6 +17,8 @@ export interface FacultyCase {
   status: "draft" | "published" | "archived"
   attempts_count: number
   rubric_exists: boolean
+  /** Faculty: own cases only. Institute Admin: their faculty's cases. */
+  can_delete?: boolean
   created_at: string
   updated_at: string
 }

@@ -259,6 +259,8 @@ export interface AdminDashboardSummary {
   total_users: number
   active_today: number
   pending_imports: number
+  /** Faculty teaching selections awaiting this admin's approval (live). */
+  pending_teaching_approvals?: number
   users_by_role: Partial<Record<AdminUserRole, number>>
   recent_activity: Array<{
     id: number
@@ -318,6 +320,8 @@ export interface FacultyActivitySummary {
   cases_total: number
   cases_published: number
   cases_draft: number
+  /** Deleted from their library and not restored by an admin. */
+  cases_deleted?: number
   bank_items: number
   section_assignments: number
   student_assignments: number
@@ -533,6 +537,11 @@ export async function setTeachingApprovalSetting(requireApproval: boolean) {
     "/admin/teaching-approvals/settings",
     { require_approval: requireApproval },
   )
+  return response.data
+}
+
+export async function getPendingTeachingCount() {
+  const response = await api.get<{ pending: number }>("/admin/teaching-approvals/pending-count")
   return response.data
 }
 

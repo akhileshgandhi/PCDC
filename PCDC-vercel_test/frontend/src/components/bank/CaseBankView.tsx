@@ -1,4 +1,4 @@
-import { Download, Edit3, Eye, FileUp, Rocket, Search, Send, Trash2 } from "lucide-react"
+import { Download, Edit3, Eye, FileUp, RotateCcw, Rocket, Search, Send, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
@@ -8,6 +8,7 @@ import {
   getBankEntries,
   getBankEntry,
   getBankMeta,
+  restoreBankEntryCase,
   type BankEntry,
   type BankEntryDetail,
   type BankMeta,
@@ -83,8 +84,12 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
   const isAdmin = isAdminRole(currentUser?.role)
 
   // Faculty never see a delete action in the Case Bank, even for cases they
-  // authored themselves — only admins can remove entries from the shared bank.
-  const canDelete = useCallback(() => isAdminRole(currentUser?.role), [currentUser])
+  // authored themselves — only admins can remove entries from the shared bank,
+  // and an Institute Admin only those created by their own faculty.
+  const canDelete = useCallback(
+    (entry: BankEntry) => isAdminRole(currentUser?.role) && entry.can_delete !== false,
+    [currentUser],
+  )
 
   async function openView(entry: BankEntry) {
     try {
@@ -123,14 +128,38 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
     }
   }
 
+  const [restoringId, setRestoringId] = useState<number | null>(null)
+
+  async function handleRestore(entry: BankEntry) {
+    const deletedBy = entry.case_deleted?.deleted_by_name || "its creator"
+    if (
+      !window.confirm(
+        `Restore "${entry.title}" (deleted by ${deletedBy})? It goes back to ${entry.creator_name || "the creator"}'s Case Library with its content and status. Student attempts removed by the delete are not restored.`,
+      )
+    ) {
+      return
+    }
+    setRestoringId(entry.id)
+    setError("")
+    try {
+      await restoreBankEntryCase(entry.id)
+      setNotice(`Restored "${entry.title}".`)
+      void loadEntries()
+    } catch (restoreError: unknown) {
+      setError(apiErrorDetail(restoreError, "Could not restore that case."))
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
   async function handleDelete(entry: BankEntry) {
     if (!window.confirm(`Remove "${entry.title}" from the bank?`)) return
     try {
       await deleteBankEntry(entry.id)
       setNotice(`"${entry.title}" removed from the bank.`)
       void loadEntries()
-    } catch {
-      setError("Could not delete that entry.")
+    } catch (deleteError: unknown) {
+      setError(apiErrorDetail(deleteError, "Could not delete that entry."))
     }
   }
 
@@ -283,7 +312,14 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                         {entry.title}
                       </button>
                     )}
-                    {!entry.linked_case_published ? (
+                    {entry.case_deleted ? (
+                      <span
+                        title={`Deleted from the Case Library on ${formatDate(entry.case_deleted.deleted_at)}`}
+                        className="rounded-full bg-[#fff5f5] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b42318]"
+                      >
+                        Deleted by {entry.case_deleted.deleted_by_role === "faculty" ? "faculty" : "admin"}
+                      </span>
+                    ) : !entry.linked_case_published ? (
                       <span
                         title="Not published yet — only visible to admin"
                         className="rounded-full bg-[#fff7df] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#92702a]"
@@ -292,6 +328,15 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                       </span>
                     ) : null}
                   </div>
+                  {entry.case_deleted ? (
+                    <p className="mt-0.5 text-xs font-medium text-[#b42318]">
+                      Deleted by {entry.case_deleted.deleted_by_name || "a removed user"}
+                      {entry.case_deleted.deleted_by_role
+                        ? ` (${roleLabel(entry.case_deleted.deleted_by_role)})`
+                        : ""}{" "}
+                      on {formatDate(entry.case_deleted.deleted_at)}
+                    </p>
+                  ) : null}
                   {entry.brief ? (
                     <p className="mt-0.5 line-clamp-1 text-xs text-[#6b7280]">{entry.brief}</p>
                   ) : null}
@@ -312,7 +357,17 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                   <span className="block text-xs text-[#6b7280]">{formatDate(entry.created_at)}</span>
                 </span>
                 <div className="flex items-center justify-end gap-1.5">
-                  {entry.linked_case_id && entry.linked_case_published ? (
+                  {entry.case_deleted ? (
+                    canDelete(entry) ? (
+                      <button type="button" title="Restore this case to its creator's Case Library"
+                        onClick={() => void handleRestore(entry)}
+                        disabled={restoringId === entry.id}
+                        className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs disabled:opacity-60`}>
+                        <RotateCcw size={13} aria-hidden="true" />
+                        {restoringId === entry.id ? "Restoring…" : "Restore"}
+                      </button>
+                    ) : null
+                  ) : entry.linked_case_id && entry.linked_case_published ? (
                     <button type="button" title="Assign" onClick={() => setAssigning(entry)}
                       className={`${t.primaryBtn} !px-3.5 !py-2 whitespace-nowrap text-xs`}>
                       <Send size={13} aria-hidden="true" /> Assign
@@ -351,7 +406,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
                         <Download size={16} />
                       </button>
                     ) : null}
-                    {canDelete() ? (
+                    {canDelete(entry) ? (
                       <button type="button" title="Delete" onClick={() => void handleDelete(entry)}
                         className="rounded-md p-2 text-[#b42318] transition hover:bg-[#fff5f5]">
                         <Trash2 size={16} />

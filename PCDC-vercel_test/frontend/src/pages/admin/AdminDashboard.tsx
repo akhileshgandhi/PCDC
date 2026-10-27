@@ -4,6 +4,7 @@ import {
   FileUp,
   Settings,
   ShieldCheck,
+  UserCheck,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -14,6 +15,7 @@ import {
   getAdminDashboardSummary,
   type AdminDashboardSummary,
 } from "../../api/admin"
+import { usePendingTeachingCount } from "../../hooks/usePendingTeachingCount"
 import AdminLayout from "../../layouts/AdminLayout"
 import { getCurrentUser } from "../../utils/auth"
 
@@ -55,6 +57,8 @@ const quickLinks = [
 export default function AdminDashboard() {
   const [summary, setSummary] = useState<AdminDashboardSummary>(defaultSummary)
   const [isLoading, setIsLoading] = useState(true)
+  // Live (polled) so a new faculty request shows here within a minute.
+  const pendingApprovals = usePendingTeachingCount()
   const [error, setError] = useState("")
   const currentUser = getCurrentUser()
   const firstName = currentUser?.name?.split(" ")[0] ?? "Admin"
@@ -137,7 +141,7 @@ export default function AdminDashboard() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total Users"
             value={summary.total_users}
@@ -159,6 +163,15 @@ export default function AdminDashboard() {
             icon={FileUp}
             isLoading={isLoading}
             description="Case studies uploaded for the library that are still in draft or awaiting your review."
+          />
+          <SummaryCard
+            label="Pending Teaching Approvals"
+            value={pendingApprovals ?? summary.pending_teaching_approvals ?? 0}
+            icon={UserCheck}
+            isLoading={isLoading && pendingApprovals === null}
+            description="Faculty teaching selections waiting for your approval. Updates automatically."
+            to="/admin/people/teaching-approvals"
+            linkLabel="Review approvals"
           />
         </section>
 

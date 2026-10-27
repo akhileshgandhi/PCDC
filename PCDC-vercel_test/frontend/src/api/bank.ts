@@ -18,7 +18,17 @@ export interface BankEntry {
   has_attachment: boolean
   attachment_name: string | null
   has_full_case: boolean
+  /** List only: false when this admin may not delete it (Institute Admin scope). */
+  can_delete?: boolean
+  /** Admin only: the case behind this entry was deleted from a Case Library. */
+  case_deleted?: BankCaseDeleted | null
   created_at: string
+}
+
+export interface BankCaseDeleted {
+  deleted_by_name: string | null
+  deleted_by_role: string | null
+  deleted_at: string
 }
 
 export interface BankEntryDetail extends BankEntry {
@@ -106,6 +116,11 @@ export async function getBankAttachment(id: number) {
 
 export async function publishBankEntry(id: number, payload: BankPublishPayload) {
   const response = await api.post<BankPublishResult>(`/bank/${id}/publish`, payload)
+  return response.data
+}
+
+export async function restoreBankEntryCase(id: number) {
+  const response = await api.post<{ status: string; case_id: number; title: string }>(`/bank/${id}/restore-case`)
   return response.data
 }
 

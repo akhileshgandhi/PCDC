@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -20,9 +20,11 @@ from services.admin.scope import (
     course_in_scope_sql,
     ensure_section_in_scope,
     is_admin_role,
+    user_in_scope_sql,
 )
+from services.admin.teaching_alerts import notify_pending_teaching
 from services.auth.service import get_current_user, hash_password
-from services.bank.service import release_used_entries, upsert_ai_bank_entry
+from services.bank.service import archive_deleted_case, release_used_entries, upsert_ai_bank_entry
 from shared.cache import cache_delete_prefix, cache_get, cache_set
 from shared.database import SessionLocal, get_db
 from shared.llm import (
@@ -1028,6 +1030,47 @@ def get_case_row_for_mutation(db: Session, case_id: int, current_user: Dict[str,
     return row
 
 
+def case_delete_owner_ids(db: Session, current_user: Dict[str, Any]) -> Optional[set]:
+    """Whose cases this user may delete (None = any case):
+    - faculty: only the cases they created themselves;
+    - Central Admin / unrestricted admin: every case;
+    - Institute Admin: cases created by faculty of their institutes (and
+      their own)."""
+    if current_user["role"] not in ("admin", "superadmin"):
+        return {current_user["id"]}
+    scope = admin_scope(current_user)
+    if scope is None:
+        return None
+    rows = db.execute(
+        text(f"SELECT u.id FROM users u WHERE u.role = 'faculty' AND {user_in_scope_sql('u')}"),
+        {"scope_ids": scope},
+    ).fetchall()
+    return {current_user["id"], *(row.id for row in rows)}
+
+
+def ensure_can_delete_case(db: Session, current_user: Dict[str, Any], owner_id: Optional[int]) -> None:
+    allowed = case_delete_owner_ids(db, current_user)
+    if allowed is None or owner_id in allowed:
+        return
+    if current_user["role"] in ("admin", "superadmin"):
+        detail = "You can only delete case studies created by your institute's faculty"
+    else:
+        detail = "You can only delete case studies you created"
+    raise HTTPException(status_code=403, detail=detail)
+
+
+def get_case_row_for_delete(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
+    require_faculty(current_user)
+    row = db.execute(
+        text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
+        {"case_id": case_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case study not found")
+    ensure_can_delete_case(db, current_user, row.created_by)
+    return row
+
+
 def get_case_row_for_publish(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
     """Admin can publish any case; faculty can publish only their own. Faculty
     can edit their own case while it's a draft (get_case_row_for_draft_edit),
@@ -1587,6 +1630,7 @@ def faculty_cases(
                 cs.estimated_minutes,
                 cs.status,
                 cs.evaluation_rubric,
+                cs.created_by,
                 cs.created_at,
                 cs.updated_at,
                 COUNT(csa.id) AS attempts_count
@@ -1598,6 +1642,7 @@ def faculty_cases(
         """),
         params,
     ).fetchall()
+    deletable_owners = case_delete_owner_ids(db, current_user)
 
     return [
         {
@@ -1610,6 +1655,7 @@ def faculty_cases(
             "status": row.status,
             "attempts_count": row.attempts_count,
             "rubric_exists": bool(row.evaluation_rubric),
+            "can_delete": deletable_owners is None or row.created_by in deletable_owners,
             "created_at": str(row.created_at),
             "updated_at": str(row.updated_at),
         }
@@ -2740,7 +2786,10 @@ def delete_faculty_case(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    row = get_case_row_for_mutation(db, case_id, current_user)
+    row = get_case_row_for_delete(db, case_id, current_user)
+    # Keep a copy so the case stays visible in the admin Case Bank as
+    # "Deleted by …" and an admin can restore it.
+    archive_deleted_case(db, case_id, current_user["id"])
     delete_case_and_dependents(db, case_id)
     db.commit()
     return {"status": "deleted", "id": case_id, "title": row.title}
@@ -4334,9 +4383,19 @@ def get_faculty_teaching(
     }
 
 
+def _alert_base_url(request: Request) -> str:
+    """Admin-facing links point at the frontend the faculty is using (the
+    request Origin), like invite emails; APP_BASE_URL when there is none."""
+    from shared.email import app_base_url
+
+    return (request.headers.get("origin") or "").rstrip("/") or app_base_url()
+
+
 @faculty_router.post("/teaching")
 def add_faculty_teaching(
     data: FacultyTeachingSelect,
+    request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -4367,6 +4426,10 @@ def add_faculty_teaching(
         {"f": fid, "s": data.section_id, "sub": data.subject.strip(), "status": status},
     )
     db.commit()
+    if status == "pending":
+        notify_pending_teaching(
+            db, fid, [(data.section_id, data.subject.strip())], background_tasks, _alert_base_url(request)
+        )
     return {"status": status}
 
 
@@ -4382,6 +4445,8 @@ class FacultyTeachingBulk(BaseModel):
 @faculty_router.post("/teaching/bulk")
 def add_faculty_teaching_bulk(
     data: FacultyTeachingBulk,
+    request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -4391,6 +4456,7 @@ def add_faculty_teaching_bulk(
     status = "pending" if _faculty_approval_required(db) else "active"
     added = 0
     skipped = 0
+    new_pending: List[tuple] = []
     for item in data.items:
         subject = (item.subject or "").strip()
         if not subject:
@@ -4418,7 +4484,10 @@ def add_faculty_teaching_bulk(
             {"f": fid, "s": item.section_id, "sub": subject, "status": status},
         )
         added += 1
+        new_pending.append((item.section_id, subject))
     db.commit()
+    if status == "pending":
+        notify_pending_teaching(db, fid, new_pending, background_tasks, _alert_base_url(request))
     return {"status": status, "added": added, "skipped": skipped}
 
 

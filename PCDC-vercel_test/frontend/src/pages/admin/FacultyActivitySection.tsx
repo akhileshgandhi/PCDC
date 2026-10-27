@@ -4,8 +4,10 @@ import {
   FilePlus2,
   Layers,
   LogIn,
+  RotateCcw,
   Send,
   Settings2,
+  Trash2,
   UserCheck,
   Users,
 } from "lucide-react"
@@ -35,6 +37,8 @@ const TIMELINE_ICONS: Record<string, typeof LogIn> = {
   login: LogIn,
   case_created: FilePlus2,
   case_updated: ClipboardList,
+  case_deleted: Trash2,
+  case_restored: RotateCcw,
   case_assigned_section: Send,
   case_assigned_student: UserCheck,
   bank_contribution: Layers,
@@ -119,7 +123,9 @@ export default function FacultyActivitySection({ facultyId }: { facultyId: numbe
           <Stat
             label="Case studies"
             value={summary.cases_total}
-            hint={`${summary.cases_published} published · ${summary.cases_draft} draft`}
+            hint={`${summary.cases_published} published · ${summary.cases_draft} draft${
+              summary.cases_deleted ? ` · ${summary.cases_deleted} deleted` : ""
+            }`}
           />
           <Stat
             label="Assignments"

@@ -20,6 +20,7 @@ from shared.email import (
     send_email,
 )
 
+from .teaching_alerts import TEACHING_REQUEST_EVENT, pending_teaching_count
 from .scope import (
     admin_scope,
     can_manage_platform,
@@ -459,8 +460,14 @@ def scoped_events_sql() -> str:
     """system_events a scoped admin may see: their own actions, plus actions by
     students/faculty of their institutes."""
     return f"""
-        (e.actor_user_id = :self_id
-         OR e.actor_user_id IN (SELECT u.id FROM users u WHERE {user_in_scope_sql('u')}))
+        (CASE WHEN e.event_type = '{TEACHING_REQUEST_EVENT}'
+              -- Teaching-approval requests belong to one institute: only
+              -- that institute's admins see them.
+              THEN COALESCE(CAST(CAST(e.metadata AS jsonb) ->> 'institution_id' AS INTEGER), -1)
+                   = ANY(CAST(:scope_ids AS INTEGER[]))
+              ELSE (e.actor_user_id = :self_id
+                    OR e.actor_user_id IN (SELECT u.id FROM users u WHERE {user_in_scope_sql('u')}))
+         END)
     """
 
 
@@ -517,6 +524,12 @@ def admin_dashboard_summary(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_admin(current_user)
+    summary = _admin_dashboard_summary_cached(db, current_user)
+    # Live, never cached: admins must see a new approval request right away.
+    return {**summary, "pending_teaching_approvals": pending_teaching_count(db, current_user)}
+
+
+def _admin_dashboard_summary_cached(db: Session, current_user: Dict[str, Any]) -> Dict[str, Any]:
     scope = admin_scope(current_user)
     # One cache entry per scope so a scoped admin never gets another
     # institute's (or the platform-wide) numbers.
@@ -1682,6 +1695,16 @@ def get_teaching_approvals(
     }
 
 
+@admin_router.get("/teaching-approvals/pending-count")
+def get_pending_teaching_count(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Live pending count for the sidebar badge (same scope as the list)."""
+    require_admin(current_user)
+    return {"pending": pending_teaching_count(db, current_user)}
+
+
 @admin_router.post("/teaching-approvals/{selection_id}/approve")
 def approve_teaching_selection(
     selection_id: int,
@@ -1832,6 +1855,8 @@ def get_admin_faculty_activity(
                 (SELECT COUNT(*) FROM case_studies WHERE created_by = :fid) AS cases_total,
                 (SELECT COUNT(*) FROM case_studies WHERE created_by = :fid AND status = 'published') AS cases_published,
                 (SELECT COUNT(*) FROM case_studies WHERE created_by = :fid AND status = 'draft') AS cases_draft,
+                (SELECT COUNT(*) FROM deleted_case_studies
+                  WHERE created_by = :fid AND restored_at IS NULL) AS cases_deleted,
                 (SELECT COUNT(*) FROM case_study_bank WHERE created_by = :fid) AS bank_items,
                 (SELECT COUNT(*) FROM case_section_assignments WHERE assigned_by = :fid) AS section_assignments,
                 (SELECT COUNT(*) FROM assigned_cases
@@ -1934,6 +1959,7 @@ def get_admin_faculty_activity(
             "cases_total": int(summary.cases_total or 0),
             "cases_published": int(summary.cases_published or 0),
             "cases_draft": int(summary.cases_draft or 0),
+            "cases_deleted": int(summary.cases_deleted or 0),
             "bank_items": int(summary.bank_items or 0),
             "section_assignments": int(summary.section_assignments or 0),
             "student_assignments": int(summary.student_assignments or 0),
@@ -2063,6 +2089,19 @@ def get_admin_faculty_timeline(
                 LEFT JOIN students s ON s.id = ac.student_id
                 LEFT JOIN users u ON u.id = s.user_id
                 WHERE ac.assigned_by = :fid AND ac.section_assignment_id IS NULL
+
+                UNION ALL
+                SELECT 'case_deleted', 'Deleted case study', d.title, NULL, d.deleted_at
+                FROM deleted_case_studies d WHERE d.deleted_by = :fid
+
+                UNION ALL
+                SELECT 'case_deleted', 'Case study deleted by admin', d.title, NULL, d.deleted_at
+                FROM deleted_case_studies d
+                WHERE d.created_by = :fid AND d.deleted_by IS DISTINCT FROM :fid
+
+                UNION ALL
+                SELECT 'case_restored', 'Case study restored by admin', d.title, d.case_id, d.restored_at
+                FROM deleted_case_studies d WHERE d.created_by = :fid AND d.restored_at IS NOT NULL
 
                 UNION ALL
                 SELECT 'bank_contribution', 'Added to Case Bank', b.title, NULL, b.created_at
