@@ -23,6 +23,7 @@ from services.admin.scope import (
     user_in_scope_sql,
 )
 from services.admin.teaching_alerts import notify_pending_teaching
+from services.dashboard_insights import faculty_dashboard_insights
 from services.auth.service import get_current_user, hash_password
 from services.bank.service import archive_deleted_case, release_used_entries, upsert_ai_bank_entry
 from shared.cache import cache_delete_prefix, cache_get, cache_set
@@ -989,7 +990,10 @@ def get_owned_case_row(db: Session, case_id: int, current_user: Dict[str, Any]) 
 
 
 def get_case_row_for_read(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
-    """Admin can read any case; faculty can only read their own (any status)."""
+    """Admin can read any case. Faculty can read their own case (any status)
+    and, view-only, another faculty's case once it's published — the same
+    cases the Case Study Bank lists for them. Edit/publish/delete stay
+    owner-only (see get_case_row_for_draft_edit and friends)."""
     if current_user["role"] in ("admin", "superadmin"):
         row = db.execute(
             text(f"SELECT {CASE_EDITOR_COLUMNS} FROM case_studies WHERE id = :case_id"),
@@ -998,7 +1002,17 @@ def get_case_row_for_read(db: Session, case_id: int, current_user: Dict[str, Any
         if not row:
             raise HTTPException(status_code=404, detail="Case study not found")
         return row
-    return get_owned_case_row(db, case_id, current_user)
+    row = db.execute(
+        text(f"""
+            SELECT {CASE_EDITOR_COLUMNS}
+            FROM case_studies
+            WHERE id = :case_id AND (created_by = :faculty_id OR status = 'published')
+        """),
+        {"case_id": case_id, "faculty_id": current_user["id"]},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Case study not found")
+    return row
 
 
 def get_case_row_for_draft_edit(db: Session, case_id: int, current_user: Dict[str, Any]) -> Any:
@@ -1561,6 +1575,15 @@ def dashboard_summary(
         "pending_reviews": int(pending_reviews),
         "capability_alerts": int(capability_alerts),
     })
+
+
+@faculty_router.get("/dashboard/insights")
+def faculty_dashboard_insights_endpoint(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_faculty(current_user)
+    return faculty_dashboard_insights(db, current_user)
 
 
 @faculty_router.get("/notifications")

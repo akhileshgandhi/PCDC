@@ -15,6 +15,7 @@ import {
   getAdminDashboardSummary,
   type AdminDashboardSummary,
 } from "../../api/admin"
+import AdminInsights from "../../components/dashboard/AdminInsights"
 import { usePendingTeachingCount } from "../../hooks/usePendingTeachingCount"
 import AdminLayout from "../../layouts/AdminLayout"
 import { getCurrentUser } from "../../utils/auth"
@@ -174,6 +175,8 @@ export default function AdminDashboard() {
             linkLabel="Review approvals"
           />
         </section>
+
+        <AdminInsights />
 
         <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
           <div className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm">

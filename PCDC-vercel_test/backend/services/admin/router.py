@@ -21,6 +21,7 @@ from shared.email import (
 )
 
 from .teaching_alerts import TEACHING_REQUEST_EVENT, pending_teaching_count
+from services.dashboard_insights import admin_dashboard_insights
 from .scope import (
     admin_scope,
     can_manage_platform,
@@ -527,6 +528,15 @@ def admin_dashboard_summary(
     summary = _admin_dashboard_summary_cached(db, current_user)
     # Live, never cached: admins must see a new approval request right away.
     return {**summary, "pending_teaching_approvals": pending_teaching_count(db, current_user)}
+
+
+@admin_router.get("/dashboard/insights")
+def admin_dashboard_insights_endpoint(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_admin(current_user)
+    return admin_dashboard_insights(db, current_user)
 
 
 def _admin_dashboard_summary_cached(db: Session, current_user: Dict[str, Any]) -> Dict[str, Any]:

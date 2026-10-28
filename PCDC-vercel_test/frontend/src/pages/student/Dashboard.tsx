@@ -32,6 +32,7 @@ import {
   type StudentRecentEvaluation,
 } from "../../api/student"
 import { AISH_NAME, AishIntro } from "../../components/aish/Aish"
+import StudentInsights from "../../components/dashboard/StudentInsights"
 import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
 import { getCurrentUser } from "../../utils/auth"
@@ -266,6 +267,8 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
+
+        <StudentInsights />
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Active Engagements</h2>

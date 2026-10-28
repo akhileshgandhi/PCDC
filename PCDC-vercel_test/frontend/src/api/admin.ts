@@ -270,6 +270,51 @@ export interface AdminDashboardSummary {
   }>
 }
 
+export interface AdminDashboardInsights {
+  attention: {
+    students_without_section: number
+    sections_without_faculty: number
+    overdue_assignments: number
+    ai_flagged_attempts_30d: number
+  }
+  totals: {
+    institutions: number
+    courses: number
+    sections: number
+    students: number
+    faculty: number
+    published_cases: number
+  }
+  /** Last 30 days. */
+  engagement: {
+    cases_assigned: number
+    cases_completed: number
+    attempts_started: number
+    attempts_evaluated: number
+    avg_score_pct: number | null
+    active_students: number
+  }
+  assignment_status: { completed: number; in_progress: number; not_started: number; overdue: number }
+  /** Last 8 weeks, oldest first. */
+  weekly_activity: { week_start: string; attempts_started: number; attempts_evaluated: number }[]
+  breakdown: {
+    group_label: string
+    rows: {
+      id: number
+      name: string
+      students: number
+      attempts_30d: number
+      avg_score_pct: number | null
+      completion_pct: number | null
+    }[]
+  }
+}
+
+export async function getAdminDashboardInsights() {
+  const response = await api.get<AdminDashboardInsights>("/admin/dashboard/insights")
+  return response.data
+}
+
 export async function getAdminDashboardSummary() {
   const response = await api.get<AdminDashboardSummary>("/admin/dashboard/summary")
   return response.data

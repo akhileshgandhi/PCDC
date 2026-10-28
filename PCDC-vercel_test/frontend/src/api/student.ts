@@ -37,6 +37,24 @@ export interface StudentDashboardSummary {
   upcoming_session: StudentUpcomingSession | null
 }
 
+export interface StudentDashboardInsights {
+  progress: {
+    assigned: number
+    completed: number
+    completion_pct: number | null
+    overdue: number
+    due_next_7_days: number
+  }
+  assignment_status: { completed: number; in_progress: number; not_started: number; overdue: number }
+  deadlines: { case_id: number; title: string; due_date: string | null; started: boolean }[]
+  score_trend: { case_id: number; title: string; score_pct: number | null; at: string | null }[]
+}
+
+export async function getStudentDashboardInsights() {
+  const response = await api.get<StudentDashboardInsights>("/student/dashboard/insights")
+  return response.data
+}
+
 export async function getStudentDashboardSummary() {
   const response = await api.get<StudentDashboardSummary>("/student/dashboard/summary")
   return response.data

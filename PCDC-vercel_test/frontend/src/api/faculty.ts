@@ -276,6 +276,44 @@ export async function getFacultyProfile() {
   return response.data
 }
 
+export interface FacultyDashboardInsights {
+  attention: {
+    due_next_7_days: number
+    overdue_submissions: number
+    ai_flagged_attempts: number
+    teaching_pending_approval: number
+  }
+  assignment_status: { completed: number; in_progress: number; not_started: number; overdue: number }
+  /** Last 8 weeks, oldest first. */
+  weekly_submissions: { week_start: string; submissions: number }[]
+  score_distribution: { band: string; attempts: number }[]
+  deadlines: { case_id: number; title: string; due_date: string | null; students: number; completed: number }[]
+  sections: {
+    id: number
+    name: string
+    course_name: string
+    semester_name: string | null
+    students: number
+    avg_score_pct: number | null
+    completion_pct: number | null
+  }[]
+  recent_submissions: {
+    attempt_id: number
+    student_name: string
+    case_title: string
+    status: string
+    score_pct: number | null
+    submitted_at: string | null
+    ai_flagged: boolean
+  }[]
+  students_needing_support: { user_id: number; name: string; avg_score_pct: number | null; evaluated_attempts: number }[]
+}
+
+export async function getFacultyDashboardInsights() {
+  const response = await api.get<FacultyDashboardInsights>("/faculty/dashboard/insights")
+  return response.data
+}
+
 export async function getFacultyDashboardSummary() {
   const response = await api.get<FacultyDashboardSummary>("/faculty/dashboard/summary")
   return response.data

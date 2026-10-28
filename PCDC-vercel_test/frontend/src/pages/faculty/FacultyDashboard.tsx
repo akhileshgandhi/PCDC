@@ -20,6 +20,7 @@ import {
   type FacultyDashboardSummary,
   type FacultySection,
 } from "../../api/faculty"
+import FacultyInsights from "../../components/dashboard/FacultyInsights"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { getCurrentUser } from "../../utils/auth"
 
@@ -206,6 +207,8 @@ export default function FacultyDashboard() {
             to="/faculty/analytics"
           />
         </section>
+
+        <FacultyInsights />
 
         <section id="my-sections" className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm scroll-mt-24">
           <div className="mb-5">

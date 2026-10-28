@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
+from services.dashboard_insights import student_dashboard_insights
 from services.student import capability_engine
 from shared.cache import cache_get, cache_set
 from shared.database import get_db
@@ -205,6 +206,18 @@ def student_dashboard_summary(
         } if upcoming_session_row else None,
     }
     return cache_set(cache_key, result)
+
+
+@student_router.get("/dashboard/insights")
+def student_dashboard_insights_endpoint(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    require_student(current_user)
+    insights = student_dashboard_insights(db, current_user)
+    if insights is None:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    return insights
 
 
 @student_router.get("/dashboard/capabilities")
