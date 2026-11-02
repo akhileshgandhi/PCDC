@@ -111,13 +111,16 @@ def app_base_url() -> str:
     return os.getenv("APP_BASE_URL", "https://pcdc-xi.vercel.app").rstrip("/")
 
 
-def password_reset_email(name: str, email: str, reset_url: str) -> tuple[str, str, str]:
-    """Return (subject, text_body, html_body) for a password-reset link."""
+def password_reset_email(
+    name: str, email: str, reset_url: str, expires_in: str = "72 hours"
+) -> tuple[str, str, str]:
+    """Return (subject, text_body, html_body) for a password-reset link.
+    `expires_in` is the human-readable link lifetime shown in the email."""
     subject = "Reset your PCDC Case Studio password"
     text_body = (
         f"Hi {name or 'there'},\n\n"
         "We received a request to reset your PCDC Case Studio password.\n\n"
-        f"Reset it here (link expires in 72 hours):\n  {reset_url}\n\n"
+        f"Reset it here (link expires in {expires_in}):\n  {reset_url}\n\n"
         "If you didn't request this, you can safely ignore this email — your "
         "password won't change.\n\n"
         "Prestige Capability Development Centre\nPCDC Case Studio"
@@ -146,7 +149,7 @@ def password_reset_email(name: str, email: str, reset_url: str) -> tuple[str, st
               </td>
             </tr></table>
             <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#8a97a8;">
-              This link expires in 72 hours. If you didn't request this, ignore this email — your password won't change.
+              This link expires in {expires_in}. If you didn't request this, ignore this email — your password won't change.
             </p>
             <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#98a2b3;word-break:break-all;">
               Button not working? Copy this link:<br />{reset_url}

@@ -26,6 +26,8 @@ export interface AdminUser {
   department_name?: string | null
   institution_name?: string | null
   semester_number?: number | null
+  /** Student's current section (single-user responses only). */
+  section_id?: number | null
 }
 
 export interface AdminUsersResponse {
@@ -840,6 +842,8 @@ export interface AdminAddStudentResult {
   email: string | null
   password: string
   scholar_number: string
+  /** Single add only: whether the set-password email went out (bulk import omits it). */
+  email_sent?: boolean
 }
 
 export async function adminAddStudent(payload: {

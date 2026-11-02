@@ -407,12 +407,19 @@ def fetch_full_user_row(db: Session, user_id: int) -> Any:
                    COALESCE(sub.course_name, NULL) AS course_name,
                    COALESCE(sub.batch_name, NULL) AS batch_name,
                    COALESCE(sub.section_name, NULL) AS section_name,
+                   sub.section_id, sub.semester_number,
+                   sub.department_name, sub.institution_name,
                    COALESCE(fac_sub.sections_teaching, 0) AS sections_teaching
             FROM users u
             LEFT JOIN LATERAL (
-                SELECT c.name AS course_name, b.name AS batch_name, cs.name AS section_name
+                SELECT c.name AS course_name, b.name AS batch_name, cs.name AS section_name,
+                       s.current_section_id AS section_id,
+                       s.current_semester_number AS semester_number,
+                       d.name AS department_name, i.name AS institution_name
                 FROM students s
                 LEFT JOIN courses c ON c.id = s.course_id
+                LEFT JOIN departments d ON d.id = c.department_id
+                LEFT JOIN institutions i ON i.id = d.institution_id
                 LEFT JOIN batches b ON b.id = s.batch_id
                 LEFT JOIN class_sections cs ON cs.id = s.current_section_id
                 WHERE s.user_id = u.id
@@ -454,6 +461,7 @@ def user_response(row: Any) -> Dict[str, Any]:
         "department_name": row.department_name if "department_name" in row_keys else None,
         "institution_name": row.institution_name if "institution_name" in row_keys else None,
         "semester_number": row.semester_number if "semester_number" in row_keys else None,
+        "section_id": row.section_id if "section_id" in row_keys else None,
     }
 
 
@@ -3740,15 +3748,20 @@ class AdminAddStudent(BaseModel):
     temporary_password: Optional[str] = None
 
 
+STUDENT_WELCOME_LINK_TTL_HOURS = 24 * 7  # set-password link in the new-student email
+
+
 @admin_router.post("/students/add", status_code=201)
 def admin_add_student(
     data: AdminAddStudent,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Create a student login and enroll them into a section (admin-driven).
     The initial password is the admin's temporary password if given, else the
-    scholar number; the student is forced to change it on first login."""
+    scholar number; the student is forced to change it on first login. The
+    student is also emailed a link (valid one week) to set their own password."""
     require_admin(current_user)
     ensure_section_in_scope(db, current_user, data.section_id)
     ensure_section(db, data.section_id)
@@ -3756,6 +3769,9 @@ def admin_add_student(
     scholar = data.scholar_number.strip()
     if not name or not scholar:
         raise HTTPException(status_code=400, detail="Name and scholar number are required")
+    email = (data.email or "").strip()
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="A valid email is required for the student")
     # Same rules the student's own change-password screen enforces.
     temporary_password = data.temporary_password or None
     if temporary_password is not None:
@@ -3771,7 +3787,7 @@ def admin_add_student(
 
     try:
         result = _create_and_enroll_student(
-            db, current_user["id"], data.section_id, name, scholar, data.email,
+            db, current_user["id"], data.section_id, name, scholar, email,
             temporary_password=temporary_password,
         )
     except ValueError as exc:
@@ -3783,8 +3799,39 @@ def admin_add_student(
         "student_added_section",
         f"Added student {name} to section {data.section_id}",
     )
+
+    # Same reset-password email and /set-password page as an admin-sent reset,
+    # with a one-week link. A mail failure never undoes the student creation.
+    student_user = db.execute(
+        text("SELECT id FROM users WHERE LOWER(email) = :e AND role = 'student'"),
+        {"e": result["email"]},
+    ).fetchone()
+    raw_token = create_setup_token(
+        db, student_user.id, purpose="reset", ttl_hours=STUDENT_WELCOME_LINK_TTL_HOURS
+    )
     db.commit()
-    return result
+    base = (request.headers.get("origin") or "").rstrip("/") or app_base_url()
+    reset_url = f"{base}/set-password?token={raw_token}"
+    subject, text_body, html_body = password_reset_email(
+        name, result["email"], reset_url, expires_in="7 days"
+    )
+    email_sent = send_email(result["email"], subject, text_body, html_body)
+    db.execute(
+        text("""
+            INSERT INTO notification_log (
+                recipient_user_id, event_type, channel, status, subject, body
+            )
+            VALUES (:recipient_user_id, 'password_reset', 'email', :status, :subject, :body)
+        """),
+        {
+            "recipient_user_id": student_user.id,
+            "status": "sent" if email_sent else "failed",
+            "subject": subject,
+            "body": text_body,
+        },
+    )
+    db.commit()
+    return {**result, "email_sent": email_sent}
 
 
 @admin_router.post("/students/bulk-import")

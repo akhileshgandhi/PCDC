@@ -7,6 +7,8 @@ import type { Coach } from "./CoachCard"
 export interface CoachMessage {
   role: "ai" | "student"
   text: string
+  /** A failed reply, shown as a notice and not sent back as history. */
+  isError?: boolean
 }
 
 export interface SessionHistoryItem {
@@ -21,6 +23,8 @@ interface CoachChatProps {
   sessionHistory: SessionHistoryItem[]
   onSendMessage: (message: string) => void
   onNewSession: () => void
+  /** True while Aish is writing a reply. */
+  isSending?: boolean
 }
 
 export default function CoachChat({
@@ -29,17 +33,18 @@ export default function CoachChat({
   sessionHistory,
   onSendMessage,
   onNewSession,
+  isSending = false,
 }: CoachChatProps) {
   const [draft, setDraft] = useState("")
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
-  }, [messages])
+  }, [messages, isSending])
 
   function handleSend() {
     const trimmed = draft.trim()
-    if (!trimmed) return
+    if (!trimmed || isSending) return
     onSendMessage(trimmed)
     setDraft("")
   }
@@ -84,10 +89,12 @@ export default function CoachChat({
           >
             {message.role === "ai" ? <AishAvatar size={32} className="mt-1" /> : null}
             <div
-              className={`max-w-[82%] rounded-xl px-4 py-3 text-sm leading-6 ${
+              className={`max-w-[82%] whitespace-pre-line rounded-xl px-4 py-3 text-sm leading-6 ${
                 message.role === "student"
                   ? "bg-[#0B1D3A] text-white"
-                  : "border border-[#E6EBEB] bg-white text-[#374151]"
+                  : message.isError
+                    ? "border border-[#F3C4C4] bg-[#FFF5F5] text-[#B42318]"
+                    : "border border-[#E6EBEB] bg-white text-[#374151]"
               }`}
             >
               <p className="mb-1 text-xs font-semibold uppercase opacity-70">
@@ -97,6 +104,14 @@ export default function CoachChat({
             </div>
           </div>
         ))}
+        {isSending ? (
+          <div className="flex items-start gap-2" role="status" aria-live="polite">
+            <AishAvatar size={32} className="mt-1" />
+            <div className="rounded-xl border border-[#E6EBEB] bg-white px-4 py-3 text-sm text-[#6B7280]">
+              {AISH_NAME} is typing…
+            </div>
+          </div>
+        ) : null}
         <div ref={messagesEndRef} />
       </div>
 
@@ -113,7 +128,8 @@ export default function CoachChat({
         <button
           type="button"
           onClick={handleSend}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C9A227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
+          disabled={isSending || !draft.trim()}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C9A227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#B08D20] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Send
           <Send size={16} aria-hidden="true" />

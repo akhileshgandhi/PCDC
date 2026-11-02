@@ -195,8 +195,14 @@ export default function AdminUserDetail() {
                       label="Admission Year"
                       value={user.admission_year ? String(user.admission_year) : null}
                     />
+                    <DetailField label="Institute" value={user.institution_name} />
+                    <DetailField label="Program" value={user.department_name} />
                     <DetailField label="Specialization" value={user.course_name} />
                     <DetailField label="Batch" value={user.batch_name} />
+                    <DetailField
+                      label="Semester"
+                      value={user.semester_number ? `Semester ${user.semester_number}` : null}
+                    />
                     <DetailField label="Section" value={user.section_name} />
                   </>
                 ) : null}

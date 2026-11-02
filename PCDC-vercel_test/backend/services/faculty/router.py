@@ -483,11 +483,14 @@ TOTAL_MARKS = 10
 
 
 def normalize_case_timing(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Rapid fire time is set by faculty/admin like the other timings;
+    RAPID_FIRE_TIME_MINUTES is only the default when it's left empty."""
     data = data or {}
+    rapid_fire = int_value(data.get("rapid_fire_time_minutes"))
     return {
         "reading_time_minutes": int_value(data.get("reading_time_minutes")),
         "answer_writing_time_minutes": int_value(data.get("answer_writing_time_minutes")),
-        "rapid_fire_time_minutes": RAPID_FIRE_TIME_MINUTES,
+        "rapid_fire_time_minutes": rapid_fire if rapid_fire and rapid_fire > 0 else RAPID_FIRE_TIME_MINUTES,
     }
 
 
@@ -3318,7 +3321,7 @@ def _apply_case_update(
         else {
             "reading_time_minutes": existing_values.get("reading_time_minutes"),
             "answer_writing_time_minutes": existing_values.get("answer_writing_time_minutes"),
-            "rapid_fire_time_minutes": RAPID_FIRE_TIME_MINUTES,
+            "rapid_fire_time_minutes": existing_values.get("rapid_fire_time_minutes") or RAPID_FIRE_TIME_MINUTES,
         }
     )
     marks = normalize_case_marks(data.marks)

@@ -205,10 +205,13 @@ def _hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def create_setup_token(db: Session, user_id: int, purpose: str = "invite") -> str:
+def create_setup_token(
+    db: Session, user_id: int, purpose: str = "invite", ttl_hours: Optional[int] = None
+) -> str:
     """Create a single-use set-password token for a user. Invalidates any
     prior unused tokens for the same user + purpose. Returns the RAW token
-    (only the hash is stored). Caller is responsible for committing."""
+    (only the hash is stored). Caller is responsible for committing.
+    `ttl_hours` overrides the purpose's default lifetime."""
     db.execute(
         text(
             """
@@ -220,7 +223,8 @@ def create_setup_token(db: Session, user_id: int, purpose: str = "invite") -> st
         {"user_id": user_id, "purpose": purpose},
     )
     raw = secrets.token_urlsafe(32)
-    ttl_hours = INVITE_TOKEN_TTL_HOURS if purpose == "invite" else SETUP_TOKEN_TTL_HOURS
+    if ttl_hours is None:
+        ttl_hours = INVITE_TOKEN_TTL_HOURS if purpose == "invite" else SETUP_TOKEN_TTL_HOURS
     db.execute(
         text(
             """
@@ -279,7 +283,8 @@ def set_password_with_token(db: Session, raw_token: str, password: str) -> dict:
         text(
             """
             UPDATE users
-            SET password_hash = :hash, status = 'active', updated_at = NOW()
+            SET password_hash = :hash, status = 'active', must_change_password = FALSE,
+                updated_at = NOW()
             WHERE id = :id
             """
         ),

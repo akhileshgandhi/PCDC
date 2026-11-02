@@ -17,6 +17,7 @@ export default function ChangePassword() {
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
@@ -107,14 +108,24 @@ export default function ChangePassword() {
           <label htmlFor="confirm" className="block text-sm font-medium text-slate-700">
             Confirm password
           </label>
-          <input
-            id="confirm"
-            type={showPassword ? "text" : "password"}
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
-            autoComplete="new-password"
-          />
+          <div className={field}>
+            <input
+              id="confirm"
+              type={showConfirm ? "text" : "password"}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm outline-none"
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              className="grid w-11 place-items-center rounded-r-md text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+              aria-label={showConfirm ? "Hide confirm password" : "Show confirm password"}
+            >
+              {showConfirm ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+            </button>
+          </div>
         </div>
 
         {error ? (

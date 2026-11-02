@@ -15,13 +15,17 @@ import { Link, useSearchParams } from "react-router-dom"
 
 import {
   deleteAdminUser,
+  enrollAdminSectionStudents,
   getAdminDepartments,
+  getAdminSections,
+  getAdminUser,
   getAdminUsers,
   resetAdminUserPassword,
   updateAdminUser,
   updateAdminUserRole,
   updateAdminUserStatus,
   type AdminDepartment,
+  type AdminSectionListItem,
   type AdminUser,
   type AdminUserRole,
   type AdminUserStatus,
@@ -30,6 +34,7 @@ import ConfirmDialog from "../../components/ConfirmDialog"
 import { useAdminScope } from "../../hooks/useAdminScope"
 import AdminLayout from "../../layouts/AdminLayout"
 import { DESIGNATION_OPTIONS, TITLE_OPTIONS } from "../../constants/designations"
+import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "./StudentPlacementFields"
 
 const roles: Array<{ label: string; value: "" | AdminUserRole }> = [
   { label: "All Roles", value: "" },
@@ -589,17 +594,47 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [departments, setDepartments] = useState<AdminDepartment[]>([])
+  const isStudent = user.role === "student"
+  // A student's Institute / Program come from the section they're enrolled in;
+  // changing them here moves the student to the chosen section.
+  const [sections, setSections] = useState<AdminSectionListItem[]>([])
+  const [currentSectionId, setCurrentSectionId] = useState(
+    user.section_id ? String(user.section_id) : "",
+  )
+  const [placement, setPlacement] = useState<StudentPlacement>(
+    user.section_id ? { ...emptyPlacement, sectionId: String(user.section_id) } : emptyPlacement,
+  )
 
   useEffect(() => {
     getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
-  }, [])
+    if (!isStudent) return
+    getAdminSections().then((d) => setSections(d.items)).catch(() => undefined)
+    // List rows don't carry the current section; the detail response does.
+    if (user.section_id === undefined) {
+      getAdminUser(user.id)
+        .then((detail) => {
+          if (!detail.section_id) return
+          setCurrentSectionId(String(detail.section_id))
+          setPlacement({ ...emptyPlacement, sectionId: String(detail.section_id) })
+        })
+        .catch(() => undefined)
+    }
+  }, [isStudent, user.id, user.section_id])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const sectionChanged = isStudent && placement.sectionId !== currentSectionId
+    if (sectionChanged && !placement.sectionId) {
+      setError("Choose a section in the selected program.")
+      return
+    }
     setIsSaving(true)
     setError("")
     try {
-      const updated = await updateAdminUser(user.id, {
+      if (sectionChanged) {
+        await enrollAdminSectionStudents(Number(placement.sectionId), [user.id])
+      }
+      const payload = {
         name: name !== user.name ? name : undefined,
         title: title !== (user.title || "") ? title : undefined,
         admission_year:
@@ -618,7 +653,13 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
               : 0
             : undefined,
         college_id: collegeId !== (user.college_id || "") ? collegeId : undefined,
-      })
+      }
+      const hasProfileChanges = Object.values(payload).some((v) => v !== undefined)
+      // The profile endpoint rejects an empty update, so a section-only change
+      // just reloads the user to pick up the new Institute / Program.
+      const updated = hasProfileChanges
+        ? await updateAdminUser(user.id, payload)
+        : await getAdminUser(user.id)
       onSaved(updated)
     } catch {
       setError("Unable to update user.")
@@ -728,23 +769,18 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
 
             {user.role === "student" ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Program">
-                  <select
-                    value={department}
-                    onChange={(event) => setDepartment(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  >
-                    <option value="">Select program</option>
-                    {department && !departments.some((d) => d.name === department) ? (
-                      <option value={department}>{department} (unlisted)</option>
-                    ) : null}
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <StudentPlacementFields
+                  sections={sections}
+                  value={placement}
+                  onChange={setPlacement}
+                  fieldClass="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  labelClass="grid gap-2 text-sm font-semibold text-[#17202a]"
+                />
+                {placement.sectionId !== currentSectionId && placement.sectionId ? (
+                  <p className="text-xs text-[#92702a] sm:col-span-2">
+                    Saving moves this student to the selected section. Their past attempts and results are kept.
+                  </p>
+                ) : null}
                 <Field label="College ID">
                   <input
                     value={collegeId}

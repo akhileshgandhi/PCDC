@@ -11,12 +11,14 @@ import {
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
 import AdminStudentList from "./AdminStudentList"
+import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "./StudentPlacementFields"
 
 export default function AdminStudents() {
   const [sections, setSections] = useState<AdminSectionListItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [sectionId, setSectionId] = useState("")
+  const [placement, setPlacement] = useState<StudentPlacement>(emptyPlacement)
+  const sectionId = placement.sectionId
   const [name, setName] = useState("")
   const [scholar, setScholar] = useState("")
   const [email, setEmail] = useState("")
@@ -46,8 +48,12 @@ export default function AdminStudents() {
   )
 
   async function submit() {
-    if (!sectionId || !name.trim() || !scholar.trim()) {
-      setError("Section, name and scholar number are required.")
+    if (!sectionId || !name.trim() || !scholar.trim() || !email.trim()) {
+      setError("Institute, program, section, name, scholar number and email are required.")
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Enter a valid email address.")
       return
     }
     if (tempPassword && tempPassword.length < 8) {
@@ -65,7 +71,7 @@ export default function AdminStudents() {
         section_id: Number(sectionId),
         name: name.trim(),
         scholar_number: scholar.trim(),
-        email: email.trim() || undefined,
+        email: email.trim(),
         temporary_password: tempPassword || undefined,
       })
       setAdded((a) => [result, ...a])
@@ -129,10 +135,6 @@ export default function AdminStudents() {
     "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
   const label = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
 
-  function sectionLabel(s: AdminSectionListItem) {
-    return `${s.name} · ${s.course_name} · Sem ${s.semester_number} · ${s.batch_name} (${s.student_count})`
-  }
-
   return (
     <AdminLayout>
       <div className="space-y-5">
@@ -163,30 +165,20 @@ export default function AdminStudents() {
             <section className="rounded-lg border border-[#eef2f7] bg-white p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-[#17202a]">Add a student</h2>
               <p className="mt-1 text-sm text-[#667085]">
-                A login is created and the student is enrolled into the chosen section.
+                Choose the institute and program, then the section. A login is created and the student is enrolled into that section.
               </p>
               <div className="mt-4 grid gap-4">
-                <label className={label}>
-                  <span>Section <span className="text-[#d92d20]">*</span></span>
-                  <select
-                    // Some browsers don't repaint a closed <select>'s displayed
-                    // label when only an <option>'s text content changes (the
-                    // student count in sectionLabel) without the value itself
-                    // changing. Keying on the counts forces a clean remount so
-                    // the visible label is never stale after adding students.
-                    key={sections.map((s) => `${s.id}:${s.student_count}`).join(",")}
-                    className={field}
-                    value={sectionId}
-                    onChange={(e) => setSectionId(e.target.value)}
-                  >
-                    <option value="">Select section</option>
-                    {sections.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {sectionLabel(s)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <StudentPlacementFields
+                  sections={sections}
+                  value={placement}
+                  onChange={setPlacement}
+                  fieldClass={field}
+                  labelClass={label}
+                  // Some browsers don't repaint a closed <select>'s displayed
+                  // label when only an <option>'s text changes (the student
+                  // count), so key on the counts to force a clean remount.
+                  sectionKey={sections.map((s) => `${s.id}:${s.student_count}`).join(",")}
+                />
                 <label className={label}>
                   <span>Full name <span className="text-[#d92d20]">*</span></span>
                   <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Riya Sharma" />
@@ -196,8 +188,17 @@ export default function AdminStudents() {
                   <input className={field} value={scholar} onChange={(e) => setScholar(e.target.value)} placeholder="PIMR2024001" />
                 </label>
                 <label className={label}>
-                  Email (optional)
-                  <input className={field} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional — students log in with their scholar number" />
+                  <span>Email <span className="text-[#d92d20]">*</span></span>
+                  <input
+                    type="email"
+                    className={field}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="riya.sharma@example.com"
+                  />
+                  <span className="text-xs font-normal text-[#667085]">
+                    The student gets an email with a link to set their password. The link is valid for 7 days.
+                  </span>
                 </label>
                 <label className={label}>
                   Temporary password (optional)
@@ -313,6 +314,13 @@ export default function AdminStudents() {
                       {s.email ? (
                         <p className="text-sm text-[#475467]">
                           Email: <span className="font-medium text-[#17202a]">{s.email}</span>
+                        </p>
+                      ) : null}
+                      {s.email_sent === true ? (
+                        <p className="text-xs font-medium text-[#067647]">Set-password link emailed (valid 7 days).</p>
+                      ) : s.email_sent === false ? (
+                        <p className="text-xs font-medium text-[#b42318]">
+                          The email could not be sent. Share the temporary password, or send a reset link from the student's record.
                         </p>
                       ) : null}
                     </div>
