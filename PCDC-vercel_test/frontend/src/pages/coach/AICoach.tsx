@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react"
+import { isAxiosError } from "axios"
+import { useRef, useState } from "react"
+
+import { sendCoachMessage } from "../../api/coach"
 
 import { AISH_GREETING, AISH_NAME, AishIntro } from "../../components/aish/Aish"
 import CoachCard, { type Coach } from "../../components/coach/CoachCard"
@@ -86,21 +89,13 @@ const coaches: Coach[] = [
 // Every coach is Aish wearing a different hat, so each opening line starts
 // with "Hi, I am Aish!" and names the coach's focus.
 const openingMessages: Record<string, string> = {
-  capability: `${AISH_GREETING} As your Capability Coach, I focus on analytical, critical and strategic thinking. I've reviewed your capability scores. Your Strategic Thinking dipped this month. Shall we explore why and work on strengthening it?`,
+  capability: `${AISH_GREETING} As your Capability Coach, I focus on analytical, critical and strategic thinking. I can see your capability scores and case results. Which kind of thinking would you like to sharpen first - analytical, critical or strategic?`,
   leadership: `${AISH_GREETING} As your Leadership Coach, I focus on team management, influence and conflict resolution. What leadership challenge are you currently facing - at college, in a project, or in life?`,
   communication: `${AISH_GREETING} As your Communication Coach, I focus on clarity, structured arguments and executive presence. What's one situation where you felt your communication fell short?`,
-  career: `${AISH_GREETING} As your Career Coach, I help you explore pathways and align your development to your goals. Your career pathway shows Management Consulting. What excites you most about that path - and what worries you?`,
+  career: `${AISH_GREETING} As your Career Coach, I help you explore pathways and align your development to your goals. Which roles or industries are you considering right now - and what excites or worries you about them?`,
   startup: `${AISH_GREETING} As your Startup Mentor, I help you spot opportunities, design business models and think like a founder. What's a problem you've noticed recently that nobody seems to be solving?`,
   reflection: `${AISH_GREETING} As your Reflection Coach, I guide you to extract learning from your case studies. Which of your recent case studies felt most challenging, and why?`,
 }
-
-const mockAIResponses = [
-  "Interesting perspective. Have you considered how the shift to premium products affects your distribution strategy? What data would you need to validate this?",
-  "You're on the right track. Let me push you further - if you fix distribution alone, how does that address the pricing gap with Chinese OEMs?",
-  "Good thinking. Now consider this: what happens if the competitor responds by dropping prices by 15%? How does your strategy hold up?",
-  "I'd challenge your assumption about customer loyalty here. What evidence do you have that brand recall is still strong in these markets?",
-  "Solid analysis. What's your recommended first move in the next 90 days, and why that over alternatives?",
-]
 
 const sessionHistory: SessionHistoryItem[] = [
   { date: "Jun 20, 2025", coach: `${AISH_NAME} · Capability Coach`, messages: 12 },
@@ -116,27 +111,51 @@ export default function AICoach() {
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null)
   const [messages, setMessages] = useState<CoachMessage[]>([])
 
-  const responseIndex = useMemo(() => {
-    const studentCount = messages.filter((message) => message.role === "student").length
-    return studentCount % mockAIResponses.length
-  }, [messages])
+  const [isSending, setIsSending] = useState(false)
+  // Bumped on every new session / coach switch so a late reply never lands
+  // in a different conversation.
+  const sessionRef = useRef(0)
 
   function handleSelectCoach(coach: Coach) {
+    sessionRef.current += 1
+    setIsSending(false)
     setSelectedCoach(coach)
     setMessages(messagesForCoach(coach))
   }
 
-  function handleSendMessage(message: string) {
-    const response = mockAIResponses[responseIndex]
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      { role: "student", text: message },
-      { role: "ai", text: response },
-    ])
+  async function handleSendMessage(message: string) {
+    if (!selectedCoach || isSending) return
+    const coachId = selectedCoach.id
+    const session = sessionRef.current
+    const history = messages
+      .filter((m) => !m.isError)
+      .map(({ role, text }) => ({ role, text }))
+    setMessages((current) => [...current, { role: "student", text: message }])
+    setIsSending(true)
+    try {
+      const { reply } = await sendCoachMessage(coachId, message, history)
+      if (session !== sessionRef.current) return
+      setMessages((current) => [...current, { role: "ai", text: reply }])
+    } catch (error) {
+      if (session !== sessionRef.current) return
+      const detail = isAxiosError(error) ? error.response?.data?.detail : undefined
+      setMessages((current) => [
+        ...current,
+        {
+          role: "ai",
+          text: typeof detail === "string" ? detail : "I couldn't reply just now. Please try again in a moment.",
+          isError: true,
+        },
+      ])
+    } finally {
+      if (session === sessionRef.current) setIsSending(false)
+    }
   }
 
   function handleNewSession() {
     if (!selectedCoach) return
+    sessionRef.current += 1
+    setIsSending(false)
     setMessages(messagesForCoach(selectedCoach))
   }
 
@@ -168,6 +187,7 @@ export default function AICoach() {
             messages={messages}
             sessionHistory={sessionHistory}
             onSendMessage={handleSendMessage}
+            isSending={isSending}
             onNewSession={handleNewSession}
           />
         ) : (
