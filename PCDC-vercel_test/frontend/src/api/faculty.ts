@@ -395,6 +395,32 @@ export async function saveFacultyCaseRubric(caseId: number, payload: FacultyRubr
   return response.data
 }
 
+export interface FacultyTeachingNotes {
+  teaching_notes: string
+  can_edit: boolean
+}
+
+export async function getFacultyTeachingNotes(caseId: number) {
+  const response = await api.get<FacultyTeachingNotes>(`/faculty/cases/${caseId}/teaching-notes`)
+  return response.data
+}
+
+export async function saveFacultyTeachingNotes(caseId: number, teachingNotes: string) {
+  const response = await api.put<FacultyTeachingNotes>(`/faculty/cases/${caseId}/teaching-notes`, {
+    teaching_notes: teachingNotes,
+  })
+  return response.data
+}
+
+// Returns the AI's text for review; it is saved only by saveFacultyTeachingNotes.
+export async function generateFacultyTeachingNotes(caseId: number, prompt: string) {
+  const response = await api.post<{ teaching_notes: string }>(
+    `/faculty/cases/${caseId}/teaching-notes/generate`,
+    { prompt },
+  )
+  return response.data
+}
+
 export async function deleteFacultyCase(caseId: number) {
   const response = await api.delete<{ status: string; id: number; title: string }>(
     `/faculty/cases/${caseId}`,

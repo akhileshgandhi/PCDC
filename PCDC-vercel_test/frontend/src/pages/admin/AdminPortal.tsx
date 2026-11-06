@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom"
 
 import FacultyCaseBuilder from "../faculty/FacultyCaseBuilder"
+import FacultySimulationEditor from "../faculty/FacultySimulationEditor"
 
 import AdminAcademicSetup from "./AdminAcademicSetup"
 import AdminAdmins from "./AdminAdmins"
@@ -10,7 +11,9 @@ import AdminDashboard from "./AdminDashboard"
 import AdminFaculty from "./AdminFaculty"
 import AdminTeachingApprovals from "./AdminTeachingApprovals"
 import AdminModulePlaceholder from "./AdminModulePlaceholder"
+import AdminPromotion from "./AdminPromotion"
 import AdminSections from "./AdminSections"
+import AdminSimulations from "./AdminSimulations"
 import AdminStudents from "./AdminStudents"
 import AdminUserDetail from "./AdminUserDetail"
 import AdminUsers from "./AdminUsers"
@@ -22,6 +25,11 @@ function AdminCaseBuilderRoute() {
   return <FacultyCaseBuilder key={id ?? "new"} />
 }
 
+function AdminSimulationRoute() {
+  const { id } = useParams()
+  return <FacultySimulationEditor key={id} />
+}
+
 export default function AdminPortal() {
   return (
     <Routes>
@@ -31,10 +39,13 @@ export default function AdminPortal() {
       <Route path="/academic/:tab" element={<AdminAcademicSetup />} />
       <Route path="/people/faculty" element={<AdminFaculty />} />
       <Route path="/people/students" element={<AdminStudents />} />
+      <Route path="/people/progression" element={<AdminPromotion />} />
       <Route path="/people/teaching-approvals" element={<AdminTeachingApprovals />} />
       <Route path="/case-bank" element={<AdminCaseBank />} />
       <Route path="/case-builder" element={<AdminCaseBuilderRoute />} />
       <Route path="/case-builder/:id" element={<AdminCaseBuilderRoute />} />
+      <Route path="/simulations" element={<AdminSimulations />} />
+      <Route path="/simulations/:id" element={<AdminSimulationRoute />} />
       <Route path="/admins" element={<AdminAdmins />} />
       <Route path="/users" element={<AdminUsers />} />
       <Route path="/user/:id" element={<AdminUserDetail />} />

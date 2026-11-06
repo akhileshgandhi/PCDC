@@ -45,9 +45,11 @@ import {
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
 import ExpandableTextarea from "../../components/ExpandableTextarea"
+import { apiErrorDetail } from "../../components/bank/shared"
 import AssignToClassDialog from "../../components/faculty/AssignToClassDialog"
 import CapabilitySelector from "../../components/faculty/CapabilitySelector"
 import RubricEditor from "../../components/faculty/RubricEditor"
+import TeachingNotesPanel from "../../components/faculty/TeachingNotesPanel"
 import AdminLayout from "../../layouts/AdminLayout"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { getCurrentUser, isAdminRole } from "../../utils/auth"
@@ -208,9 +210,10 @@ function describeAiFailure(error: unknown): string {
 // Faculty can only edit their own drafts, so one acting on a stale page (e.g.
 // a case published meanwhile) gets a 403 whose detail is already a clear,
 // specific message — surface it instead of a generic fallback.
+// Publish refusals are an object ({message, missing_fields}), not a string,
+// and rendering that object directly crashes the page.
 function describeApiError(error: unknown, fallback: string): string {
-  const err = error as { response?: { data?: { detail?: string } } }
-  return err?.response?.data?.detail || fallback
+  return apiErrorDetail(error, fallback)
 }
 
 const emptyCoreForm: CoreFormState = {
@@ -1832,6 +1835,8 @@ function EditorStep({
         </section>
       ) : null}
       </div>
+
+      <TeachingNotesPanel caseId={caseData.id} />
     </div>
   )
 }

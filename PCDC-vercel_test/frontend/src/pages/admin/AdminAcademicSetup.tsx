@@ -6,6 +6,7 @@ import {
   createAdminBatch,
   updateAdminBatch,
   createAdminCourse,
+  updateAdminCourse,
   createAdminDepartment,
   createAdminInstitution,
   createAdminSection,
@@ -1074,6 +1075,7 @@ function CoursesTab({
   const [items, setItems] = useState<AdminCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [editingCode, setEditingCode] = useState<AdminCourse | null>(null)
   const [deleting, setDeleting] = useState<AdminCourse | null>(null)
 
   const visible = institutionFilter
@@ -1140,6 +1142,7 @@ function CoursesTab({
                       <Link to="/admin/courses" className="text-sm font-semibold text-[#0b5fff] hover:underline">
                         Manage
                       </Link>
+                      <IconButton label="Edit code" onClick={() => setEditingCode(course)}><Pencil size={15} /></IconButton>
                       <IconButton label="Delete" danger onClick={() => setDeleting(course)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
@@ -1149,6 +1152,16 @@ function CoursesTab({
           </table>
         </div>
       )}
+      {editingCode ? (
+        <CourseCodeForm
+          course={editingCode}
+          onClose={() => setEditingCode(null)}
+          onSaved={() => {
+            setEditingCode(null)
+            onChanged()
+          }}
+        />
+      ) : null}
       {deleting ? (
         <ConfirmDialog
           title="Delete specialization?"
@@ -1158,6 +1171,64 @@ function CoursesTab({
         />
       ) : null}
     </Card>
+  )
+}
+
+// Edit only the code of an existing specialization. The server allows admins
+// only, and an institute admin only for specializations of their institutes.
+function CourseCodeForm({
+  course,
+  onClose,
+  onSaved,
+}: {
+  course: AdminCourse
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [code, setCode] = useState(course.code)
+  const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    const next = code.trim().toUpperCase()
+    if (!next) {
+      setError("Code is required.")
+      return
+    }
+    if (next === course.code) {
+      onClose()
+      return
+    }
+    setSaving(true)
+    setError("")
+    try {
+      await updateAdminCourse(course.id, { code: next })
+      onSaved()
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Could not update the code.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Drawer title="Edit specialization code" subtitle={`${course.name}${course.department_name ? ` · ${course.department_name}` : ""}`} onClose={onClose}>
+      <div className="grid gap-4">
+        <label className={labelClass}>
+          <ReqLabel>Code</ReqLabel>
+          <input
+            className={fieldClass}
+            value={code}
+            maxLength={20}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="MBA-HR"
+          />
+          <span className="text-xs font-normal text-[#667085]">Short and unique across all specializations. Up to 20 characters.</span>
+        </label>
+        {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
+        <DrawerSubmit label="Save code" icon={<Pencil size={16} aria-hidden="true" />} saving={saving} onClick={submit} />
+      </div>
+    </Drawer>
   )
 }
 

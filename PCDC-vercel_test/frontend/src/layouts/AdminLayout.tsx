@@ -15,6 +15,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Table2,
   UserCheck,
   UserCircle,
   Users,
@@ -89,6 +90,7 @@ const navGroups: NavGroup[] = [
     icon: BookMarked,
     items: [
       { label: "Case Bank", to: "/admin/case-bank", icon: BookMarked },
+      { label: "Simulations", to: "/admin/simulations", icon: Table2 },
     ],
   },
   {
@@ -97,6 +99,7 @@ const navGroups: NavGroup[] = [
     items: [
       { label: "Faculty", to: "/admin/people/faculty", icon: Users },
       { label: "Students", to: "/admin/people/students", icon: GraduationCap },
+      { label: "Semester Progression", to: "/admin/people/progression", icon: Layers },
       { label: "Teaching Approvals", to: "/admin/people/teaching-approvals", icon: Users },
       { label: "All Users", to: "/admin/users", icon: Users },
     ],

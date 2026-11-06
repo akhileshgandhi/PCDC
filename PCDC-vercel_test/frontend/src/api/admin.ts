@@ -745,7 +745,7 @@ export async function createAdminCourse(payload: {
 
 export async function updateAdminCourse(
   courseId: number,
-  payload: { name?: string; status?: "active" | "inactive"; department_id?: number },
+  payload: { name?: string; code?: string; status?: "active" | "inactive"; department_id?: number },
 ) {
   const response = await api.patch<AdminCourse>(`/admin/courses/${courseId}`, payload)
   return response.data

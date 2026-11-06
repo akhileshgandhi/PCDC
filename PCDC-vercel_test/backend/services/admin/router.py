@@ -139,6 +139,7 @@ class AdminCourseCreate(BaseModel):
 
 class AdminCourseUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     status: Optional[str] = None
     department_id: Optional[int] = None
 
@@ -377,6 +378,19 @@ def enroll_student_in_section(
         },
     )
     return section
+
+
+def mark_section_promoted(db: Session, student_id: int) -> None:
+    """Close the current enrollment as 'promoted' (not 'dropped') before
+    moving a student up a semester, so their previous section's work, such
+    as section-assigned simulations, stays visible to them."""
+    db.execute(
+        text("""
+            UPDATE student_sections SET status = 'promoted'
+            WHERE student_id = :student_id AND status = 'active'
+        """),
+        {"student_id": student_id},
+    )
 
 
 def get_student_for_user(db: Session, user_id: int) -> Any:
@@ -2848,21 +2862,47 @@ def update_admin_course(
     ensure_course(db, course_id)
     if data.status is not None and data.status not in {"active", "inactive"}:
         raise HTTPException(status_code=400, detail="Invalid course status")
+    # Only admins reach here (require_admin), and a scoped institute admin only
+    # for specializations of their own institutes (ensure_course_in_scope).
+    new_code = None
+    old_code = None
+    if data.code is not None:
+        new_code = data.code.strip().upper()
+        if not new_code:
+            raise HTTPException(status_code=400, detail="Specialization code can't be empty")
+        if len(new_code) > 20:
+            raise HTTPException(status_code=400, detail="Specialization code must be 20 characters or fewer")
+        clash = db.execute(
+            text("SELECT id FROM courses WHERE code = :code AND id <> :course_id"),
+            {"code": new_code, "course_id": course_id},
+        ).fetchone()
+        if clash:
+            raise HTTPException(status_code=409, detail="Another specialization already uses this code")
+        old_code = db.execute(
+            text("SELECT code FROM courses WHERE id = :course_id"), {"course_id": course_id}
+        ).scalar()
     db.execute(
         text("""
             UPDATE courses
             SET name = COALESCE(:name, name),
+                code = COALESCE(:code, code),
                 status = COALESCE(:status, status),
                 department_id = COALESCE(:department_id, department_id)
             WHERE id = :course_id
         """),
         {
             "name": data.name.strip() if data.name else None,
+            "code": new_code,
             "status": data.status,
             "department_id": data.department_id,
             "course_id": course_id,
         },
     )
+    if new_code and old_code != new_code:
+        record_system_event(
+            db, current_user["id"], "course_code_changed",
+            f"Changed specialization code {old_code} to {new_code}",
+        )
     db.commit()
     row = db.execute(
         text("""
@@ -2873,12 +2913,13 @@ def update_admin_course(
                    COUNT(DISTINCT s.id) AS student_count,
                    COUNT(DISTINCT fs.faculty_id) AS faculty_count
             FROM courses c
+            LEFT JOIN departments dept ON dept.id = c.department_id
             LEFT JOIN batches b ON b.course_id = c.id
             LEFT JOIN class_sections cs ON cs.course_id = c.id
             LEFT JOIN students s ON s.course_id = c.id
             LEFT JOIN faculty_sections fs ON fs.section_id = cs.id
             WHERE c.id = :course_id
-            GROUP BY c.id
+            GROUP BY c.id, dept.name
         """),
         {"course_id": course_id},
     ).fetchone()
@@ -3992,6 +4033,9 @@ def advance_batch_semester(
             FROM class_sections cs
             JOIN semesters se ON se.id = cs.semester_id
             WHERE cs.batch_id = :batch_id
+            -- Highest semester first, so students just moved up are not moved
+            -- again when their new section is reached later in this loop.
+            ORDER BY se.semester_number DESC, cs.id
         """),
         {"batch_id": batch_id},
     ).fetchall()
@@ -4006,12 +4050,14 @@ def advance_batch_semester(
                 JOIN semesters se ON se.id = cs.semester_id
                 WHERE cs.batch_id = :batch_id AND cs.course_id = :course_id
                   AND se.semester_number = :next_semester_number
+                ORDER BY (cs.name = :name) DESC, cs.id
                 LIMIT 1
             """),
             {
                 "batch_id": batch_id,
                 "course_id": batch_row.course_id,
                 "next_semester_number": section.semester_number + 1,
+                "name": section.name,
             },
         ).fetchone()
 
@@ -4028,6 +4074,7 @@ def advance_batch_semester(
 
         for student in active_students:
             if next_section:
+                mark_section_promoted(db, student.student_id)
                 enroll_student_in_section(db, student.student_id, next_section.id, current_user["id"])
                 advanced.append(
                     {

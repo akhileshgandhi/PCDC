@@ -20,6 +20,10 @@ import AICoach from "./pages/coach/AICoach"
 import FacultyPortal from "./pages/faculty/FacultyPortal"
 import Dashboard from "./pages/student/Dashboard"
 import Profile from "./pages/student/Profile"
+import MySimulations from "./pages/simulations/MySimulations"
+import SimulationDetail from "./pages/simulations/SimulationDetail"
+import SimulationResults from "./pages/simulations/SimulationResults"
+import SimulationWorkspace from "./pages/simulations/SimulationWorkspace"
 import Unauthorized from "./pages/Unauthorized"
 import { getUserRole, isAuthenticated, portalPathForRole } from "./utils/auth"
 
@@ -124,6 +128,39 @@ export default function App() {
             element={
               <ProtectedRoute allowedRole="student">
                 <CaseStudyDestination />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/student/simulations"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <MySimulations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/simulations/:id"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <SimulationDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/simulations/:id/results"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <SimulationResults />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/simulations/:id/workspace"
+            element={
+              <ProtectedRoute allowedRole="student">
+                <SimulationWorkspace />
               </ProtectedRoute>
             }
           />

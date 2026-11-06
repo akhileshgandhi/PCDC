@@ -31,6 +31,7 @@ import {
   type StudentProfile,
   type StudentRecentEvaluation,
 } from "../../api/student"
+import { getAssignedSimulations } from "../../api/jobsim"
 import { AISH_NAME, AishIntro } from "../../components/aish/Aish"
 import StudentInsights from "../../components/dashboard/StudentInsights"
 import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
@@ -123,16 +124,32 @@ export default function Dashboard() {
   const [activeEngagements, setActiveEngagements] = useState<StudentActiveEngagements>(
     defaultActiveEngagements,
   )
-  // Simulations/Concepts browsing isn't built yet (see the "Coming soon" cards
-  // below), so the matrix never actually filters to anything but case studies.
+  // Simulation and concept scores aren't in the matrix yet, so it only ever
+  // filters to case studies.
   const activeMatrixFilter: MatrixFilter = "case_study"
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [recentEvaluations, setRecentEvaluations] = useState<StudentRecentEvaluation[]>([])
   const [achievements, setAchievements] = useState<StudentAchievements | null>(null)
   const [careerPathway, setCareerPathway] = useState<StudentCareerPathway | null>(null)
+  const [simulationCounts, setSimulationCounts] = useState<{ toDo: number; completed: number } | null>(null)
   const currentUser = getCurrentUser()
   const firstName = currentUser?.name?.split(" ")[0] ?? "Student"
+
+  useEffect(() => {
+    let isMounted = true
+    getAssignedSimulations()
+      .then(({ items }) => {
+        const completed = items.filter((item) => item.status === "completed" || item.status === "time_up").length
+        if (isMounted) setSimulationCounts({ toDo: items.length - completed, completed })
+      })
+      .catch(() => {
+        if (isMounted) setSimulationCounts({ toDo: 0, completed: 0 })
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -301,11 +318,34 @@ export default function Dashboard() {
               </Link>
             </Card>
 
-            <Card title="Simulations" className="border-teal-100 bg-teal-50" comingSoon>
-              <p className="flex-1 text-sm font-medium text-[#6b7280]">
+            <Card title="Simulations" className="border-teal-100 bg-teal-50">
+              <p className="mb-4 text-sm font-medium text-[#6b7280]">
                 Practice high-stakes decisions in realistic simulated scenarios.
               </p>
-              <ComingSoonButton label="Browse Simulations" />
+              <div className="flex flex-1 items-center justify-center gap-8 py-2 text-center">
+                {simulationCounts === null ? (
+                  <p className="text-sm font-medium text-[#6b7280]">Loading...</p>
+                ) : simulationCounts.toDo + simulationCounts.completed === 0 ? (
+                  <p className="text-sm font-medium text-[#6b7280]">No simulations assigned yet.</p>
+                ) : (
+                  <>
+                    <div>
+                      <div className="text-4xl font-semibold text-[#081d3a]">{simulationCounts.toDo}</div>
+                      <p className="mt-1 text-sm font-medium text-[#6b7280]">To do</p>
+                    </div>
+                    <div>
+                      <div className="text-4xl font-semibold text-[#081d3a]">{simulationCounts.completed}</div>
+                      <p className="mt-1 text-sm font-medium text-[#6b7280]">Completed</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <Link
+                to="/student/simulations"
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+              >
+                Browse Simulations
+              </Link>
             </Card>
 
             <Card title="Academic Fundamentals" className="border-rose-100 bg-rose-50" comingSoon>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import {
   Bell,
   BookOpen,
+  BriefcaseBusiness,
   CalendarDays,
   CircleHelp,
   Compass,
@@ -51,6 +52,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigationItems = [
     { label: "Dashboard", icon: LayoutDashboard, to: "/student/dashboard", end: true },
     { label: "My Case Studies", icon: BookOpen, to: "/student/case-studies" },
+    { label: "My Simulations", icon: BriefcaseBusiness, to: "/student/simulations" },
     { label: "Capability Profile", icon: TrendingUp, to: "/student/capability-profile" },
     { label: "Aish Coaches", icon: MessageSquare, to: "/student/ai-coach" },
     { label: "Achievements", icon: Trophy, to: "/student/achievements" },

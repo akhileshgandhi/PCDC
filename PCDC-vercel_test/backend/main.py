@@ -5,6 +5,8 @@ import sys
 # different working directory (e.g. Vercel serverless runs from /var/task).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.auth.router import auth_router
@@ -12,13 +14,26 @@ from services.simulation.router import simulation_router
 from services.capability.router import capability_router
 from services.ai.router import ai_router
 from services.admin.router import admin_router
+from services.admin.promotion import promotion_router
 from services.faculty.router import faculty_router
+from services.faculty.teaching_notes import teaching_notes_router
 from services.bank.router import bank_router
 from services.notification.router import notification_router
 from services.student.router import student_router
 from services.coach.router import coach_router
+from services.jobsim.router import jobsim_router
+from services.jobsim.worker import start_sweeper
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    stop_sweeper = start_sweeper()
+    yield
+    if stop_sweeper:
+        stop_sweeper.set()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # CORS middleware
 # allow_origin_regex matches localhost or any IPv4-addressed origin on any
@@ -42,13 +57,16 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(simulation_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(promotion_router, prefix="/api/v1")
 app.include_router(faculty_router, prefix="/api/v1")
+app.include_router(teaching_notes_router, prefix="/api/v1")
 app.include_router(bank_router, prefix="/api/v1")
 app.include_router(capability_router, prefix="/capability")
 app.include_router(ai_router, prefix="/ai")
 app.include_router(notification_router, prefix="/notification")
 app.include_router(student_router, prefix="/api/v1")
 app.include_router(coach_router, prefix="/api/v1")
+app.include_router(jobsim_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

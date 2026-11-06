@@ -9,6 +9,11 @@ import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
 import FacultyMyTeaching from "./FacultyMyTeaching"
 import FacultyReports from "./FacultyReports"
+import FacultySimulationAttempt from "./FacultySimulationAttempt"
+import FacultySimulationEditor from "./FacultySimulationEditor"
+import FacultySimulationNew from "./FacultySimulationNew"
+import FacultySimulationResults from "./FacultySimulationResults"
+import FacultySimulations from "./FacultySimulations"
 import FacultyStudents from "./FacultyStudents"
 
 // "/case-builder" and "/case-builder/:id" are sibling routes rendering the
@@ -20,6 +25,12 @@ import FacultyStudents from "./FacultyStudents"
 function FacultyCaseBuilderRoute() {
   const { id } = useParams()
   return <FacultyCaseBuilder key={id ?? "new"} />
+}
+
+// Same reason as above: a fresh editor for each simulation (and for "manual").
+function FacultySimulationEditorRoute() {
+  const { id } = useParams()
+  return <FacultySimulationEditor key={id ?? "manual"} />
 }
 
 export default function FacultyPortal() {
@@ -39,6 +50,12 @@ export default function FacultyPortal() {
       <Route path="/attempts/:attemptId" element={<FacultyAttemptReport />} />
       <Route path="/analytics" element={<FacultyAnalytics />} />
       <Route path="/reports" element={<FacultyReports />} />
+      <Route path="/simulations" element={<FacultySimulations />} />
+      <Route path="/simulations/new" element={<FacultySimulationNew />} />
+      <Route path="/simulations/new/manual" element={<FacultySimulationEditorRoute />} />
+      <Route path="/simulations/attempts/:attemptId" element={<FacultySimulationAttempt />} />
+      <Route path="/simulations/:id/results" element={<FacultySimulationResults />} />
+      <Route path="/simulations/:id" element={<FacultySimulationEditorRoute />} />
       <Route path="*" element={<Navigate to="/faculty/dashboard" replace />} />
     </Routes>
   )

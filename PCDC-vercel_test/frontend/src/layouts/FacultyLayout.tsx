@@ -12,6 +12,7 @@ import {
   LogOut,
   Search,
   Settings,
+  Table2,
   UserCircle,
   Users,
 } from "lucide-react"
@@ -47,7 +48,8 @@ const dashboardItem = {
 interface NavGroup {
   label: string
   icon: typeof Users
-  items: Array<{ label: string; to: string }>
+  // end: highlight only on this exact path (not on paths below it).
+  items: Array<{ label: string; to: string; end?: boolean }>
 }
 
 const navGroups: NavGroup[] = [
@@ -66,6 +68,14 @@ const navGroups: NavGroup[] = [
       { label: "My Case Library", to: "/faculty/case-library" },
       { label: "Case Bank", to: "/faculty/case-bank" },
       { label: "Case Builder", to: "/faculty/case-builder" },
+    ],
+  },
+  {
+    label: "Simulations",
+    icon: Table2,
+    items: [
+      { label: "My Simulations", to: "/faculty/simulations", end: true },
+      { label: "Create Simulation", to: "/faculty/simulations/new" },
     ],
   },
   {
@@ -220,7 +230,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
                 {isOpen ? (
                   <div className="mt-1 space-y-1">
                     {group.items.map((item) => (
-                      <NavLink key={item.to} to={item.to} className={navLinkClass(true)}>
+                      <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass(true)}>
                         <span>{item.label}</span>
                       </NavLink>
                     ))}

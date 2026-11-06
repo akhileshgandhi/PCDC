@@ -411,9 +411,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         user_id = int(payload.get("sub"))
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.execute(text("SELECT id, name, email, role, created_at FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+    user = db.execute(
+        text("SELECT id, name, email, role, created_at, COALESCE(status, 'active') AS status FROM users WHERE id = :id"),
+        {"id": user_id},
+    ).fetchone()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # An account made inactive (graduated, exited, or switched off by an admin)
+    # is signed out on its next request, not only at its next login. 401 makes
+    # the frontend clear the session.
+    if user[5] != "active":
+        raise HTTPException(status_code=401, detail="Account is inactive")
     current = {"id": user[0], "name": user[1], "email": user[2], "role": user[3], "created_at": str(user[4])}
     # Admin scope (see services/admin/scope.py). Only looked up for admin
     # roles so student/faculty/mentor requests stay exactly as before.
