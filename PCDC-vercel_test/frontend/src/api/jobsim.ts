@@ -22,8 +22,12 @@ export interface JobsimTask {
     cell_label?: string
     must_use_formula?: boolean
     required_sections?: string[]
+    /** What to write under each required section. */
+    section_notes?: Record<string, string>
     min_words?: number
     min_slides?: number
+    /** The slides the deck should have, each with a note on what goes there. */
+    slide_plan?: SlidePlanItem[]
   }
   max_score: number
   has_hint: boolean
@@ -35,6 +39,29 @@ export interface JobsimTask {
 export interface SavedCell {
   input: string
   format: CellFormat
+}
+
+export interface SlidePlanItem {
+  title: string
+  guide: string
+}
+
+/** One slide: a title and its bullet points (handover 8.3). */
+export interface Slide {
+  title: string
+  points: string[]
+}
+
+export interface SavedDeck {
+  slides: Slide[]
+  text: string
+  word_count: number
+}
+
+export interface SavedMemo {
+  doc: Record<string, unknown>
+  text: string
+  word_count: number
 }
 
 export interface JobsimAttempt {
@@ -57,8 +84,10 @@ export interface JobsimAttempt {
   tasks: JobsimTask[]
   saved: {
     cells: Record<string, SavedCell>
-    memo: unknown
-    slides: unknown
+    /** By task id. */
+    memo: Record<string, SavedMemo> | null
+    /** By task id. */
+    slides: Record<string, SavedDeck> | null
     last_task_id: number | null
   }
 }
@@ -134,12 +163,30 @@ export async function getJobsimAttempt(attemptId: number) {
   return response.data
 }
 
+export async function submitJobsimMemo(attemptId: number, taskId: number, doc: unknown) {
+  const response = await api.post<{ status: "scoring" | "scored" }>(
+    `/jobsim/attempts/${attemptId}/tasks/${taskId}/submit`,
+    { doc },
+  )
+  return response.data
+}
+
+export async function submitJobsimSlides(attemptId: number, taskId: number, slides: Slide[]) {
+  const response = await api.post<{ status: "scoring" | "scored" }>(
+    `/jobsim/attempts/${attemptId}/tasks/${taskId}/submit`,
+    { slides },
+  )
+  return response.data
+}
+
 export async function saveJobsimState(
   attemptId: number,
   state: {
     cells?: Record<string, SavedCell>
-    memo?: unknown
-    slides?: unknown
+    /** By task id. The server builds the plain text itself. */
+    memo?: Record<string, { doc: unknown }>
+    /** By task id. */
+    slides?: Record<string, { slides: Slide[] }>
     last_task_id?: number | null
   },
 ) {
@@ -183,6 +230,10 @@ export interface SimulationDataset {
   rows: DatasetCell[][]
 }
 
+export interface MemoRubric {
+  criteria: Array<{ name: string; max: number }>
+}
+
 export interface AuthorTask {
   id?: number
   type: "spreadsheet" | "memo" | "presentation"
@@ -190,7 +241,7 @@ export interface AuthorTask {
   prompt: string
   hint: string | null
   config: { cell_label?: string; must_use_formula?: boolean; [key: string]: unknown }
-  rubric?: unknown
+  rubric?: MemoRubric | null
   max_score: number
   answer_formula: string | null
   expected_format: CellFormat | null
@@ -210,6 +261,8 @@ export interface AuthorSimulation {
   status: SimulationAuthorStatus
   dataset: SimulationDataset
   can_regenerate_dataset: boolean
+  /** Set while a draft is back with its author after an admin sent it back. */
+  sent_back?: { at: string; note: string | null } | null
   skills: Array<{ id: number; name: string }>
   tasks: AuthorTask[]
   created_at: string
@@ -228,6 +281,10 @@ export interface AuthorSimulationListItem {
   attempt_count: number
   row_count: number
   updated_at: string
+  /** Sent back by an admin (faculty list only). */
+  sent_back?: boolean
+  /** ...and the author hasn't opened it since. */
+  sent_back_unseen?: boolean
 }
 
 export interface SimulationSavePayload {
@@ -253,6 +310,10 @@ export interface SimulationBrief {
   task_count: number
   capability_ids: number[]
   notes?: string
+  /** Ask the AI to draft a memo brief and rubric too. */
+  include_memo?: boolean
+  /** Ask the AI to draft a slide deck brief, slide plan and rubric too. */
+  include_presentation?: boolean
 }
 
 export interface DraftJob {
@@ -265,6 +326,12 @@ export interface DraftJob {
 
 export async function listAuthorSimulations() {
   const response = await api.get<{ items: AuthorSimulationListItem[]; total: number }>("/faculty/jobsim")
+  return response.data
+}
+
+/** The faculty's simulations sent back by an admin and not opened since. */
+export async function getSentBackSimulationCount() {
+  const response = await api.get<{ sent_back: number }>("/faculty/jobsim/sent-back-count")
   return response.data
 }
 
@@ -387,6 +454,12 @@ export async function listAdminSimulations() {
   return response.data
 }
 
+/** Simulations approved by faculty and waiting for this admin to publish. */
+export async function getPendingSimulationCount() {
+  const response = await api.get<{ pending: number }>("/admin/jobsim/pending-count")
+  return response.data
+}
+
 export async function publishSimulation(simulationId: number) {
   const response = await api.post<AuthorSimulation>(`/admin/jobsim/${simulationId}/publish`)
   return response.data
@@ -399,6 +472,21 @@ export async function withdrawSimulation(simulationId: number) {
 
 export type ReviewStatus = "correct" | "incorrect" | "not_answered"
 
+/** not_started: the attempt is open and the memo isn't submitted. review: the AI
+ * couldn't mark it reliably, so faculty will. delayed: the AI kept failing. */
+export type MemoStatus = "not_started" | "pending" | "delayed" | "review" | "scored"
+
+export interface StudentMemoResult {
+  position: number
+  stage: string | null
+  prompt: string
+  status: MemoStatus
+  marks: number
+  max_marks: number
+  feedback: string | null
+  marks_changed: boolean
+}
+
 export interface JobsimResults {
   attempt_id: number
   simulation: { id: number; title: string }
@@ -410,6 +498,10 @@ export interface JobsimResults {
   incorrect: number
   not_answered: number
   unscored_parts: string[]
+  memos: StudentMemoResult[]
+  memos_pending: number
+  decks: StudentMemoResult[]
+  decks_pending: number
   tasks: Array<{
     position: number
     stage: string | null
@@ -468,7 +560,26 @@ export interface SimulationResults {
       marks: number
       marks_changed: boolean
     }>
+    memo_results: WrittenResult[]
+    deck_results: WrittenResult[]
   }>
+  memo_tasks: WrittenTask[]
+  deck_tasks: WrittenTask[]
+}
+
+export interface WrittenResult {
+  task_id: number
+  status: MemoStatus
+  marks: number
+  marks_changed: boolean
+}
+
+export interface WrittenTask {
+  task_id: number
+  position: number
+  stage: string | null
+  prompt: string
+  max_marks: number
 }
 
 export interface MarksChange {
@@ -521,6 +632,60 @@ export interface AttemptReview {
   incorrect: number
   not_answered: number
   tasks: AttemptReviewTask[]
+  memos: AttemptReviewMemo[]
+  decks: AttemptReviewDeck[]
+}
+
+export interface AttemptReviewDeck {
+  task_id: number
+  task_result_id: number | null
+  position: number
+  stage: string | null
+  prompt: string
+  min_slides: number
+  slide_plan: SlidePlanItem[]
+  rubric: Array<{ name: string; max: number }>
+  status: MemoStatus
+  marked_by: "auto" | "ai" | "faculty" | null
+  marks: number
+  max_marks: number
+  slides: Slide[]
+  ai_criteria: Array<{ name: string; max: number; score: number; reason: string; evidence: string }>
+  ai_feedback: string | null
+  ai_problems: string[]
+  can_rescore: boolean
+  marks_changes: MarksChange[]
+}
+
+/** A saved memo as stored by the server: headings, paragraphs, lists, bold and italics only. */
+export interface MemoNode {
+  type: string
+  text?: string
+  attrs?: { level?: number }
+  marks?: Array<{ type: string }>
+  content?: MemoNode[]
+}
+
+export interface AttemptReviewMemo {
+  task_id: number
+  task_result_id: number | null
+  position: number
+  stage: string | null
+  prompt: string
+  required_sections: string[]
+  min_words: number
+  rubric: Array<{ name: string; max: number }>
+  status: MemoStatus
+  marked_by: "auto" | "ai" | "faculty" | null
+  marks: number
+  max_marks: number
+  doc: MemoNode | null
+  word_count: number
+  ai_criteria: Array<{ name: string; max: number; score: number; reason: string; evidence: string }>
+  ai_feedback: string | null
+  ai_problems: string[]
+  can_rescore: boolean
+  marks_changes: MarksChange[]
 }
 
 export async function getSimulationResults(simulationId: number) {
@@ -545,6 +710,11 @@ export async function changeTaskMarks(taskResultId: number, score: number, note:
     score,
     note: note.trim() || null,
   })
+  return response.data
+}
+
+export async function rescoreMemo(taskResultId: number) {
+  const response = await api.post<AttemptReview>(`/faculty/jobsim/task-results/${taskResultId}/rescore`)
   return response.data
 }
 

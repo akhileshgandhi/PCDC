@@ -8,6 +8,7 @@ import {
   publishSimulation,
   type AdminSimulationListItem,
 } from "../../api/jobsim"
+import { notifyTeachingApprovalsChanged } from "../../hooks/usePendingTeachingCount"
 import AdminLayout from "../../layouts/AdminLayout"
 import { AuthorStatusBadge } from "../faculty/FacultySimulations"
 
@@ -55,6 +56,7 @@ export default function AdminSimulations() {
     try {
       await publishSimulation(item.id)
       setNotice(`Published "${item.title}".`)
+      notifyTeachingApprovalsChanged() // refreshes the sidebar red badges now
       await load()
     } catch (err) {
       const detail = isAxiosError(err) ? err.response?.data?.detail : undefined

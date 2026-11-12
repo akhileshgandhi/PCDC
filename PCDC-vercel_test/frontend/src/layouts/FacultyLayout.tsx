@@ -19,9 +19,24 @@ import {
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getFacultyNotifications, type FacultyNotification } from "../api/faculty"
+import { useSentBackSimulationCount } from "../hooks/useSentBackSimulationCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
 const NOTIF_SEEN_KEY = "pcdc_faculty_notif_last_seen_id"
+const MY_SIMULATIONS_PATH = "/faculty/simulations"
+
+// Red count of simulations an admin sent back (same look as the admin badges).
+function SentBackBadge({ count }: { count: number }) {
+  return (
+    <span
+      className="grid min-w-5 place-items-center rounded-full bg-[#d92d20] px-1.5 text-[10px] font-bold leading-5 text-white"
+      aria-label={`${count} ${count === 1 ? "simulation" : "simulations"} sent back by an admin`}
+      title="Sent back by an admin — open it to see the note"
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  )
+}
 
 function timeAgo(iso: string): string {
   const then = new Date(iso.endsWith("Z") ? iso : `${iso}Z`).getTime()
@@ -150,6 +165,12 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
   const notifRef = useRef<HTMLDivElement>(null)
   const unreadCount = notifications.filter((n) => n.id > lastSeenId).length
 
+  // Red badge: simulations an admin sent back that this faculty hasn't opened yet.
+  const sentBackCount = useSentBackSimulationCount()
+  const pendingByPath: Record<string, number> = { [MY_SIMULATIONS_PATH]: sentBackCount }
+  const pendingInGroup = (group: NavGroup) =>
+    group.items.reduce((sum, item) => sum + (pendingByPath[item.to] ?? 0), 0)
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
@@ -221,6 +242,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
                 >
                   <GroupIcon size={18} aria-hidden="true" />
                   <span className="flex-1">{group.label}</span>
+                  {!isOpen && pendingInGroup(group) > 0 ? <SentBackBadge count={pendingInGroup(group)} /> : null}
                   <ChevronDown
                     size={16}
                     aria-hidden="true"
@@ -231,7 +253,8 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
                   <div className="mt-1 space-y-1">
                     {group.items.map((item) => (
                       <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass(true)}>
-                        <span>{item.label}</span>
+                        <span className="flex-1">{item.label}</span>
+                        {(pendingByPath[item.to] ?? 0) > 0 ? <SentBackBadge count={pendingByPath[item.to]} /> : null}
                       </NavLink>
                     ))}
                   </div>

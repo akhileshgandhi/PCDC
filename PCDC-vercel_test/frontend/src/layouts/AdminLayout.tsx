@@ -24,19 +24,28 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getAdminNotifications, type AdminNotification } from "../api/admin"
 import { clearAdminScope, useAdminScope } from "../hooks/useAdminScope"
+import { usePendingSimulationCount } from "../hooks/usePendingSimulationCount"
 import { useAdminAlertRefresh, usePendingTeachingCount } from "../hooks/usePendingTeachingCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
 const NOTIF_SEEN_KEY = "pcdc_admin_notif_last_seen_id"
 const TEACHING_APPROVALS_PATH = "/admin/people/teaching-approvals"
+const SIMULATIONS_PATH = "/admin/simulations"
 const TEACHING_REQUEST_EVENT = "teaching_approval_requested"
 
-// Red count of teaching selections waiting for approval.
-function PendingBadge({ count }: { count: number }) {
+// What each red count means, for screen readers.
+const BADGE_LABELS: Record<string, [string, string]> = {
+  [TEACHING_APPROVALS_PATH]: ["pending teaching approval", "pending teaching approvals"],
+  [SIMULATIONS_PATH]: ["simulation waiting to publish", "simulations waiting to publish"],
+}
+
+// Red count of items waiting for the admin (teaching selections, simulations).
+function PendingBadge({ count, label }: { count: number; label?: [string, string] }) {
+  const [one, many] = label ?? ["pending item", "pending items"]
   return (
     <span
       className="grid min-w-5 place-items-center rounded-full bg-[#d92d20] px-1.5 text-[10px] font-bold leading-5 text-white"
-      aria-label={`${count} pending teaching ${count === 1 ? "approval" : "approvals"}`}
+      aria-label={`${count} ${count === 1 ? one : many}`}
     >
       {count > 99 ? "99+" : count}
     </span>
@@ -198,6 +207,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       .catch(() => undefined)
   })
   const pendingApprovals = usePendingTeachingCount() ?? 0
+  const pendingSimulations = usePendingSimulationCount() ?? 0
+  // Red badge per menu item; a closed group shows the total of its items.
+  const pendingByPath: Record<string, number> = {
+    [TEACHING_APPROVALS_PATH]: pendingApprovals,
+    [SIMULATIONS_PATH]: pendingSimulations,
+  }
+  const pendingInGroup = (group: NavGroup) =>
+    group.items.reduce((sum, item) => sum + (pendingByPath[item.to] ?? 0), 0)
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -284,9 +301,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 >
                   <GroupIcon size={18} aria-hidden="true" />
                   <span className="flex-1">{group.label}</span>
-                  {!isOpen && pendingApprovals > 0 && group.items.some((item) => item.to === TEACHING_APPROVALS_PATH) ? (
-                    <PendingBadge count={pendingApprovals} />
-                  ) : null}
+                  {!isOpen && pendingInGroup(group) > 0 ? <PendingBadge count={pendingInGroup(group)} /> : null}
                   <ChevronDown
                     size={16}
                     aria-hidden="true"
@@ -298,8 +313,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                     {group.items.map((item) => (
                       <NavLink key={item.to} to={item.to} className={navLinkClass(true)}>
                         <span className="flex-1">{item.label}</span>
-                        {item.to === TEACHING_APPROVALS_PATH && pendingApprovals > 0 ? (
-                          <PendingBadge count={pendingApprovals} />
+                        {(pendingByPath[item.to] ?? 0) > 0 ? (
+                          <PendingBadge count={pendingByPath[item.to]} label={BADGE_LABELS[item.to]} />
                         ) : null}
                       </NavLink>
                     ))}

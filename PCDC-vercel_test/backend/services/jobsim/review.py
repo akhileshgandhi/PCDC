@@ -11,6 +11,14 @@ student_results is the student's own view and leaves them out.
 
 Faculty can change a mark once the attempt is submitted (handover F5). Every
 change is kept in jobsim_score_overrides: old mark, new mark, who, when, why.
+
+Memos (handover 9.6, F5) are listed beside the spreadsheet tasks, never mixed
+into them: students see their memo marks and feedback (never the rubric);
+faculty see the memo itself, the AI's marks per criterion with its evidence,
+and can change the marks or ask the AI to try again.
+
+Slide decks (handover 8.3) work the same way and are listed after the memos,
+as "decks"; their marks use the same states and the same faculty controls.
 """
 
 import csv
@@ -24,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from services.admin.scope import admin_scope, is_admin_role, user_in_scope_sql
 
+from .capability import apply_attempt_to_profile
 from .formula import FORMAT_LABELS, CellResult, Sheet, evaluate_input, format_value
 from .marking import mark_spreadsheet_answer, values_match
 from .publishing import ensure_admin_can_manage
@@ -44,6 +53,14 @@ REASON_TEXT = {
 }
 
 IST = timedelta(hours=5, minutes=30)
+
+MEMO_STATUS_TEXT = {
+    "not_started": "Not submitted",
+    "pending": "Scoring pending",
+    "delayed": "Scoring delayed",
+    "review": "Needs faculty marking",
+    "scored": "Scored",
+}
 
 
 def _simulation_for_review(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Any:
@@ -114,6 +131,54 @@ def _task_results(db: Session, attempt_ids: List[int]) -> Dict[Tuple[int, int], 
     return {(r.attempt_id, r.task_id): r for r in rows}
 
 
+def _memo_tasks(db: Session, simulation_id: int, task_type: str = "memo") -> List[Any]:
+    return db.execute(
+        text("""
+            SELECT id, position, stage, prompt_template, config, rubric, max_score
+            FROM jobsim_tasks WHERE simulation_id = :sid AND type = :type
+            ORDER BY position
+        """),
+        {"sid": simulation_id, "type": task_type},
+    ).fetchall()
+
+
+def _memo_results(db: Session, attempt_ids: List[int], task_type: str = "memo") -> Dict[Tuple[int, int], Any]:
+    rows = db.execute(
+        text("""
+            SELECT r.id, r.attempt_id, r.task_id, r.status, r.score, r.marked_by, r.ai_feedback
+            FROM jobsim_task_results r JOIN jobsim_tasks t ON t.id = r.task_id
+            WHERE r.attempt_id = ANY(:ids) AND t.type = :type
+        """),
+        {"ids": attempt_ids, "type": task_type},
+    ).fetchall()
+    return {(r.attempt_id, r.task_id): r for r in rows}
+
+
+def _deck_tasks(db: Session, simulation_id: int) -> List[Any]:
+    return _memo_tasks(db, simulation_id, "presentation")
+
+
+def _deck_results(db: Session, attempt_ids: List[int]) -> Dict[Tuple[int, int], Any]:
+    return _memo_results(db, attempt_ids, "presentation")
+
+
+def memo_state(result: Optional[Any], attempt_status: str) -> str:
+    """not_started while the attempt is open and the memo isn't submitted;
+    then pending, delayed (the AI kept failing), review (left for faculty) or scored."""
+    if result is None or result.status not in ("scoring", "scored"):
+        return "not_started" if attempt_status == "in_progress" else "pending"
+    if result.status == "scored":
+        return "scored"
+    state = (_load(result.ai_feedback, {}) or {}).get("state")
+    return {"delayed": "delayed", "needs_review": "review"}.get(state, "pending")
+
+
+def _memo_marks(result: Optional[Any]) -> float:
+    if result is None or result.status != "scored" or result.score is None:
+        return 0.0
+    return float(result.score)
+
+
 def _compare(
     task: Any,
     key: Optional[Any],
@@ -174,10 +239,10 @@ def student_results(db: Session, current_user: Dict[str, Any], attempt_id: int) 
     tasks = _spreadsheet_tasks(db, attempt.simulation_id)
     keys = _keys(db, [attempt.id])
     results = _task_results(db, [attempt.id])
-    other_parts = db.execute(
-        text("SELECT DISTINCT type FROM jobsim_tasks WHERE simulation_id = :sid AND type <> 'spreadsheet'"),
-        {"sid": attempt.simulation_id},
-    ).fetchall()
+    memo_tasks = _memo_tasks(db, attempt.simulation_id)
+    memo_results = _memo_results(db, [attempt.id]) if memo_tasks else {}
+    deck_tasks = _deck_tasks(db, attempt.simulation_id)
+    deck_results = _deck_results(db, [attempt.id]) if deck_tasks else {}
     sheet = _attempt_sheet(db, attempt)
     cells = _load(attempt.cells, {})
     cache: Dict[str, CellResult] = {}
@@ -200,8 +265,10 @@ def student_results(db: Session, current_user: Dict[str, Any], attempt_id: int) 
                 "marks_changed": bool(result) and result.marked_by == "faculty",
             }
         )
-    marks = sum(item["marks"] for item in items)
-    max_marks = sum(item["max_marks"] for item in items)
+    memos = [_student_written(task, memo_results.get((attempt.id, task.id)), attempt.status) for task in memo_tasks]
+    decks = [_student_written(task, deck_results.get((attempt.id, task.id)), attempt.status) for task in deck_tasks]
+    marks = sum(item["marks"] for item in items) + sum(m["marks"] for m in memos + decks)
+    max_marks = sum(item["max_marks"] for item in items) + sum(m["max_marks"] for m in memos + decks)
     return {
         "attempt_id": attempt.id,
         "simulation": {"id": simulation.id, "title": simulation.title},
@@ -212,8 +279,29 @@ def student_results(db: Session, current_user: Dict[str, Any], attempt_id: int) 
         "correct": sum(1 for item in items if item["status"] == "correct"),
         "incorrect": sum(1 for item in items if item["status"] == "incorrect"),
         "not_answered": sum(1 for item in items if item["status"] == "not_answered"),
-        "unscored_parts": sorted("Memo" if p.type == "memo" else "Slides" for p in other_parts),
+        "unscored_parts": [],
         "tasks": items,
+        "memos": memos,
+        "memos_pending": sum(1 for m in memos if m["status"] != "scored"),
+        "decks": decks,
+        "decks_pending": sum(1 for d in decks if d["status"] != "scored"),
+    }
+
+
+def _student_written(task: Any, result: Optional[Any], attempt_status: str) -> Dict[str, Any]:
+    """A memo or deck as the student sees it: marks and the AI's note, never the rubric."""
+    state = memo_state(result, attempt_status)
+    feedback = (_load(result.ai_feedback, {}) or {}) if result is not None else {}
+    return {
+        "position": task.position,
+        "stage": task.stage,
+        "prompt": task.prompt_template,
+        "status": state,
+        "marks": _memo_marks(result),
+        "max_marks": float(task.max_score),
+        # The AI's note to the student. The rubric itself is never sent.
+        "feedback": feedback.get("feedback") if state == "scored" else None,
+        "marks_changed": result is not None and result.marked_by == "faculty",
     }
 
 
@@ -247,9 +335,13 @@ def simulation_results(db: Session, current_user: Dict[str, Any], simulation_id:
         {**params, "sid": simulation_id},
     ).fetchall()
     tasks = _spreadsheet_tasks(db, simulation_id)
+    memo_tasks = _memo_tasks(db, simulation_id)
+    deck_tasks = _deck_tasks(db, simulation_id)
     attempt_ids = [a.id for a in attempts]
     keys = _keys(db, attempt_ids) if attempts else {}
     results = _task_results(db, attempt_ids) if attempts else {}
+    memo_results = _memo_results(db, attempt_ids) if attempts and memo_tasks else {}
+    deck_results = _deck_results(db, attempt_ids) if attempts and deck_tasks else {}
     # Attempts on the stored dataset share one sheet; seeded ones each have their own.
     sheets: Dict[Any, Tuple[Sheet, Dict[str, CellResult]]] = {}
     items = []
@@ -288,12 +380,16 @@ def simulation_results(db: Session, current_user: Dict[str, Any], simulation_id:
                 "marks": float(attempt.marks),
                 **counts,
                 "task_results": task_results,
+                "memo_results": [_memo_cell(task, memo_results.get((attempt.id, task.id)), attempt.status) for task in memo_tasks],
+                "deck_results": [_memo_cell(task, deck_results.get((attempt.id, task.id)), attempt.status) for task in deck_tasks],
             }
         )
     return {
         "simulation": {"id": simulation.id, "title": simulation.title},
         "task_count": len(tasks),
-        "max_marks": sum(float(t.max_score) for t in tasks),
+        "max_marks": sum(float(t.max_score) for t in list(tasks) + list(memo_tasks) + list(deck_tasks)),
+        "memo_tasks": [_task_summary(t) for t in memo_tasks],
+        "deck_tasks": [_task_summary(t) for t in deck_tasks],
         "tasks": [
             {
                 "task_id": t.id,
@@ -305,6 +401,25 @@ def simulation_results(db: Session, current_user: Dict[str, Any], simulation_id:
             for t in tasks
         ],
         "items": items,
+    }
+
+
+def _task_summary(task: Any) -> Dict[str, Any]:
+    return {
+        "task_id": task.id,
+        "position": task.position,
+        "stage": task.stage,
+        "prompt": task.prompt_template,
+        "max_marks": float(task.max_score),
+    }
+
+
+def _memo_cell(task: Any, result: Optional[Any], attempt_status: str) -> Dict[str, Any]:
+    return {
+        "task_id": task.id,
+        "status": memo_state(result, attempt_status),
+        "marks": _memo_marks(result),
+        "marks_changed": result is not None and result.marked_by == "faculty",
     }
 
 
@@ -328,6 +443,22 @@ def results_csv(db: Session, current_user: Dict[str, Any], simulation_id: int) -
         ["Student", "College ID", "Section", "Status", "Started (IST)", "Finished (IST)",
          "Correct", "Incorrect", "Not answered", "Marks", "Out of", "Percent", "Marks changed by faculty"]
         + [f"Task {t['position']} marks (out of {t['max_marks']:g})" for t in data["tasks"]]
+        + [
+            column
+            for t in data["memo_tasks"]
+            for column in (
+                f"Task {t['position']} memo marks (out of {t['max_marks']:g})",
+                f"Task {t['position']} memo status",
+            )
+        ]
+        + [
+            column
+            for t in data["deck_tasks"]
+            for column in (
+                f"Task {t['position']} slides marks (out of {t['max_marks']:g})",
+                f"Task {t['position']} slides status",
+            )
+        ]
     )
     max_marks = data["max_marks"]
     for item in sorted(data["items"], key=lambda i: (i["section_label"] or "", i["student_name"] or "")):
@@ -345,9 +476,16 @@ def results_csv(db: Session, current_user: Dict[str, Any], simulation_id: int) -
                 f"{item['marks']:g}",
                 f"{max_marks:g}",
                 round(100 * item["marks"] / max_marks, 1) if max_marks else 0,
-                "Yes" if any(r["marks_changed"] for r in item["task_results"]) else "No",
+                "Yes"
+                if any(r["marks_changed"] for r in item["task_results"] + item["memo_results"] + item["deck_results"])
+                else "No",
             ]
             + [f"{r['marks']:g}" for r in item["task_results"]]
+            + [
+                cell
+                for r in item["memo_results"] + item["deck_results"]
+                for cell in (f"{r['marks']:g}" if r["status"] == "scored" else "", MEMO_STATUS_TEXT[r["status"]])
+            ]
         )
     return "\ufeff" + output.getvalue()
 
@@ -433,6 +571,8 @@ def attempt_review(db: Session, current_user: Dict[str, Any], attempt_id: int) -
                 "marks_changes": changes.get(task.id, []),
             }
         )
+    memos = _memo_review(db, attempt, changes)
+    decks = _deck_review(db, attempt, changes)
     return {
         "attempt_id": attempt.id,
         "simulation": {"id": simulation.id, "title": simulation.title},
@@ -443,13 +583,125 @@ def attempt_review(db: Session, current_user: Dict[str, Any], attempt_id: int) -
         "finished_at": str(attempt.finished_at) if attempt.finished_at else None,
         # A string: the seed is larger than a JavaScript number can hold exactly.
         "seed": str(attempt.seed),
-        "marks": sum(item["marks"] for item in items),
-        "max_marks": sum(item["max_marks"] for item in items),
+        "marks": sum(item["marks"] for item in items) + sum(m["marks"] for m in memos + decks),
+        "max_marks": sum(item["max_marks"] for item in items) + sum(m["max_marks"] for m in memos + decks),
         "correct": sum(1 for item in items if item["status"] == "correct"),
         "incorrect": sum(1 for item in items if item["status"] == "incorrect"),
         "not_answered": sum(1 for item in items if item["status"] == "not_answered"),
         "tasks": items,
+        "memos": memos,
+        "decks": decks,
     }
+
+
+def _memo_review(db: Session, attempt: Any, changes: Dict[int, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Each memo as the student wrote it, with the AI's marking and evidence."""
+    memo_tasks = _memo_tasks(db, attempt.simulation_id)
+    if not memo_tasks:
+        return []
+    results = _memo_results(db, [attempt.id])
+    saved = _load(attempt.memo, None) or {}
+    out = []
+    for task in memo_tasks:
+        result = results.get((attempt.id, task.id))
+        state = memo_state(result, attempt.status)
+        entry = saved.get(str(task.id)) or {}
+        feedback = (_load(result.ai_feedback, {}) or {}) if result is not None else {}
+        config = _load(task.config, {}) or {}
+        out.append(
+            {
+                "task_id": task.id,
+                "task_result_id": result.id if result is not None else None,
+                "position": task.position,
+                "stage": task.stage,
+                "prompt": task.prompt_template,
+                "required_sections": config.get("required_sections") or [],
+                "min_words": int(config.get("min_words") or 0),
+                "rubric": (_load(task.rubric, {}) or {}).get("criteria") or [],
+                "status": state,
+                "marked_by": result.marked_by if result is not None else None,
+                "marks": _memo_marks(result),
+                "max_marks": float(task.max_score),
+                "doc": entry.get("doc"),
+                "word_count": int(entry.get("word_count") or 0),
+                "ai_criteria": feedback.get("criteria") or [],
+                "ai_feedback": feedback.get("feedback"),
+                "ai_problems": feedback.get("problems") or [],
+                "can_rescore": state in ("delayed", "review"),
+                "marks_changes": changes.get(task.id, []),
+            }
+        )
+    return out
+
+
+def _deck_review(db: Session, attempt: Any, changes: Dict[int, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Each deck as the student built it, with the AI's marking and evidence."""
+    deck_tasks = _deck_tasks(db, attempt.simulation_id)
+    if not deck_tasks:
+        return []
+    results = _deck_results(db, [attempt.id])
+    saved = _load(attempt.slides, None)
+    saved = saved if isinstance(saved, dict) else {}
+    out = []
+    for task in deck_tasks:
+        result = results.get((attempt.id, task.id))
+        state = memo_state(result, attempt.status)
+        entry = saved.get(str(task.id)) or {}
+        feedback = (_load(result.ai_feedback, {}) or {}) if result is not None else {}
+        config = _load(task.config, {}) or {}
+        out.append(
+            {
+                "task_id": task.id,
+                "task_result_id": result.id if result is not None else None,
+                "position": task.position,
+                "stage": task.stage,
+                "prompt": task.prompt_template,
+                "min_slides": int(config.get("min_slides") or 1),
+                "slide_plan": config.get("slide_plan") or [],
+                "rubric": (_load(task.rubric, {}) or {}).get("criteria") or [],
+                "status": state,
+                "marked_by": result.marked_by if result is not None else None,
+                "marks": _memo_marks(result),
+                "max_marks": float(task.max_score),
+                "slides": entry.get("slides") or [],
+                "ai_criteria": feedback.get("criteria") or [],
+                "ai_feedback": feedback.get("feedback"),
+                "ai_problems": feedback.get("problems") or [],
+                "can_rescore": state in ("delayed", "review"),
+                "marks_changes": changes.get(task.id, []),
+            }
+        )
+    return out
+
+
+def rescore_memo(db: Session, current_user: Dict[str, Any], task_result_id: int) -> Dict[str, Any]:
+    """Faculty ask the AI to mark a memo or deck again after it was delayed or left for review."""
+    from .scoring import requeue
+
+    visible_sql, params = _visible_attempts_sql(current_user)
+    row = db.execute(
+        text(f"""
+            SELECT r.id, r.task_id, r.status, r.ai_feedback, a.id AS attempt_id, a.simulation_id,
+                   a.status AS attempt_status
+            FROM jobsim_task_results r
+            JOIN jobsim_tasks t ON t.id = r.task_id AND t.type IN ('memo', 'presentation')
+            JOIN jobsim_attempts a ON a.id = r.attempt_id
+            JOIN users u ON u.id = a.student_id
+            WHERE r.id = :rid AND {visible_sql}
+            FOR UPDATE OF r
+        """),
+        {**params, "rid": task_result_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    _simulation_for_review(db, current_user, row.simulation_id)
+    if memo_state(row, row.attempt_status) not in ("delayed", "review"):
+        raise HTTPException(
+            status_code=409, detail="Only a memo whose scoring was delayed or left for faculty can be scored again."
+        )
+    requeue(db, row.attempt_id, row.task_id)
+    db.commit()
+    return attempt_review(db, current_user, row.attempt_id)
 
 
 def change_score(
@@ -461,7 +713,8 @@ def change_score(
     visible_sql, params = _visible_attempts_sql(current_user)
     row = db.execute(
         text(f"""
-            SELECT r.id, r.score, t.max_score, t.position, a.id AS attempt_id, a.simulation_id, a.status
+            SELECT r.id, r.score, r.status AS result_status, t.max_score, t.position,
+                   a.id AS attempt_id, a.simulation_id, a.status
             FROM jobsim_task_results r
             JOIN jobsim_tasks t ON t.id = r.task_id
             JOIN jobsim_attempts a ON a.id = r.attempt_id
@@ -481,7 +734,8 @@ def change_score(
         raise HTTPException(status_code=400, detail=f"Marks must be between 0 and {max_marks:g}.")
     new_score = round(score, 2)
     old_score = float(row.score or 0)
-    if new_score == old_score:
+    # A memo still waiting for its score can be given any marks, 0 included.
+    if new_score == old_score and row.result_status != "scoring":
         raise HTTPException(status_code=400, detail=f"This task already has {old_score:g} marks.")
 
     db.execute(
@@ -498,7 +752,14 @@ def change_score(
         },
     )
     db.execute(
-        text("UPDATE jobsim_task_results SET score = :new, marked_by = 'faculty', updated_at = NOW() WHERE id = :rid"),
+        text("""
+            UPDATE jobsim_task_results
+            SET score = :new, marked_by = 'faculty', updated_at = NOW(),
+                -- memos only: one still waiting for the AI is now marked
+                status = CASE WHEN status = 'scoring' THEN 'scored' ELSE status END,
+                ai_feedback = CASE WHEN ai_feedback ? 'state' THEN ai_feedback - 'state' ELSE ai_feedback END
+            WHERE id = :rid
+        """),
         {"new": new_score, "rid": row.id},
     )
     db.execute(
@@ -512,6 +773,8 @@ def change_score(
         """),
         {"aid": row.attempt_id},
     )
+    # Faculty marking the last memo or deck that was waiting updates the capability profile.
+    apply_attempt_to_profile(db, row.attempt_id)
     db.execute(
         text("""
             INSERT INTO system_events (actor_user_id, event_type, message)

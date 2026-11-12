@@ -63,7 +63,69 @@ function SectionsTable({ items, maxMarks }: { items: ResultItem[]; maxMarks: num
   )
 }
 
-function TasksTable({ items, tasks }: { items: ResultItem[]; tasks: SimulationResults["tasks"] }) {
+/** What a student's memos and slides still need, if anything. */
+function memoNote(item: ResultItem) {
+  return [writtenNote(item, item.memo_results, "Memo"), writtenNote(item, item.deck_results ?? [], "Slides")].filter(Boolean).join(" · ")
+}
+
+function writtenNote(item: ResultItem, results: ResultItem["memo_results"], label: string) {
+  const statuses = results.map((result) => result.status)
+  if (statuses.includes("review")) return `${label} ${label === "Slides" ? "need" : "needs"} your marks`
+  if (statuses.includes("delayed")) return `${label} scoring delayed`
+  if (statuses.includes("pending") && item.status === "submitted") return `${label} scoring pending`
+  return ""
+}
+
+function MemoRows({
+  items,
+  memoTasks,
+  label = "Memo",
+  resultsOf = (item) => item.memo_results,
+}: {
+  items: ResultItem[]
+  memoTasks: SimulationResults["memo_tasks"]
+  label?: string
+  resultsOf?: (item: ResultItem) => ResultItem["memo_results"]
+}) {
+  const submitted = items.filter((item) => item.status === "submitted")
+  return (
+    <>
+      {memoTasks.map((task) => {
+        const results = submitted.flatMap((item) => resultsOf(item).filter((result) => result.task_id === task.task_id))
+        const scored = results.filter((result) => result.status === "scored")
+        const waiting = results.length - scored.length
+        const mean = average(scored.map((result) => result.marks))
+        return (
+          <tr key={task.task_id}>
+            <td className="py-3 pr-4">
+              <p className="text-xs font-semibold text-[#6b7280]">
+                Task {task.position}
+                {task.stage ? ` · ${task.stage}` : ""} · {label}
+              </p>
+              <p className="mt-0.5 text-[#111827]">{task.prompt}</p>
+            </td>
+            <td colSpan={3} className="py-3 text-right text-xs text-[#6b7280]">
+              {scored.length} marked{waiting ? ` · ${waiting} waiting` : ""}
+            </td>
+            <td className="py-3 text-right tabular-nums text-[#374151]">{mean === null ? "—" : `${mean} / ${task.max_marks}`}</td>
+          </tr>
+        )
+      })}
+    </>
+  )
+}
+
+function TasksTable({
+  items,
+  tasks,
+  memoTasks,
+  deckTasks,
+}: {
+  items: ResultItem[]
+  tasks: SimulationResults["tasks"]
+  memoTasks: SimulationResults["memo_tasks"]
+  deckTasks: SimulationResults["deck_tasks"]
+}) {
   const submitted = items.filter((item) => item.status === "submitted")
   return (
     <table className="w-full min-w-[760px] text-left text-sm">
@@ -97,6 +159,8 @@ function TasksTable({ items, tasks }: { items: ResultItem[]; tasks: SimulationRe
             </tr>
           )
         })}
+        <MemoRows items={items} memoTasks={memoTasks} />
+        <MemoRows items={items} memoTasks={deckTasks} label="Slides" resultsOf={(item) => item.deck_results ?? []} />
       </tbody>
     </table>
   )
@@ -232,7 +296,7 @@ export default function FacultySimulationResults() {
                 {view === "sections" ? (
                   <SectionsTable items={data.items} maxMarks={data.max_marks} />
                 ) : view === "tasks" ? (
-                  <TasksTable items={items} tasks={data.tasks} />
+                  <TasksTable items={items} tasks={data.tasks} memoTasks={data.memo_tasks} deckTasks={data.deck_tasks ?? []} />
                 ) : (
                   <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className="text-xs uppercase tracking-wide text-[#6b7280]">
@@ -269,9 +333,12 @@ export default function FacultySimulationResults() {
                           <td className="py-3 text-right tabular-nums text-[#374151]">{item.not_answered}</td>
                           <td className="py-3 text-right tabular-nums text-[#374151]">
                             {item.marks} / {data.max_marks}
-                            {item.task_results.some((result) => result.marks_changed) ? (
+                            {item.task_results.some((result) => result.marks_changed) ||
+                            item.memo_results.some((result) => result.marks_changed) ||
+                            (item.deck_results ?? []).some((result) => result.marks_changed) ? (
                               <p className="text-xs text-[#92702a]">Changed by faculty</p>
                             ) : null}
+                            {memoNote(item) ? <p className="text-xs text-[#1d4ed8]">{memoNote(item)}</p> : null}
                           </td>
                           <td className="py-3 pl-4 text-right">
                             <Link

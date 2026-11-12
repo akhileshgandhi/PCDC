@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from services.auth.service import get_current_user
 from shared.database import get_db
 
-from . import designer, publishing, questions, review, service
+from . import designer, publishing, questions, review, scoring, service
 from .formula import FORMAT_LABELS, SUPPORTED_FUNCTIONS
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,11 @@ class AttemptState(BaseModel):
     last_task_id: Optional[int] = None
 
 
+class MemoSubmit(BaseModel):
+    doc: Any = None
+    slides: Any = None  # a slides task sends its deck here instead
+
+
 class CellInput(BaseModel):
     input: str = ""
     format: str = "general"
@@ -138,6 +143,17 @@ def list_simulations(
     return {"items": items, "total": len(items)}
 
 
+# Declared before /faculty/jobsim/{simulation_id} so "sent-back-count" isn't read as an id.
+@jobsim_router.get("/faculty/jobsim/sent-back-count")
+def sent_back_count(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Live count for the faculty sidebar badge: simulations an admin sent back, not opened yet."""
+    require_author(current_user)
+    return {"sent_back": service.sent_back_unseen_count(db, current_user)}
+
+
 @jobsim_router.post("/faculty/jobsim", status_code=201)
 def create_simulation(
     payload: SimulationPayload,
@@ -158,7 +174,10 @@ def get_simulation(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_author(current_user)
-    return service.load_simulation_for_author(db, current_user, simulation_id)
+    simulation = service.load_simulation_for_author(db, current_user, simulation_id)
+    if simulation["sent_back"]:
+        service.mark_sent_back_seen(db, current_user, simulation_id)
+    return simulation
 
 
 @jobsim_router.put("/faculty/jobsim/{simulation_id}")
@@ -264,6 +283,8 @@ class DraftBrief(BaseModel):
     task_count: int = 10
     capability_ids: List[int] = Field(default_factory=list)
     notes: Optional[str] = None
+    include_memo: bool = False
+    include_presentation: bool = False
 
 
 @jobsim_router.post("/faculty/jobsim/drafts", status_code=202)
@@ -302,6 +323,8 @@ def create_draft(
             "capability_ids": brief.capability_ids,
             "capabilities": capability_names,
             "notes": (brief.notes or "").strip() or None,
+            "include_memo": brief.include_memo,
+            "include_presentation": brief.include_presentation,
         },
     )
     background_tasks.add_task(designer.run_draft_job, job_id)
@@ -407,6 +430,20 @@ def change_task_score(
     return review.change_score(db, current_user, task_result_id, payload.score, payload.note)
 
 
+@jobsim_router.post("/faculty/jobsim/task-results/{task_result_id}/rescore")
+def rescore_memo(
+    task_result_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Ask the AI to mark a memo or deck again after its scoring was delayed or failed the checks."""
+    require_author(current_user)
+    result = review.rescore_memo(db, current_user, task_result_id)
+    background_tasks.add_task(scoring.kick)
+    return result
+
+
 @jobsim_router.patch("/faculty/jobsim/assignments/{assignment_id}/close")
 def close_simulation_assignment(
     assignment_id: int,
@@ -432,6 +469,15 @@ def admin_simulations(
 ) -> Dict[str, Any]:
     """Approved, published and withdrawn simulations (drafts stay with their author)."""
     return publishing.list_for_admin(db, current_user, status)
+
+
+@jobsim_router.get("/admin/jobsim/pending-count")
+def admin_pending_count(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Live count for the sidebar badge: simulations waiting to be published."""
+    return {"pending": publishing.pending_count(db, current_user)}
 
 
 @jobsim_router.post("/admin/jobsim/{simulation_id}/publish")
@@ -558,11 +604,15 @@ def check_cell(
 @jobsim_router.post("/jobsim/attempts/{attempt_id}/finish")
 def finish_attempt(
     attempt_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_student(current_user)
-    return service.finish_attempt(db, current_user, attempt_id)
+    result = service.finish_attempt(db, current_user, attempt_id)
+    # Memos left open at Finish go for scoring; start on them straight away.
+    background_tasks.add_task(scoring.kick)
+    return result
 
 
 @jobsim_router.get("/jobsim/attempts/{attempt_id}/results")
@@ -573,6 +623,25 @@ def attempt_results(
 ) -> Dict[str, Any]:
     require_student(current_user)
     return review.student_results(db, current_user, attempt_id)
+
+
+@jobsim_router.post("/jobsim/attempts/{attempt_id}/tasks/{task_id}/submit")
+def submit_memo(
+    attempt_id: int,
+    task_id: int,
+    memo: MemoSubmit,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Submit a memo or a slide deck; its structure is checked here and scoring is queued."""
+    require_student(current_user)
+    if service.task_type_for_attempt(db, current_user, attempt_id, task_id) == "presentation":
+        result = service.submit_deck(db, current_user, attempt_id, task_id, memo.slides)
+    else:
+        result = service.submit_memo(db, current_user, attempt_id, task_id, memo.doc)
+    background_tasks.add_task(scoring.kick)
+    return result
 
 
 @jobsim_router.post("/jobsim/attempts/{attempt_id}/tasks/{task_id}/hint")

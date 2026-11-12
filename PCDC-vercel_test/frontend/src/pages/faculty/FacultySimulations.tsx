@@ -138,7 +138,22 @@ export default function FacultySimulations() {
                       <td className="py-3 text-right tabular-nums text-[#374151]">{item.task_count}</td>
                       <td className="py-3 text-right tabular-nums text-[#374151]">{item.row_count.toLocaleString("en-IN")}</td>
                       <td className="py-3 text-right tabular-nums text-[#374151]">{item.attempt_count}</td>
-                      <td className="py-3 pl-6"><AuthorStatusBadge status={item.status} /></td>
+                      <td className="py-3 pl-6">
+                        <div className="flex flex-col items-start gap-1">
+                          <AuthorStatusBadge status={item.status} />
+                          {item.sent_back ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#b42318]"
+                              title="An admin sent this back for changes. Open it to see their note."
+                            >
+                              {item.sent_back_unseen ? (
+                                <span className="size-2 rounded-full bg-[#d92d20]" aria-label="New" />
+                              ) : null}
+                              Sent back
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="py-3 text-[#6b7280]">
                         {new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(item.updated_at))}
                       </td>

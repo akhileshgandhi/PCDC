@@ -107,6 +107,20 @@ def list_for_admin(db: Session, current_user: Dict[str, Any], status: Optional[s
     return {"items": items, "total": len(items), "counts": counts}
 
 
+def pending_count(db: Session, current_user: Dict[str, Any]) -> int:
+    """Simulations approved by faculty and waiting for this admin to publish
+    (same scope as the publish queue). Drives the sidebar red badge."""
+    _require_admin(current_user)
+    scope_sql, params = _admin_scope_sql(current_user)
+    return int(
+        db.execute(
+            text(f"SELECT COUNT(*) FROM jobsim_simulations s WHERE s.status = 'approved' AND {scope_sql}"),
+            params,
+        ).scalar()
+        or 0
+    )
+
+
 def ensure_admin_can_manage(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Any:
     _require_admin(current_user)
     scope_sql, params = _admin_scope_sql(current_user)
@@ -159,15 +173,17 @@ def send_back(db: Session, current_user: Dict[str, Any], simulation_id: int, not
     row = ensure_admin_can_manage(db, current_user, simulation_id)
     if row.status != "approved":
         raise HTTPException(status_code=409, detail="Only an approved simulation can be sent back.")
+    note = (note or "").strip()[:1000]
+    # sent_back_* drive the faculty's red badge and the note in their editor.
     db.execute(
         text("""
             UPDATE jobsim_simulations
-            SET status = 'draft', approved_by = NULL, updated_at = NOW()
+            SET status = 'draft', approved_by = NULL, updated_at = NOW(),
+                sent_back_at = NOW(), sent_back_note = :note, sent_back_seen_at = NULL
             WHERE id = :sid
         """),
-        {"sid": simulation_id},
+        {"sid": simulation_id, "note": note or None},
     )
-    note = (note or "").strip()[:1000]
     _notify(
         db, row.created_by, "jobsim_sent_back", "Simulation sent back for changes",
         f'"{row.title}" was sent back to draft.' + (f" Admin note: {note}" if note else ""),

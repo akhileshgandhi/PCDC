@@ -10,6 +10,8 @@ import FacultyLayout from "../../layouts/FacultyLayout"
 
 const POLL_MS = 3000
 const LEVELS = ["Beginner", "Intermediate", "Advanced"]
+// Dropdown value that switches the Subject field to a text box.
+const OTHER_SUBJECT = "__other__"
 const PROGRESS_STEPS = [
   "Writing the scenario and tasks",
   "Building the company dataset",
@@ -29,9 +31,12 @@ export default function FacultySimulationNew() {
   const [duration, setDuration] = useState("60")
   const [taskCount, setTaskCount] = useState("10")
   const [notes, setNotes] = useState("")
+  const [includeMemo, setIncludeMemo] = useState(false)
+  const [includeSlides, setIncludeSlides] = useState(false)
   const [skills, setSkills] = useState<number[]>([])
   const [capabilities, setCapabilities] = useState<Array<{ id: number; name: string }>>([])
   const [teachingSubjects, setTeachingSubjects] = useState<string[]>([])
+  const [otherSubject, setOtherSubject] = useState(false)
   const [error, setError] = useState("")
   const [jobId, setJobId] = useState<number | null>(null)
   const [elapsed, setElapsed] = useState(0)
@@ -91,6 +96,8 @@ export default function FacultySimulationNew() {
         task_count: Math.min(50, Math.max(1, Number(taskCount) || 10)),
         capability_ids: skills,
         notes: notes.trim() || undefined,
+        include_memo: includeMemo,
+        include_presentation: includeSlides,
       })
       startedAt.current = Date.now()
       setElapsed(0)
@@ -133,10 +140,38 @@ export default function FacultySimulationNew() {
                 <input className={field} value={role} disabled={isRunning} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Retail sales analyst" />
               </Field>
               <Field label="Subject">
-                <input className={field} value={subject} disabled={isRunning} onChange={(e) => setSubject(e.target.value)} list="sim-subjects" placeholder="e.g. Business Analytics" />
-                <datalist id="sim-subjects">
-                  {teachingSubjects.map((s) => <option key={s} value={s} />)}
-                </datalist>
+                {teachingSubjects.length > 0 ? (
+                  <>
+                    {/* A real dropdown of the subjects this faculty teaches, like Semester
+                        and Level; "Other subject" opens a text box for anything else. */}
+                    <select
+                      className={field}
+                      value={otherSubject ? OTHER_SUBJECT : subject}
+                      disabled={isRunning}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setOtherSubject(value === OTHER_SUBJECT)
+                        setSubject(value === OTHER_SUBJECT ? "" : value)
+                      }}
+                    >
+                      <option value="">Any subject</option>
+                      {teachingSubjects.map((s) => <option key={s} value={s}>{s}</option>)}
+                      <option value={OTHER_SUBJECT}>Other subject…</option>
+                    </select>
+                    {otherSubject ? (
+                      <input
+                        className={`${field} mt-2`}
+                        value={subject}
+                        disabled={isRunning}
+                        onChange={(e) => setSubject(e.target.value)}
+                        placeholder="Type the subject, e.g. Business Analytics"
+                        autoFocus
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <input className={field} value={subject} disabled={isRunning} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Business Analytics" />
+                )}
               </Field>
               <Field label="Semester">
                 <select className={field} value={semester} disabled={isRunning} onChange={(e) => setSemester(e.target.value)}>
@@ -156,6 +191,38 @@ export default function FacultySimulationNew() {
                 <input className={field} type="number" min={1} max={50} value={taskCount} disabled={isRunning} onChange={(e) => setTaskCount(e.target.value)} />
               </Field>
             </div>
+
+            <label className="mt-5 flex items-start gap-3 rounded-md border border-[#e6e8eb] p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[#0b1d3a]"
+                checked={includeMemo}
+                disabled={isRunning}
+                onChange={(e) => setIncludeMemo(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold text-[#111827]">Include a memo</span>
+                <span className="mt-0.5 block text-[#6b7280]">
+                  The AI also drafts a memo brief, its required sections and a marking rubric. You can edit them before approving.
+                </span>
+              </span>
+            </label>
+
+            <label className="mt-3 flex items-start gap-3 rounded-md border border-[#e6e8eb] p-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[#0b1d3a]"
+                checked={includeSlides}
+                disabled={isRunning}
+                onChange={(e) => setIncludeSlides(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold text-[#111827]">Include slides</span>
+                <span className="mt-0.5 block text-[#6b7280]">
+                  The AI also drafts a slide deck brief, a slide-by-slide plan and a marking rubric. Students build the deck last, after the spreadsheet and memo.
+                </span>
+              </span>
+            </label>
 
             {capabilities.length ? (
               <fieldset className="mt-5">

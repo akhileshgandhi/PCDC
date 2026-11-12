@@ -22,15 +22,18 @@ from services.notification.router import notification_router
 from services.student.router import student_router
 from services.coach.router import coach_router
 from services.jobsim.router import jobsim_router
-from services.jobsim.worker import start_sweeper
+from services.jobsim.worker import start_scorer, start_sweeper
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     stop_sweeper = start_sweeper()
+    stop_scorer = start_scorer()
     yield
     if stop_sweeper:
         stop_sweeper.set()
+    if stop_scorer:
+        stop_scorer.set()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -48,7 +51,7 @@ app = FastAPI(lifespan=lifespan)
 # literal "*", which is invalid combined with allow_credentials).
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http?://(localhost|(\d{1,3}\.){3}\d{1,3}):\d+|http://(www\.)?pcdc\.in",
+    allow_origin_regex=r"https?://(localhost|(\d{1,3}\.){3}\d{1,3}):\d+|https?://(www\.)?pcdc\.in",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

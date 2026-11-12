@@ -12,6 +12,10 @@ stay alive and the sweeper isn't started. The check before every read still
 applies there.
 
 JOBSIM_SWEEP_SECONDS sets how often it runs. JOBSIM_SWEEPER=off turns it off.
+
+The memo scorer runs beside it (handover 9.6, 9.7): it takes queued 'score'
+jobs and marks memos with the AI (see scoring.py). JOBSIM_SCORE_SECONDS sets how
+often it looks for jobs when idle. JOBSIM_SCORER=off turns it off.
 """
 
 import logging
@@ -22,11 +26,13 @@ from typing import Optional
 
 from shared.database import SessionLocal
 
+from . import scoring
 from .service import sweep_expired_attempts
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_SWEEP_SECONDS = 30
+DEFAULT_SCORE_SECONDS = 5
 
 
 def sweep_interval() -> float:
@@ -71,9 +77,43 @@ def start_sweeper() -> Optional[threading.Event]:
     return stop
 
 
+def score_interval() -> float:
+    try:
+        return max(1.0, float(os.getenv("JOBSIM_SCORE_SECONDS", DEFAULT_SCORE_SECONDS)))
+    except ValueError:
+        return float(DEFAULT_SCORE_SECONDS)
+
+
+def scorer_thread_enabled() -> bool:
+    return not os.getenv("VERCEL") and scoring.scorer_enabled()
+
+
+def run_scorer(stop: threading.Event) -> None:
+    """Mark due memos; when there are none, wait an interval and look again."""
+    interval = score_interval()
+    while not stop.is_set():
+        try:
+            if scoring.run_due_jobs():
+                continue
+        except Exception:  # noqa: BLE001 - a database blip must not end the scorer
+            logger.exception("Memo scoring failed; trying again next interval")
+        stop.wait(interval)
+
+
+def start_scorer() -> Optional[threading.Event]:
+    """Start the memo scorer thread. Returns the event that stops it, or None if off."""
+    if not scorer_thread_enabled():
+        return None
+    stop = threading.Event()
+    threading.Thread(target=run_scorer, args=(stop,), name="jobsim-scorer", daemon=True).start()
+    return stop
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     stop_event = threading.Event()
+    if scoring.scorer_enabled():
+        threading.Thread(target=run_scorer, args=(stop_event,), name="jobsim-scorer", daemon=True).start()
     try:
         run_sweeper(stop_event)
     except KeyboardInterrupt:

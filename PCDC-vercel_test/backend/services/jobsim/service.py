@@ -22,16 +22,22 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from .capability import apply_attempt_to_profile
 from .dataset import generate_rows
 from .formula import FORMATS, SUPPORTED_FUNCTIONS, Sheet, evaluate_input, functions_used
 from .marking import mark_spreadsheet_answer
+from .memo import clean_memo_task, memo_entry, structure_problems
+from .slides import clean_presentation_task, deck_entry
+from .slides import structure_problems as deck_problems
 
 MAX_DATASET_ROWS = 2000
 MAX_DATASET_COLUMNS = 30
 MAX_SPREADSHEET_TASKS = 50
 TASK_TYPES = ("spreadsheet", "memo", "presentation")
 # Only these config keys are ever shown to a student.
-STUDENT_CONFIG_KEYS = ("cell_label", "must_use_formula", "required_sections", "min_words", "min_slides")
+STUDENT_CONFIG_KEYS = (
+    "cell_label", "must_use_formula", "required_sections", "min_words", "min_slides", "slide_plan", "section_notes",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +151,15 @@ def validate_simulation(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], List[D
                 seen_formulas[key] = position
             task["answer_formula"] = formula
             task["expected_format"] = fmt
+        elif task_type == "memo":
+            task["config"], task["rubric"], problems = clean_memo_task(task["config"], task["rubric"])
+            errors.extend(f"{label}: {problem}" for problem in problems)
+            # A memo is worth what its rubric adds up to.
+            task["max_score"] = sum(c["max"] for c in task["rubric"]["criteria"]) or task["max_score"]
+        elif task_type == "presentation":
+            task["config"], task["rubric"], problems = clean_presentation_task(task["config"], task["rubric"])
+            errors.extend(f"{label}: {problem}" for problem in problems)
+            task["max_score"] = sum(c["max"] for c in task["rubric"]["criteria"]) or task["max_score"]
         tasks.append(task)
     if spreadsheet_count > MAX_SPREADSHEET_TASKS:
         errors.append(f"A simulation can have at most {MAX_SPREADSHEET_TASKS} spreadsheet tasks.")
@@ -290,6 +305,12 @@ def load_simulation_for_author(db: Session, current_user: Dict[str, Any], simula
         "weights": _load(row.weights, {}),
         "dataset": _load(row.dataset, {"columns": [], "rows": []}),
         "can_regenerate_dataset": bool(_load(row.dataset_spec, None)),
+        # Set while a draft is back with its author after an admin sent it back.
+        "sent_back": (
+            {"at": str(row.sent_back_at), "note": row.sent_back_note}
+            if row.status == "draft" and row.sent_back_at
+            else None
+        ),
         "skills": [
             {"id": c.id, "name": c.name}
             for c in db.execute(
@@ -333,6 +354,7 @@ def list_simulations_for_author(db: Session, current_user: Dict[str, Any]) -> Li
     rows = db.execute(
         text(f"""
             SELECT s.id, s.title, s.role, s.level, s.subject, s.status, s.duration_minutes, s.updated_at,
+                   s.sent_back_at, s.sent_back_seen_at,
                    (SELECT COUNT(*) FROM jobsim_tasks t WHERE t.simulation_id = s.id) AS task_count,
                    (SELECT COUNT(*) FROM jobsim_attempts a WHERE a.simulation_id = s.id) AS attempt_count,
                    jsonb_array_length(COALESCE(s.dataset -> 'rows', CAST('[]' AS JSONB))) AS row_count
@@ -355,9 +377,41 @@ def list_simulations_for_author(db: Session, current_user: Dict[str, Any]) -> Li
             "attempt_count": int(r.attempt_count),
             "row_count": int(r.row_count or 0),
             "updated_at": str(r.updated_at),
+            "sent_back": r.status == "draft" and r.sent_back_at is not None,
+            "sent_back_unseen": r.status == "draft" and r.sent_back_at is not None and r.sent_back_seen_at is None,
         }
         for r in rows
     ]
+
+
+def sent_back_unseen_count(db: Session, current_user: Dict[str, Any]) -> int:
+    """The author's simulations sent back by an admin and not opened since.
+    Drives the red badge on Simulations in the faculty sidebar."""
+    return int(
+        db.execute(
+            text("""
+                SELECT COUNT(*) FROM jobsim_simulations
+                WHERE created_by = :uid AND status = 'draft'
+                  AND sent_back_at IS NOT NULL AND sent_back_seen_at IS NULL
+            """),
+            {"uid": current_user["id"]},
+        ).scalar()
+        or 0
+    )
+
+
+def mark_sent_back_seen(db: Session, current_user: Dict[str, Any], simulation_id: int) -> None:
+    """The author opened a simulation that was sent back: clear its badge.
+    Only the author's own opening counts, not an admin's."""
+    result = db.execute(
+        text("""
+            UPDATE jobsim_simulations SET sent_back_seen_at = NOW()
+            WHERE id = :sid AND created_by = :uid AND sent_back_at IS NOT NULL AND sent_back_seen_at IS NULL
+        """),
+        {"sid": simulation_id, "uid": current_user["id"]},
+    )
+    if result.rowcount:
+        db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -618,8 +672,12 @@ def save_attempt_state(
     db: Session, current_user: Dict[str, Any], attempt_id: int, state: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Autosave. `cells` is merged per task ({task_id: {input, format}}), so the
-    browser only needs to send what changed."""
+    browser only needs to send what changed. `memo` is merged the same way
+    ({task_id: {doc}}), and `slides` too ({task_id: {slides}}); a memo or deck
+    that was submitted can't change."""
     attempt = _attempt_for_student(db, attempt_id, current_user["id"])
+    if "memo" in state or "slides" in state:
+        attempt = _locked_attempt(db, attempt_id, current_user["id"])
     _ensure_writable(attempt)
     cells = _load(attempt.cells, {})
     for task_id, cell in (state.get("cells") or {}).items():
@@ -634,16 +692,186 @@ def save_attempt_state(
     params: Dict[str, Any] = {"aid": attempt.id, "cells": _json(cells)}
     if "memo" in state:
         sets.append("memo = CAST(:memo AS JSONB)")
-        params["memo"] = _json(state["memo"])
+        params["memo"] = _json(_merged_memos(db, attempt, state["memo"]))
     if "slides" in state:
         sets.append("slides = CAST(:slides AS JSONB)")
-        params["slides"] = _json(state["slides"])
+        params["slides"] = _json(_merged_decks(db, attempt, state["slides"]))
     if state.get("last_task_id") is not None:
         sets.append("last_task_id = :last_task_id")
         params["last_task_id"] = int(state["last_task_id"])
     db.execute(text(f"UPDATE jobsim_attempts SET {', '.join(sets)} WHERE id = :aid"), params)
     db.commit()
     return {"saved": True, "saved_at": datetime.utcnow().isoformat() + "Z"}
+
+
+# ---------------------------------------------------------------------------
+# Student: memos (handover 8.2)
+# ---------------------------------------------------------------------------
+
+
+def _locked_attempt(db: Session, attempt_id: int, user_id: int) -> Any:
+    """Memos are merged and then written back, so a save can't overlap a submit."""
+    attempt = db.execute(
+        text("SELECT * FROM jobsim_attempts WHERE id = :aid AND student_id = :uid FOR UPDATE"),
+        {"aid": attempt_id, "uid": user_id},
+    ).fetchone()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    return attempt
+
+
+def _written_tasks(db: Session, attempt: Any, task_type: str) -> List[Any]:
+    return db.execute(
+        text("""
+            SELECT t.id, t.config, r.status
+            FROM jobsim_tasks t
+            LEFT JOIN jobsim_task_results r ON r.task_id = t.id AND r.attempt_id = :aid
+            WHERE t.simulation_id = :sid AND t.type = :type
+        """),
+        {"aid": attempt.id, "sid": attempt.simulation_id, "type": task_type},
+    ).fetchall()
+
+
+def _memo_tasks(db: Session, attempt: Any) -> List[Any]:
+    return _written_tasks(db, attempt, "memo")
+
+
+def _is_closed(status: Optional[str]) -> bool:
+    return status in ("scoring", "scored")
+
+
+def _entry(raw_doc: Any) -> Dict[str, Any]:
+    try:
+        return memo_entry(raw_doc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _merged_memos(db: Session, attempt: Any, incoming: Any) -> Dict[str, Any]:
+    memos = _load(attempt.memo, None) or {}
+    if not isinstance(incoming, dict):
+        return memos
+    open_tasks = {str(t.id) for t in _memo_tasks(db, attempt) if not _is_closed(t.status)}
+    for task_id, saved in incoming.items():
+        if str(task_id) in open_tasks and isinstance(saved, dict):
+            memos[str(task_id)] = _entry(saved.get("doc"))
+    return memos
+
+
+def _set_memo_result(
+    db: Session, attempt_id: int, task_id: int, status: str, score: Optional[float], marked_by: Optional[str]
+) -> None:
+    db.execute(
+        text("""
+            INSERT INTO jobsim_task_results (attempt_id, task_id, status, score, marked_by)
+            VALUES (:aid, :tid, :status, :score, :marked_by)
+            ON CONFLICT (attempt_id, task_id) DO UPDATE
+            SET status = EXCLUDED.status, score = EXCLUDED.score,
+                marked_by = EXCLUDED.marked_by, updated_at = NOW()
+        """),
+        {"aid": attempt_id, "tid": task_id, "status": status, "score": score, "marked_by": marked_by},
+    )
+
+
+def _queue_memo_scoring(db: Session, attempt_id: int, task_id: int) -> None:
+    _set_memo_result(db, attempt_id, task_id, "scoring", None, None)
+    db.execute(
+        text("INSERT INTO jobsim_jobs (kind, payload) VALUES ('score', CAST(:payload AS JSONB))"),
+        {"payload": _json({"attempt_id": attempt_id, "task_id": task_id})},
+    )
+
+
+def submit_memo(
+    db: Session, current_user: Dict[str, Any], attempt_id: int, task_id: int, raw_doc: Any
+) -> Dict[str, Any]:
+    """Save the memo as sent, re-check its structure and queue it for scoring.
+    Safe to call twice. The saved memo is untouched if a check fails."""
+    attempt = _locked_attempt(db, attempt_id, current_user["id"])
+    _ensure_writable(attempt)
+    task = next((t for t in _memo_tasks(db, attempt) if t.id == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Memo task not found")
+    if _is_closed(task.status):
+        return {"status": task.status}
+    entry = _entry(raw_doc)
+    problems = structure_problems(entry, _load(task.config, {}))
+    if problems:
+        raise HTTPException(status_code=400, detail={"message": "This memo isn't ready to submit.", "errors": problems})
+    memos = _load(attempt.memo, None) or {}
+    memos[str(task_id)] = entry
+    db.execute(
+        text("UPDATE jobsim_attempts SET memo = CAST(:memo AS JSONB), updated_at = NOW() WHERE id = :aid"),
+        {"aid": attempt.id, "memo": _json(memos)},
+    )
+    _queue_memo_scoring(db, attempt.id, task_id)
+    db.commit()
+    return {"status": "scoring"}
+
+
+def _close_open_memos(db: Session, attempt: Any) -> None:
+    """At Finish or time-up, memos and decks not submitted yet go for scoring as
+    they were last saved, even if unfinished. A blank one scores 0 with no AI call."""
+    for column, task_type in ((attempt.memo, "memo"), (attempt.slides, "presentation")):
+        saved = _load(column, None) or {}
+        for task in _written_tasks(db, attempt, task_type):
+            if _is_closed(task.status):
+                continue
+            if ((saved.get(str(task.id)) or {}).get("text") or "").strip():
+                _queue_memo_scoring(db, attempt.id, task.id)
+            else:
+                _set_memo_result(db, attempt.id, task.id, "scored", 0, "auto")
+
+
+# ---------------------------------------------------------------------------
+# Student: slide decks (handover 8.3). Saved, submitted and scored like memos.
+# ---------------------------------------------------------------------------
+
+
+def _merged_decks(db: Session, attempt: Any, incoming: Any) -> Dict[str, Any]:
+    decks = _load(attempt.slides, None)
+    decks = decks if isinstance(decks, dict) else {}
+    if not isinstance(incoming, dict):
+        return decks
+    open_tasks = {str(t.id) for t in _written_tasks(db, attempt, "presentation") if not _is_closed(t.status)}
+    for task_id, saved in incoming.items():
+        if str(task_id) in open_tasks and isinstance(saved, dict):
+            decks[str(task_id)] = deck_entry(saved.get("slides"))
+    return decks
+
+
+def submit_deck(
+    db: Session, current_user: Dict[str, Any], attempt_id: int, task_id: int, raw_slides: Any
+) -> Dict[str, Any]:
+    """Save the deck as sent, re-check its structure and queue it for scoring.
+    Safe to call twice. The saved deck is untouched if a check fails."""
+    attempt = _locked_attempt(db, attempt_id, current_user["id"])
+    _ensure_writable(attempt)
+    task = next((t for t in _written_tasks(db, attempt, "presentation") if t.id == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail="Slides task not found")
+    if _is_closed(task.status):
+        return {"status": task.status}
+    entry = deck_entry(raw_slides)
+    problems = deck_problems(entry, _load(task.config, {}))
+    if problems:
+        raise HTTPException(status_code=400, detail={"message": "These slides aren't ready to submit.", "errors": problems})
+    decks = _merged_decks(db, attempt, None)
+    decks[str(task_id)] = entry
+    db.execute(
+        text("UPDATE jobsim_attempts SET slides = CAST(:slides AS JSONB), updated_at = NOW() WHERE id = :aid"),
+        {"aid": attempt.id, "slides": _json(decks)},
+    )
+    _queue_memo_scoring(db, attempt.id, task_id)
+    db.commit()
+    return {"status": "scoring"}
+
+
+def task_type_for_attempt(db: Session, current_user: Dict[str, Any], attempt_id: int, task_id: int) -> Optional[str]:
+    attempt = _attempt_for_student(db, attempt_id, current_user["id"])
+    return db.execute(
+        text("SELECT type FROM jobsim_tasks WHERE id = :tid AND simulation_id = :sid"),
+        {"tid": task_id, "sid": attempt.simulation_id},
+    ).scalar()
 
 
 # ---------------------------------------------------------------------------
@@ -1007,13 +1235,19 @@ def approve_simulation(db: Session, current_user: Dict[str, Any], simulation_id:
     _, tasks, errors = validate_simulation(current)
     if not any(t["type"] == "spreadsheet" for t in tasks):
         errors.append("Add at least one spreadsheet task.")
+    errors.extend(
+        f"Task {t['position']}: add at least one rubric criterion."
+        for t in tasks
+        if t["type"] in ("memo", "presentation") and not t["rubric"]["criteria"]
+    )
     errors.extend(_seed_check_errors(db, row))
     if errors:
         raise HTTPException(status_code=400, detail={"message": "Fix these before approving.", "errors": errors})
     db.execute(
         text("""
             UPDATE jobsim_simulations
-            SET status = 'approved', approved_by = :uid, updated_at = NOW()
+            SET status = 'approved', approved_by = :uid, updated_at = NOW(),
+                sent_back_at = NULL, sent_back_note = NULL, sent_back_seen_at = NULL
             WHERE id = :sid
         """),
         {"uid": current_user["id"], "sid": simulation_id},
@@ -1106,6 +1340,7 @@ def _mark_final_answers(db: Session, attempt: Any) -> None:
 
 def _submit_attempt(db: Session, attempt: Any, finished_at: Optional[datetime]) -> None:
     _mark_final_answers(db, attempt)
+    _close_open_memos(db, attempt)
     db.execute(
         text("""
             UPDATE jobsim_attempts a
@@ -1119,6 +1354,8 @@ def _submit_attempt(db: Session, attempt: Any, finished_at: Optional[datetime]) 
         """),
         {"aid": attempt.id, "finished": finished_at},
     )
+    # Nothing left to score (no memo or deck waiting): update the capability profile now.
+    apply_attempt_to_profile(db, attempt.id)
 
 
 def finish_attempt(db: Session, current_user: Dict[str, Any], attempt_id: int) -> Dict[str, Any]:

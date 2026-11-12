@@ -5,9 +5,11 @@ import {
   ArrowUp,
   Ban,
   CheckCircle2,
+  FileText,
   FlaskConical,
   Loader2,
   Plus,
+  Presentation,
   RefreshCw,
   Rocket,
   Save,
@@ -65,6 +67,45 @@ function blankTask(): EditableTask {
     max_score: 1,
     answer_formula: "=",
     expected_format: "general",
+  }
+}
+
+function blankMemo(): EditableTask {
+  return {
+    key: newKey(),
+    type: "memo",
+    stage: "",
+    prompt: "",
+    hint: "",
+    config: { required_sections: [], min_words: 150 },
+    rubric: { criteria: [{ name: "", max: 5 }] },
+    max_score: 5,
+    answer_formula: null,
+    expected_format: null,
+  }
+}
+
+function blankDeck(): EditableTask {
+  return {
+    key: newKey(),
+    type: "presentation",
+    stage: "",
+    prompt: "",
+    hint: "",
+    config: {
+      min_slides: 5,
+      slide_plan: [
+        { title: "Introduction", guide: "The objective of the analysis" },
+        { title: "Methodology", guide: "How you worked with the data" },
+        { title: "Key findings", guide: "The main figures from your analysis" },
+        { title: "Recommendations", guide: "What the company should do next" },
+        { title: "Conclusion", guide: "The one thing to remember" },
+      ],
+    },
+    rubric: { criteria: [{ name: "", max: 5 }] },
+    max_score: 5,
+    answer_formula: null,
+    expected_format: null,
   }
 }
 
@@ -217,7 +258,7 @@ export default function FacultySimulationEditor() {
       }
       // Empty tasks are dropped so the new questions don't sit below a blank one.
       setTasks((current) => [
-        ...current.filter((t) => t.prompt.trim()),
+        ...current.filter((t) => t.prompt.trim() || t.type !== "spreadsheet"),
         ...generated.map((t) => ({ ...t, key: newKey() })),
       ])
       touch()
@@ -315,10 +356,14 @@ export default function FacultySimulationEditor() {
 
   async function regenerate() {
     if (!sim) return
+    // Unsaved edits are saved first (as Approve does), so they aren't lost
+    // when the page reloads the simulation with the new numbers.
+    const saved = dirty ? await save() : sim
+    if (!saved) return
     setBusy("regenerate")
     setErrors([])
     try {
-      applySimulation(await regenerateSimulationData(sim.id))
+      applySimulation(await regenerateSimulationData(saved.id))
       setNotice("New numbers generated. The columns and tasks are the same, and every answer was re-calculated.")
     } catch (err) {
       setErrors(errorsFrom(err))
@@ -450,6 +495,14 @@ export default function FacultySimulationEditor() {
         </section>
 
         {notice ? <div className="rounded-lg border border-[#a6f4c5] bg-[#ecfdf3] px-4 py-3 text-sm font-medium text-[#067647]">{notice}</div> : null}
+        {sim?.sent_back ? (
+          <div className="rounded-lg border border-[#fecdca] bg-[#fef3f2] px-4 py-3 text-sm text-[#b42318]">
+            <p className="font-semibold">An admin sent this simulation back for changes.</p>
+            <p className="mt-1 text-[#7a271a]">
+              {sim.sent_back.note ? <>Admin note: {sim.sent_back.note}</> : "No note was added."} Make the changes, then approve it again.
+            </p>
+          </div>
+        ) : null}
         {routeState.dropped?.length ? (
           <div className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-sm text-[#92400e]">
             <p className="font-semibold">Some AI tasks failed the answer checks and were left out:</p>
@@ -540,8 +593,8 @@ export default function FacultySimulationEditor() {
                   <button
                     type="button"
                     onClick={() => void regenerate()}
-                    disabled={busy !== "" || dirty}
-                    title={dirty ? "Save your changes first" : "Same columns and tasks, new numbers"}
+                    disabled={busy !== ""}
+                    title={dirty ? "Saves your changes, then makes new numbers" : "Same columns and tasks, new numbers"}
                     className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb] disabled:opacity-50"
                   >
                     {busy === "regenerate" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} New numbers
@@ -599,6 +652,20 @@ export default function FacultySimulationEditor() {
                   className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
                 >
                   <Plus size={15} /> Add task
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTasks((cur) => [...cur, blankMemo()]); touch() }}
+                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                >
+                  <FileText size={15} /> Add memo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setTasks((cur) => [...cur, blankDeck()]); touch() }}
+                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                >
+                  <Presentation size={15} /> Add slides
                 </button>
               </div>
             )
@@ -661,7 +728,9 @@ export default function FacultySimulationEditor() {
                       onChange={(e) => updateTask(task.key, { stage: e.target.value })}
                       aria-label={`Task ${index + 1} stage`}
                     />
-                    {task.type !== "spreadsheet" ? <span className="text-xs text-[#6b7280]">{task.type} task</span> : null}
+                    {task.type !== "spreadsheet" ? (
+                      <span className="text-xs text-[#6b7280]">{task.type === "presentation" ? "slides" : task.type} task</span>
+                    ) : null}
                     {!readOnly ? (
                       <div className="ml-auto flex gap-1">
                         <IconButton label="Move up" disabled={index === 0} onClick={() => moveTask(index, -1)}><ArrowUp size={15} /></IconButton>
@@ -672,19 +741,31 @@ export default function FacultySimulationEditor() {
                   </div>
 
                   <div className="mt-3 grid gap-3">
-                    <Labeled label="Question">
+                    <Labeled label={task.type === "memo" ? "Memo brief" : task.type === "presentation" ? "Slides brief" : "Question"}>
                       <textarea
                         rows={2}
                         readOnly={readOnly}
                         value={task.prompt}
                         onChange={(e) => updateTask(task.key, { prompt: e.target.value })}
-                        placeholder="e.g. What is the total revenue from the North region? Show it in rupees."
+                        placeholder={
+                          task.type === "memo"
+                            ? "e.g. Write a memo to your manager recommending which region to invest in, using your figures."
+                            : task.type === "presentation"
+                              ? "e.g. Build a short deck for the regional head presenting your analysis and recommendation."
+                              : "e.g. What is the total revenue from the North region? Show it in rupees."
+                        }
                         className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none read-only:bg-[#f9fafb] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
                       />
                     </Labeled>
                     <Labeled label="Hint (shown only if the student asks)">
                       <input className={input} readOnly={readOnly} value={task.hint ?? ""} onChange={(e) => updateTask(task.key, { hint: e.target.value })} />
                     </Labeled>
+                    {task.type === "memo" ? (
+                      <MemoFields task={task} readOnly={readOnly} inputClass={input} onChange={(patch) => updateTask(task.key, patch)} />
+                    ) : null}
+                    {task.type === "presentation" ? (
+                      <DeckFields task={task} readOnly={readOnly} inputClass={input} onChange={(patch) => updateTask(task.key, patch)} />
+                    ) : null}
                     {task.type === "spreadsheet" ? (
                       <div className="grid gap-3 lg:grid-cols-[1fr_180px_auto] lg:items-end">
                         <Labeled label="Answer formula (hidden from students)">
@@ -747,6 +828,204 @@ export default function FacultySimulationEditor() {
         </Card>
       </div>
     </PortalLayout>
+  )
+}
+
+function MemoFields({
+  task,
+  readOnly,
+  inputClass,
+  onChange,
+}: {
+  task: EditableTask
+  readOnly: boolean
+  inputClass: string
+  onChange: (patch: Partial<AuthorTask>) => void
+}) {
+  const sections = (task.config.required_sections as string[] | undefined) ?? []
+  const notes = (task.config.section_notes as Record<string, string> | undefined) ?? {}
+  const named = sections.map((name) => name.trim()).filter(Boolean)
+
+  return (
+    <>
+      <div className="grid gap-3 lg:grid-cols-[1fr_180px]">
+        <Labeled label="Required section headings (one per line)">
+          <textarea
+            rows={3}
+            readOnly={readOnly}
+            value={sections.join("\n")}
+            onChange={(e) => onChange({ config: { ...task.config, required_sections: e.target.value.split("\n") } })}
+            placeholder={"Summary\nFindings\nRecommendation"}
+            className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-normal outline-none read-only:bg-[#f9fafb] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+          />
+        </Labeled>
+        <Labeled label="Minimum words">
+          <input
+            className={inputClass}
+            type="number"
+            min={0}
+            max={5000}
+            readOnly={readOnly}
+            value={Number(task.config.min_words ?? 0)}
+            onChange={(e) => onChange({ config: { ...task.config, min_words: Number(e.target.value) } })}
+          />
+        </Labeled>
+      </div>
+      {named.length ? (
+        <div className="grid gap-2">
+          <p className="text-sm font-semibold text-[#111827]">What to write in each section (optional, shown to students)</p>
+          {named.map((name) => (
+            <div key={name} className="grid items-center gap-2 sm:grid-cols-[180px_1fr]">
+              <span className="truncate text-sm text-[#374151]">{name}</span>
+              <input
+                className={inputClass}
+                readOnly={readOnly}
+                maxLength={300}
+                aria-label={`What to write in ${name}`}
+                placeholder="e.g. Summarise the result of your analysis in two lines"
+                value={notes[name] ?? ""}
+                onChange={(e) => onChange({ config: { ...task.config, section_notes: { ...notes, [name]: e.target.value } } })}
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <RubricFields task={task} readOnly={readOnly} inputClass={inputClass} onChange={onChange} />
+    </>
+  )
+}
+
+function DeckFields({
+  task,
+  readOnly,
+  inputClass,
+  onChange,
+}: {
+  task: EditableTask
+  readOnly: boolean
+  inputClass: string
+  onChange: (patch: Partial<AuthorTask>) => void
+}) {
+  const plan = (task.config.slide_plan as Array<{ title: string; guide: string }> | undefined) ?? []
+  const setPlan = (next: typeof plan) => onChange({ config: { ...task.config, slide_plan: next } })
+
+  return (
+    <>
+      <div className="grid gap-3 lg:grid-cols-[1fr_180px]">
+        <div>
+          <p className="text-sm font-semibold text-[#111827]">Slide plan (the student's deck starts from these slides)</p>
+          <ol className="mt-1.5 space-y-2">
+            {plan.map((item, index) => (
+              <li key={index} className="grid grid-cols-[24px_200px_1fr_auto] items-center gap-2">
+                <span className="text-right text-xs font-semibold text-[#6b7280]">{index + 1}</span>
+                <input
+                  className={inputClass}
+                  readOnly={readOnly}
+                  maxLength={120}
+                  aria-label={`Slide ${index + 1} title`}
+                  placeholder="Slide title"
+                  value={item.title}
+                  onChange={(e) => setPlan(plan.map((p, i) => (i === index ? { ...p, title: e.target.value } : p)))}
+                />
+                <input
+                  className={inputClass}
+                  readOnly={readOnly}
+                  maxLength={300}
+                  aria-label={`What goes on slide ${index + 1}`}
+                  placeholder="What goes on this slide"
+                  value={item.guide}
+                  onChange={(e) => setPlan(plan.map((p, i) => (i === index ? { ...p, guide: e.target.value } : p)))}
+                />
+                {!readOnly ? (
+                  <IconButton label="Delete slide" danger onClick={() => setPlan(plan.filter((_, i) => i !== index))}><Trash2 size={15} /></IconButton>
+                ) : <span />}
+              </li>
+            ))}
+          </ol>
+          {!readOnly && plan.length < 15 ? (
+            <button
+              type="button"
+              onClick={() => setPlan([...plan, { title: "", guide: "" }])}
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0b1d3a] hover:underline"
+            >
+              <Plus size={14} /> Add slide
+            </button>
+          ) : null}
+        </div>
+        <Labeled label="Minimum slides">
+          <input
+            className={inputClass}
+            type="number"
+            min={1}
+            max={15}
+            readOnly={readOnly}
+            value={Number(task.config.min_slides ?? 1)}
+            onChange={(e) => onChange({ config: { ...task.config, min_slides: Number(e.target.value) } })}
+          />
+        </Labeled>
+      </div>
+      <RubricFields task={task} readOnly={readOnly} inputClass={inputClass} onChange={onChange} />
+    </>
+  )
+}
+
+function RubricFields({
+  task,
+  readOnly,
+  inputClass,
+  onChange,
+}: {
+  task: EditableTask
+  readOnly: boolean
+  inputClass: string
+  onChange: (patch: Partial<AuthorTask>) => void
+}) {
+  const criteria = task.rubric?.criteria ?? []
+  const setCriteria = (next: typeof criteria) =>
+    onChange({ rubric: { criteria: next }, max_score: next.reduce((sum, c) => sum + (Number(c.max) || 0), 0) })
+
+  return (
+    <>
+      <div>
+        <p className="text-sm font-semibold text-[#111827]">Rubric (hidden from students) · {task.max_score} marks in total</p>
+        <ul className="mt-1.5 space-y-2">
+          {criteria.map((criterion, index) => (
+            <li key={index} className="grid grid-cols-[1fr_96px_auto] items-center gap-2">
+              <input
+                className={inputClass}
+                readOnly={readOnly}
+                aria-label={`Criterion ${index + 1}`}
+                placeholder="e.g. Uses the figures to support the recommendation"
+                value={criterion.name}
+                onChange={(e) => setCriteria(criteria.map((c, i) => (i === index ? { ...c, name: e.target.value } : c)))}
+              />
+              <input
+                className={inputClass}
+                type="number"
+                min={0}
+                step="any"
+                readOnly={readOnly}
+                aria-label={`Marks for criterion ${index + 1}`}
+                value={criterion.max}
+                onChange={(e) => setCriteria(criteria.map((c, i) => (i === index ? { ...c, max: Number(e.target.value) } : c)))}
+              />
+              {!readOnly ? (
+                <IconButton label="Delete criterion" danger onClick={() => setCriteria(criteria.filter((_, i) => i !== index))}><Trash2 size={15} /></IconButton>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        {!readOnly ? (
+          <button
+            type="button"
+            onClick={() => setCriteria([...criteria, { name: "", max: 5 }])}
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0b1d3a] hover:underline"
+          >
+            <Plus size={14} /> Add criterion
+          </button>
+        ) : null}
+      </div>
+    </>
   )
 }
 

@@ -27,6 +27,8 @@ from shared.llm import create_with_retry, get_llm_client, get_llm_model, parse_j
 from . import service
 from .dataset import generate_rows, validate_spec
 from .formula import FORMATS, SUPPORTED_FUNCTIONS, Sheet, column_letters, evaluate_input, functions_used
+from .memo import clean_memo_task
+from .slides import clean_presentation_task
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,31 @@ Prompt rules:
 - Write each prompt as a clear business question; say which format to show (e.g. "Show it in rupees").
 - NEVER put a computed number or the answer in a prompt or hint. You may mention category values or thresholds.
 - Progress from simple (counts, totals) to harder (conditional and lookup questions).
+""".strip()
+
+
+# Added to the prompt only when faculty tick "include a memo" (handover 9.4).
+MEMO_PROMPT = """
+Also include the key "memo" (the student writes it after the spreadsheet tasks):
+  {"brief": "2-3 sentences: what the manager asks the student to write, and for whom, based on the scenario",
+   "required_sections": ["2 to 5 short section headings, e.g. Summary, Key findings, Recommendation"],
+   "section_notes": {"<each section heading>": "one sentence telling the student what to write in it"},
+   "min_words": a number from 150 to 400,
+   "rubric": [ {"name": "one marking criterion, e.g. Uses figures from the analysis correctly", "max": marks} ]}
+The rubric has 3 to 5 criteria and its marks add up to 10 to 20.
+NEVER put a computed number or answer in the memo brief.
+""".strip()
+
+# Added only when faculty tick "include slides" (handover 8.3, 9.4).
+PRESENTATION_PROMPT = """
+Also include the key "presentation" (the student builds a short slide deck last, after the spreadsheet tasks and any memo):
+  {"brief": "2-3 sentences: who the deck is for and what it must show, based on the scenario",
+   "slides": [ {"title": "a slide title, e.g. Introduction", "guide": "one sentence telling the student what to put on this slide"} ],
+   "rubric": [ {"name": "one marking criterion, e.g. Each slide makes one clear point backed by the analysis", "max": marks} ]}
+Plan 6 to 12 slides in a sensible order, for example: title slide (the student's role and the date), introduction,
+methodology, key metrics, findings, implications, recommendations, conclusion.
+The rubric has 3 to 5 criteria and its marks add up to 10 to 20.
+NEVER put a computed number or answer in the brief or the slide notes.
 """.strip()
 
 
@@ -176,7 +203,70 @@ def check_task(
     }, None
 
 
-def build_draft(draft: Dict[str, Any], task_limit: int, seed: int) -> Tuple[Dict[str, Any], List[str], List[str]]:
+def build_memo_task(raw: Any, stage: Optional[str]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """The AI's memo: brief, required sections, minimum words and rubric,
+    checked with the same rules as a memo faculty add by hand."""
+    if not isinstance(raw, dict):
+        return None, "The memo wasn't drafted"
+    brief = str(raw.get("brief") or "").strip()
+    rubric = raw.get("rubric")
+    config, clean_rubric, problems = clean_memo_task(
+        {
+            "required_sections": raw.get("required_sections") or [],
+            "min_words": raw.get("min_words") or 0,
+            "section_notes": raw.get("section_notes") or {},
+        },
+        {"criteria": rubric if isinstance(rubric, list) else []},
+    )
+    if not brief:
+        problems.append("it has no brief")
+    if not clean_rubric["criteria"]:
+        problems.append("it has no rubric")
+    if problems:
+        return None, "The memo was left out: " + "; ".join(problems)
+    return {
+        "type": "memo",
+        "stage": stage,
+        "prompt": brief,
+        "hint": None,
+        "config": config,
+        "rubric": clean_rubric,
+    }, None
+
+
+def build_presentation_task(raw: Any, stage: Optional[str]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """The AI's slide deck: brief, slide plan and rubric, checked with the same
+    rules as a deck faculty add by hand."""
+    if not isinstance(raw, dict):
+        return None, "The slides weren't drafted"
+    brief = str(raw.get("brief") or "").strip()
+    rubric = raw.get("rubric")
+    plan = raw.get("slides") if isinstance(raw.get("slides"), list) else []
+    config, clean_rubric, problems = clean_presentation_task(
+        {"slide_plan": plan, "min_slides": len([s for s in plan if isinstance(s, dict) and s.get("title")]) or 1},
+        {"criteria": rubric if isinstance(rubric, list) else []},
+    )
+    if not brief:
+        problems.append("it has no brief")
+    if not config["slide_plan"]:
+        problems.append("it has no slide plan")
+    if not clean_rubric["criteria"]:
+        problems.append("it has no rubric")
+    if problems:
+        return None, "The slides were left out: " + "; ".join(problems)
+    return {
+        "type": "presentation",
+        "stage": stage,
+        "prompt": brief,
+        "hint": None,
+        "config": config,
+        "rubric": clean_rubric,
+    }, None
+
+
+def build_draft(
+    draft: Dict[str, Any], task_limit: int, seed: int, include_memo: bool = False, include_presentation: bool = False
+) -> Tuple[Dict[str, Any], List[str], List[str]]:
     """Turn the AI's JSON into a simulation payload.
     Returns (payload, blocking_errors, dropped_task_messages)."""
     errors: List[str] = []
@@ -216,6 +306,18 @@ def build_draft(draft: Dict[str, Any], task_limit: int, seed: int) -> Tuple[Dict
             break
     if not tasks:
         errors.append("No task passed the checks.")
+    if include_memo:
+        memo_task, problem = build_memo_task(draft.get("memo"), stages[-1] if stages else None)
+        if memo_task:
+            tasks.append(memo_task)
+        else:
+            dropped.append(f"{problem}. Add one with Add memo.")
+    if include_presentation:
+        deck_task, problem = build_presentation_task(draft.get("presentation"), stages[-1] if stages else None)
+        if deck_task:
+            tasks.append(deck_task)
+        else:
+            dropped.append(f"{problem}. Add them with Add slides.")
     payload = {
         "title": str(draft.get("title") or "").strip()[:255] or "Untitled simulation",
         "description": str(draft.get("description") or "").strip() or None,
@@ -227,8 +329,10 @@ def build_draft(draft: Dict[str, Any], task_limit: int, seed: int) -> Tuple[Dict
 
 
 def _ask_ai(brief: Dict[str, Any], feedback: Optional[str]) -> Dict[str, Any]:
+    system = SYSTEM_PROMPT + ("\n\n" + MEMO_PROMPT if brief.get("include_memo") else "")
+    system += "\n\n" + PRESENTATION_PROMPT if brief.get("include_presentation") else ""
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system},
         {"role": "user", "content": "Brief:\n" + _brief_text(brief) + "\n\nReturn the JSON object."},
     ]
     if feedback:
@@ -305,7 +409,13 @@ def run_draft_job(job_id: int) -> None:
         feedback: Optional[str] = None
         for _ in range(2):  # first try + one retry with the errors fed back
             draft = _ask_ai(brief, feedback)
-            built, errors, dropped = build_draft(draft, int(brief["task_count"]), seed)
+            built, errors, dropped = build_draft(
+                draft,
+                int(brief["task_count"]),
+                seed,
+                bool(brief.get("include_memo")),
+                bool(brief.get("include_presentation")),
+            )
             if not errors and not dropped:
                 break
             feedback = "\n".join(errors + dropped)
