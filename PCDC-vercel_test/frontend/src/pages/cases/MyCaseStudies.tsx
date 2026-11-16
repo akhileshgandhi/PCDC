@@ -2,9 +2,11 @@ import { Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { getCaseStudies, toCaseDomain, toCaseStatus } from "../../api/cases"
+import { markCaseStudiesSeen } from "../../api/student"
 import CaseCard, { type CaseStudy } from "../../components/cases/CaseCard"
 import type { CaseDomain } from "../../components/cases/DomainTag"
 import type { CaseStatus } from "../../components/cases/StatusBadge"
+import { notifyTeachingApprovalsChanged } from "../../hooks/usePendingTeachingCount"
 import DashboardLayout from "../../layouts/DashboardLayout"
 
 const domains = [
@@ -47,6 +49,13 @@ export default function MyCaseStudies() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    // Clear the "new case study" red dot now that the student has opened the list.
+    markCaseStudiesSeen()
+      .then(notifyTeachingApprovalsChanged)
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let isMounted = true

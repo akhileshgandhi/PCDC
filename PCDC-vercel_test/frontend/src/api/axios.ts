@@ -29,9 +29,9 @@ api.interceptors.request.use((config) => {
 })
 
 // A 401 on an authenticated request means the token is no longer valid
-// (expired or revoked): end the session and send the user to login, which
-// brings them back to this page afterwards. Login's own 401 (wrong password)
-// is left alone so the form can show its error.
+// (expired or revoked): end the session and send the user to login; logging
+// back in always lands on their portal dashboard, not this page. Login's own
+// 401 (wrong password) is left alone so the form can show its error.
 api.interceptors.response.use(
   (response) => response,
   (error) => {

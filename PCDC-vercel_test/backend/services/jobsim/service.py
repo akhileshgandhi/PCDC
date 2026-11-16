@@ -2,8 +2,9 @@
 results. Raw SQL with sqlalchemy.text(), like the rest of the backend.
 
 Rules this module keeps (handover sections 4 and 9.11):
-- answer formulas and expected values are only read by faculty/admin loaders
-  and by marking; student payloads never contain them;
+- answer formulas and expected values are only read by the simulation's own
+  author's loader and by marking; student payloads never contain them, and
+  neither does admin's read-only view;
 - the server owns the clock: writes after deadline_at or after finishing are
   refused;
 - the student always comes from the login token.
@@ -22,6 +23,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from . import publishing
 from .capability import apply_attempt_to_profile
 from .dataset import generate_rows
 from .formula import FORMATS, SUPPORTED_FUNCTIONS, Sheet, evaluate_input, functions_used
@@ -40,8 +42,6 @@ STUDENT_CONFIG_KEYS = (
 )
 
 logger = logging.getLogger(__name__)
-
-ADMIN_ROLES = ("admin", "superadmin")
 
 # Approval re-runs every answer formula on data from these seeds (handover 9.5).
 VERIFY_SEEDS = (101, 202, 303)
@@ -241,11 +241,10 @@ def create_simulation(db: Session, current_user: Dict[str, Any], payload: Dict[s
 
 def _owned_simulation(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Any:
     row = db.execute(
-        text("SELECT * FROM jobsim_simulations WHERE id = :sid"), {"sid": simulation_id}
+        text("SELECT * FROM jobsim_simulations WHERE id = :sid AND created_by = :uid"),
+        {"sid": simulation_id, "uid": current_user["id"]},
     ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Simulation not found")
-    if current_user["role"] not in ADMIN_ROLES and row.created_by != current_user["id"]:
         raise HTTPException(status_code=404, detail="Simulation not found")
     return row
 
@@ -277,9 +276,11 @@ def update_simulation(
     db.commit()
 
 
-def load_simulation_for_author(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Dict[str, Any]:
-    """Full simulation for faculty/admin, including answer formulas."""
-    row = _owned_simulation(db, current_user, simulation_id)
+def _simulation_detail_dict(db: Session, row: Any, *, include_answers: bool) -> Dict[str, Any]:
+    """Shared shape for the author's and an admin's view of a simulation.
+    include_answers=False strips the answer key (formula/format/verified_at) —
+    admin gets visibility into what the task asks, never the grading secret."""
+    simulation_id = row.id
     tasks = db.execute(
         text("""
             SELECT t.id, t.position, t.type, t.stage, t.prompt_template, t.hint, t.config,
@@ -305,7 +306,7 @@ def load_simulation_for_author(db: Session, current_user: Dict[str, Any], simula
         "weights": _load(row.weights, {}),
         "dataset": _load(row.dataset, {"columns": [], "rows": []}),
         "can_regenerate_dataset": bool(_load(row.dataset_spec, None)),
-        # Set while a draft is back with its author after an admin sent it back.
+        # Historical: set while a draft was sent back to its author (no longer triggered).
         "sent_back": (
             {"at": str(row.sent_back_at), "note": row.sent_back_note}
             if row.status == "draft" and row.sent_back_at
@@ -336,30 +337,45 @@ def load_simulation_for_author(db: Session, current_user: Dict[str, Any], simula
                 "config": _load(t.config, {}),
                 "rubric": _load(t.rubric, None),
                 "max_score": float(t.max_score),
-                "answer_formula": t.formula,
-                "expected_format": t.expected_format,
-                "verified_at": str(t.verified_at) if t.verified_at else None,
+                **(
+                    {
+                        "answer_formula": t.formula,
+                        "expected_format": t.expected_format,
+                        "verified_at": str(t.verified_at) if t.verified_at else None,
+                    }
+                    if include_answers
+                    else {}
+                ),
             }
             for t in tasks
         ],
     }
 
 
+def load_simulation_for_author(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Dict[str, Any]:
+    """Full simulation for its author, including answer formulas."""
+    row = _owned_simulation(db, current_user, simulation_id)
+    return _simulation_detail_dict(db, row, include_answers=True)
+
+
+def load_simulation_for_admin(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Dict[str, Any]:
+    """Read-only view for admin: everything the author sees except the
+    answer key (formula/expected format/verified_at), and never a draft."""
+    row = publishing.get_for_admin_view(db, current_user, simulation_id)
+    return _simulation_detail_dict(db, row, include_answers=False)
+
+
 def list_simulations_for_author(db: Session, current_user: Dict[str, Any]) -> List[Dict[str, Any]]:
-    params: Dict[str, Any] = {}
-    where = ""
-    if current_user["role"] not in ADMIN_ROLES:
-        where = "WHERE s.created_by = :uid"
-        params["uid"] = current_user["id"]
+    params: Dict[str, Any] = {"uid": current_user["id"]}
     rows = db.execute(
-        text(f"""
+        text("""
             SELECT s.id, s.title, s.role, s.level, s.subject, s.status, s.duration_minutes, s.updated_at,
                    s.sent_back_at, s.sent_back_seen_at,
                    (SELECT COUNT(*) FROM jobsim_tasks t WHERE t.simulation_id = s.id) AS task_count,
                    (SELECT COUNT(*) FROM jobsim_attempts a WHERE a.simulation_id = s.id) AS attempt_count,
                    jsonb_array_length(COALESCE(s.dataset -> 'rows', CAST('[]' AS JSONB))) AS row_count
             FROM jobsim_simulations s
-            {where}
+            WHERE s.created_by = :uid
             ORDER BY s.updated_at DESC
         """),
         params,
@@ -1018,7 +1034,7 @@ def check_task(
 _ASSIGNED_SQL = """
     SELECT DISTINCT ON (s.id)
            s.id, s.title, s.description, s.role, s.level, s.subject, s.duration_minutes,
-           a.due_date
+           a.due_date, a.created_at AS assigned_at
     FROM jobsim_simulations s
     JOIN jobsim_assignments a ON a.simulation_id = s.id
     WHERE (
@@ -1104,11 +1120,14 @@ def list_assigned_simulations(db: Session, current_user: Dict[str, Any]) -> List
             "subject": r.subject,
             "duration_minutes": r.duration_minutes,
             "due_date": r.due_date.isoformat() if r.due_date else None,
+            "assigned_at": r.assigned_at.isoformat() if r.assigned_at else None,
             **progress.get(r.id, {}),
         }
         for r in rows
     ]
-    items.sort(key=lambda i: (i["role"].lower(), i["due_date"] or "9999", i["title"].lower()))
+    # Most recently assigned first, so a newly assigned simulation shows at
+    # the top of the student's list.
+    items.sort(key=lambda i: (i["assigned_at"] or "", i["title"].lower()), reverse=True)
     return items
 
 
@@ -1227,7 +1246,7 @@ def _seed_check_errors(db: Session, simulation: Any) -> List[str]:
 
 def approve_simulation(db: Session, current_user: Dict[str, Any], simulation_id: int) -> None:
     """Re-verify every answer on the stored data, then mark the draft approved
-    (it then waits for an admin to publish it)."""
+    and ready for its author to publish."""
     row = _owned_simulation(db, current_user, simulation_id)
     if row.status != "draft":
         raise HTTPException(status_code=409, detail="Only a draft simulation can be approved.")

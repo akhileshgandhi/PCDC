@@ -46,7 +46,7 @@ export default function ChangePassword() {
       const accessToken = res.data.access_token
       setToken(accessToken)
       const payload = decodeJwtPayload(accessToken)
-      // Back to the page they were on before their session expired, if any.
+      // Always their portal dashboard, not wherever they were before.
       const nextPath = takePostLoginPath(payload?.role) ?? "/login"
       window.location.assign(nextPath)
     } catch (err) {

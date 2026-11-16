@@ -6,8 +6,9 @@ marking rules as Check Answer, on the answer the student left in the cell, so
 it also covers answers they never checked.
 
 Expected values and formulas appear only in the faculty views: those endpoints
-are faculty or admin only, and faculty see only students in their own sections.
-student_results is the student's own view and leaves them out.
+are faculty-only, scoped to the simulation's own author, who sees only
+students they assigned it to. student_results is the student's own view and
+leaves them out.
 
 Faculty can change a mark once the attempt is submitted (handover F5). Every
 change is kept in jobsim_score_overrides: old mark, new mark, who, when, why.
@@ -30,12 +31,9 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from services.admin.scope import admin_scope, is_admin_role, user_in_scope_sql
-
 from .capability import apply_attempt_to_profile
 from .formula import FORMAT_LABELS, CellResult, Sheet, evaluate_input, format_value
 from .marking import mark_spreadsheet_answer, values_match
-from .publishing import ensure_admin_can_manage
 from .service import (
     _attempt_for_student,
     _attempt_sheet,
@@ -64,8 +62,6 @@ MEMO_STATUS_TEXT = {
 
 
 def _simulation_for_review(db: Session, current_user: Dict[str, Any], simulation_id: int) -> Any:
-    if is_admin_role(current_user):
-        return ensure_admin_can_manage(db, current_user, simulation_id)
     row = db.execute(
         text("SELECT * FROM jobsim_simulations WHERE id = :sid AND created_by = :uid"),
         {"sid": simulation_id, "uid": current_user["id"]},
@@ -77,11 +73,6 @@ def _simulation_for_review(db: Session, current_user: Dict[str, Any], simulation
 
 def _visible_attempts_sql(current_user: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
     """Which attempts this reviewer may see. Needs aliases a (attempt) and u (student)."""
-    if is_admin_role(current_user):
-        scope = admin_scope(current_user)
-        if scope is None:
-            return "TRUE", {}
-        return user_in_scope_sql("u"), {"scope_ids": scope}
     return (
         """(
             EXISTS (SELECT 1 FROM jobsim_assignments asg

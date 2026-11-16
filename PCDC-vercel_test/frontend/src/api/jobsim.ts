@@ -128,6 +128,7 @@ export interface AssignedSimulation extends SimulationProgress {
   subject: string | null
   duration_minutes: number
   due_date: string | null
+  assigned_at: string | null
 }
 
 export interface SimulationDetail extends AssignedSimulation {
@@ -219,7 +220,7 @@ export async function checkJobsimTask(
 }
 
 // ---------------------------------------------------------------------------
-// Faculty / admin: build simulations
+// Faculty: build simulations
 // ---------------------------------------------------------------------------
 
 export type SimulationAuthorStatus = "draft" | "approved" | "published" | "withdrawn"
@@ -436,7 +437,19 @@ export async function closeSimulationAssignment(assignmentId: number) {
   return response.data
 }
 
-// --- admin publish queue -------------------------------------------------
+// --- publishing (faculty, direct — no admin approval step) ---------------
+
+export async function publishSimulation(simulationId: number) {
+  const response = await api.post<AuthorSimulation>(`/faculty/jobsim/${simulationId}/publish`)
+  return response.data
+}
+
+export async function withdrawSimulation(simulationId: number) {
+  const response = await api.post<AuthorSimulation>(`/faculty/jobsim/${simulationId}/withdraw`)
+  return response.data
+}
+
+// --- admin: read-only visibility (no edit/publish/withdraw/assign) -------
 
 export interface AdminSimulationListItem extends AuthorSimulationListItem {
   semester: number | null
@@ -445,6 +458,14 @@ export interface AdminSimulationListItem extends AuthorSimulationListItem {
   assignment_count: number
 }
 
+export type AdminSimulationTask = Omit<AuthorTask, "answer_formula" | "expected_format" | "verified_at">
+
+export interface AdminSimulationDetail extends Omit<AuthorSimulation, "tasks"> {
+  tasks: AdminSimulationTask[]
+}
+
+/** Every non-draft simulation in this admin's institute scope — view only,
+ * faculty own the whole lifecycle including publish and withdraw. */
 export async function listAdminSimulations() {
   const response = await api.get<{
     items: AdminSimulationListItem[]
@@ -454,19 +475,9 @@ export async function listAdminSimulations() {
   return response.data
 }
 
-/** Simulations approved by faculty and waiting for this admin to publish. */
-export async function getPendingSimulationCount() {
-  const response = await api.get<{ pending: number }>("/admin/jobsim/pending-count")
-  return response.data
-}
-
-export async function publishSimulation(simulationId: number) {
-  const response = await api.post<AuthorSimulation>(`/admin/jobsim/${simulationId}/publish`)
-  return response.data
-}
-
-export async function withdrawSimulation(simulationId: number) {
-  const response = await api.post<AuthorSimulation>(`/admin/jobsim/${simulationId}/withdraw`)
+/** Read-only detail, same shape as the author's view minus the answer key. */
+export async function getAdminSimulation(simulationId: number) {
+  const response = await api.get<AdminSimulationDetail>(`/admin/jobsim/${simulationId}`)
   return response.data
 }
 
@@ -720,10 +731,5 @@ export async function rescoreMemo(taskResultId: number) {
 
 export async function getSimulationAttemptReview(attemptId: number) {
   const response = await api.get<AttemptReview>(`/faculty/jobsim/attempts/${attemptId}`)
-  return response.data
-}
-
-export async function sendBackSimulation(simulationId: number, note?: string) {
-  const response = await api.post<AuthorSimulation>(`/admin/jobsim/${simulationId}/send-back`, { note: note || null })
   return response.data
 }

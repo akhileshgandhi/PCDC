@@ -28,6 +28,62 @@ def mentor_initials(mentor_name: str) -> str:
     return (parts[0][0] + parts[-1][0]).upper()
 
 
+@student_router.get("/new-assignments-count")
+def new_assignments_count(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Live counts for the sidebar red dots: case studies / simulations
+    assigned to this student that they haven't opened the list for yet."""
+    require_student(current_user)
+    rows = db.execute(
+        text("""
+            SELECT event_type, COUNT(*) AS n FROM notification_log
+            WHERE recipient_user_id = :uid AND event_type IN ('case_assigned', 'jobsim_assigned')
+              AND seen_at IS NULL
+            GROUP BY event_type
+        """),
+        {"uid": current_user["id"]},
+    ).fetchall()
+    counts = {r.event_type: int(r.n) for r in rows}
+    case_studies = counts.get("case_assigned", 0)
+    simulations = counts.get("jobsim_assigned", 0)
+    return {"case_studies": case_studies, "simulations": simulations, "total": case_studies + simulations}
+
+
+def _mark_assignment_notifications_seen(db: Session, user_id: int, event_type: str) -> None:
+    db.execute(
+        text("""
+            UPDATE notification_log SET seen_at = NOW()
+            WHERE recipient_user_id = :uid AND event_type = :event AND seen_at IS NULL
+        """),
+        {"uid": user_id, "event": event_type},
+    )
+    db.commit()
+
+
+@student_router.post("/case-studies/mark-seen")
+def mark_case_studies_seen(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The student opened My Case Studies: clear that red dot."""
+    require_student(current_user)
+    _mark_assignment_notifications_seen(db, current_user["id"], "case_assigned")
+    return {"status": "ok"}
+
+
+@student_router.post("/simulations/mark-seen")
+def mark_simulations_seen(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The student opened My Simulations: clear that red dot."""
+    require_student(current_user)
+    _mark_assignment_notifications_seen(db, current_user["id"], "jobsim_assigned")
+    return {"status": "ok"}
+
+
 @student_router.get("/profile")
 def student_profile(
     db: Session = Depends(get_db),

@@ -219,3 +219,22 @@ export async function getStudentActiveEngagements() {
   const response = await api.get<StudentActiveEngagements>("/student/active-engagements")
   return response.data
 }
+
+export interface NewAssignmentsCount {
+  case_studies: number
+  simulations: number
+  total: number
+}
+
+export async function getNewAssignmentsCount() {
+  const response = await api.get<NewAssignmentsCount>("/student/new-assignments-count")
+  return response.data
+}
+
+export async function markCaseStudiesSeen() {
+  await api.post("/student/case-studies/mark-seen")
+}
+
+export async function markSimulationsSeen() {
+  await api.post("/student/simulations/mark-seen")
+}

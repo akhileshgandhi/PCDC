@@ -44,8 +44,6 @@ export const IDLE_TIMEOUT_MS = 10 * 60 * 1000
 export const IDLE_WARNING_MS = 60 * 1000
 // Kept in localStorage so activity in any open tab keeps every tab alive.
 const LAST_ACTIVITY_KEY = "pcdc_last_activity"
-// Per tab, so each tab returns to its own page.
-const RETURN_TO_KEY = "pcdc_return_to"
 export const SESSION_EXPIRED_REASON = "expired"
 
 let lastActivityWrite = 0
@@ -79,50 +77,19 @@ export function isSessionExpired() {
 
 /**
  * End the session and land on the login screen with a "session expired"
- * message, remembering `returnTo` (default: the current page) so login can
- * send the user straight back. Safe to call repeatedly — only the first call
- * in a page load acts.
+ * message. Safe to call repeatedly — only the first call in a page load acts.
  */
-export function expireSession(returnTo?: string) {
+export function expireSession() {
   if (isExpiring) return
   isExpiring = true
-  const path = returnTo ?? `${window.location.pathname}${window.location.search}${window.location.hash}`
-  if (isSafeReturnPath(path)) {
-    sessionStorage.setItem(RETURN_TO_KEY, path)
-  }
   clearToken()
   window.location.replace(`/login?reason=${SESSION_EXPIRED_REASON}`)
 }
 
-function isSafeReturnPath(path: string) {
-  // Internal paths only (no "//evil.com"), and never back to an auth page.
-  return (
-    path.startsWith("/") &&
-    !path.startsWith("//") &&
-    !/^\/(login|register|set-password|change-password|forgot-password|unauthorized)\b/.test(path)
-  )
-}
-
-function roleCanOpen(role: UserRole | undefined, path: string) {
-  if (!role) return false
-  if (path.startsWith("/student")) return role === "student"
-  if (path.startsWith("/faculty")) return role === "faculty" || isAdminRole(role)
-  if (path.startsWith("/admin")) return isAdminRole(role)
-  return true
-}
-
-/** The saved page, if it is still valid for this role. Does not clear it. */
-export function peekReturnPath(role?: UserRole) {
-  const path = sessionStorage.getItem(RETURN_TO_KEY)
-  if (!path || !isSafeReturnPath(path) || !roleCanOpen(role, path)) return null
-  return path
-}
-
-/** Where to go after login: the saved page (consumed), else the role's portal. */
+/** Where to go after login: always the role's dashboard, however the user
+ * was logged out — never the page they were last on. */
 export function takePostLoginPath(role?: UserRole) {
-  const path = peekReturnPath(role)
-  sessionStorage.removeItem(RETURN_TO_KEY)
-  return path ?? portalPathForRole(role)
+  return portalPathForRole(role)
 }
 
 export function decodeToken(token: string): JwtPayload | null {

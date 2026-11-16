@@ -19,6 +19,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import formataddr
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,13 @@ def _send_via_smtp(to: str, subject: str, text_body: str, html_body: str | None 
 
 def app_base_url() -> str:
     return os.getenv("APP_BASE_URL", "https://pcdc-xi.vercel.app").rstrip("/")
+
+
+def request_base_url(request) -> str:
+    """The frontend origin the caller is actually using (so links in emails
+    point at localhost/preview/prod correctly), falling back to APP_BASE_URL
+    for server-to-server calls with no Origin header."""
+    return (request.headers.get("origin") or "").rstrip("/") or app_base_url()
 
 
 def password_reset_email(
@@ -342,6 +350,65 @@ def faculty_invite_email(name: str, email: str, setup_url: str) -> tuple[str, st
   </body>
 </html>"""
     return subject, text_body, html_body
+
+
+def _assignment_email(
+    name: str, kind_label: str, title: str, due_text: str, url: str, cta_label: str
+) -> tuple[str, str, str]:
+    """Shared layout for 'a case study / simulation was assigned to you' emails."""
+    subject = f"New {kind_label} assigned: {title}"
+    text_body = (
+        f"Hi {name or 'there'},\n\n"
+        f'"{title}" has been assigned to you on PCDC Case Studio.\n'
+        f"{due_text}\n\n"
+        f"Open it here:\n  {url}\n\n"
+        "Prestige Capability Development Centre\nPCDC Case Studio"
+    )
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#eef1f5;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1b2735;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f5;padding:32px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="width:520px;max-width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(16,32,51,0.08);">
+          <tr><td style="background:#0b1d3a;padding:24px 30px;">
+            <div style="font-size:19px;font-weight:700;letter-spacing:2px;color:#ffffff;">PCDC</div>
+            <div style="font-size:11px;color:#c9a227;letter-spacing:0.5px;margin-top:2px;">CASE STUDIO</div>
+          </td></tr>
+          <tr><td style="height:3px;background:#c9a227;line-height:3px;font-size:0;">&nbsp;</td></tr>
+          <tr><td style="padding:30px;">
+            <p style="margin:0 0 6px;font-size:13px;font-weight:600;letter-spacing:0.5px;color:#c9a227;text-transform:uppercase;">New {kind_label} assigned</p>
+            <h1 style="margin:0 0 14px;font-size:20px;color:#0b1d3a;">{title}</h1>
+            <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#42526b;">
+              Hi {name or 'there'}, this has been assigned to you on PCDC Case Studio. {due_text}
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td style="background:#0b1d3a;border-radius:8px;">
+                <a href="{url}" style="display:inline-block;padding:13px 30px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">{cta_label} &rarr;</a>
+              </td>
+            </tr></table>
+            <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#98a2b3;word-break:break-all;">
+              Button not working? Copy this link:<br />{url}
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+    return subject, text_body, html_body
+
+
+def case_assigned_email(name: str, case_title: str, due_date: Optional[str], case_url: str) -> tuple[str, str, str]:
+    """Return (subject, text_body, html_body) for a student being assigned a case study."""
+    due_text = f"It's due by {due_date}." if due_date else "No due date has been set."
+    return _assignment_email(name, "case study", case_title, due_text, case_url, "Open case study")
+
+
+def jobsim_assigned_email(name: str, sim_title: str, due_date: Optional[str], sim_url: str) -> tuple[str, str, str]:
+    """Return (subject, text_body, html_body) for a student being assigned a job simulation."""
+    due_text = f"It's due by {due_date}." if due_date else "No due date has been set."
+    return _assignment_email(name, "simulation", sim_title, due_text, sim_url, "Open simulation")
 
 
 def make_temp_password() -> str:

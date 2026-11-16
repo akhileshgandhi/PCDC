@@ -31,7 +31,7 @@ export default function Login() {
         return
       }
 
-      // Back to the page they were on when the session expired, else their portal.
+      // Always their portal dashboard, however they were logged out.
       const nextPath = takePostLoginPath(payload?.role)
       navigate(nextPath ?? "/unauthorized", { replace: true })
     } catch (loginError) {

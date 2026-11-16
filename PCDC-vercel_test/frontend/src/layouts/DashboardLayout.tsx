@@ -18,12 +18,26 @@ import {
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
 
+import { useNewAssignmentsCount } from "../hooks/useNewAssignmentsCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
 const ROLE_LABELS: Record<string, string> = {
   student: "Student",
   faculty: "Faculty",
   admin: "Admin",
+}
+
+// Red count of newly assigned case studies / simulations (same look as the
+// faculty "sent back" badge).
+function NewAssignmentBadge({ count }: { count: number }) {
+  return (
+    <span
+      className="grid min-w-5 place-items-center rounded-full bg-[#d92d20] px-1.5 text-[10px] font-bold leading-5 text-white"
+      aria-label={`${count} new ${count === 1 ? "assignment" : "assignments"}`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  )
 }
 
 function roleLabel(role: string | undefined): string {
@@ -58,6 +72,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { label: "Achievements", icon: Trophy, to: "/student/achievements" },
     { label: "Career Pathway", icon: Compass, to: "/student/career-pathway" },
   ]
+
+  const newAssignments = useNewAssignmentsCount()
+  const pendingByPath: Record<string, number> = {
+    "/student/case-studies": newAssignments.case_studies,
+    "/student/simulations": newAssignments.simulations,
+  }
 
   useEffect(() => {
     if (!isMenuOpen) return
@@ -101,7 +121,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 }
               >
                 <Icon size={18} aria-hidden="true" />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {(pendingByPath[item.to] ?? 0) > 0 ? (
+                  <NewAssignmentBadge count={pendingByPath[item.to]} />
+                ) : null}
               </NavLink>
             )
           })}
@@ -151,10 +174,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="hidden items-center gap-2 sm:flex">
               <button
                 type="button"
-                className="grid size-9 place-items-center rounded-md border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
-                aria-label="Notifications"
+                className="relative grid size-9 place-items-center rounded-md border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
+                aria-label={
+                  newAssignments.total > 0
+                    ? `Notifications (${newAssignments.total} new)`
+                    : "Notifications"
+                }
               >
                 <Bell size={18} aria-hidden="true" />
+                {newAssignments.total > 0 ? (
+                  <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#d92d20]" />
+                ) : null}
               </button>
               <button
                 type="button"

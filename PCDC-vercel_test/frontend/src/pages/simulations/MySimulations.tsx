@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { getAssignedSimulations, type AssignedSimulation } from "../../api/jobsim"
+import { markSimulationsSeen } from "../../api/student"
 import {
   StatusBadge,
   actionText,
@@ -10,6 +11,7 @@ import {
   durationText,
   taskMixText,
 } from "../../components/jobsim/simulationBits"
+import { notifyTeachingApprovalsChanged } from "../../hooks/usePendingTeachingCount"
 import DashboardLayout from "../../layouts/DashboardLayout"
 
 const ALL_ROLES = "__all__"
@@ -24,6 +26,13 @@ export default function MySimulations() {
   const [error, setError] = useState("")
   const [role, setRole] = useState(ALL_ROLES)
   const [search, setSearch] = useState("")
+
+  useEffect(() => {
+    // Clear the "new simulation" red dot now that the student has opened the list.
+    markSimulationsSeen()
+      .then(notifyTeachingApprovalsChanged)
+      .catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let isMounted = true

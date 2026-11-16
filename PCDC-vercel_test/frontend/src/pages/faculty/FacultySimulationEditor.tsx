@@ -15,7 +15,6 @@ import {
   Save,
   Sparkles,
   Trash2,
-  Undo2,
   Upload,
 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -31,7 +30,6 @@ import {
   publishSimulation,
   generateSimulationQuestions,
   regenerateSimulationData,
-  sendBackSimulation,
   testAuthorFormula,
   updateAuthorSimulation,
   withdrawSimulation,
@@ -44,7 +42,7 @@ import {
 import DatasetGrid from "../../components/jobsim/DatasetGrid"
 import SimulationAssignments from "../../components/jobsim/SimulationAssignments"
 import { parseDatasetCsv } from "../../components/jobsim/csv"
-import AdminLayout from "../../layouts/AdminLayout"
+import { showToast } from "../../components/Toast"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { AUTHOR_STATUS, AuthorStatusBadge } from "./FacultySimulations"
 
@@ -133,8 +131,8 @@ function errorsFrom(err: unknown): string[] {
 /**
  * Review and edit a spreadsheet simulation: details, the dataset, and every
  * task's question, hint, answer formula and format. Each formula can be tested
- * on the data. Drafts are editable; approving re-checks every answer and sends
- * the simulation to an admin to publish.
+ * on the data. Drafts are editable; approving re-checks every answer and makes
+ * it ready for its author to publish directly.
  */
 export default function FacultySimulationEditor() {
   const { id } = useParams()
@@ -142,9 +140,6 @@ export default function FacultySimulationEditor() {
   const location = useLocation()
   const routeState = (location.state ?? {}) as { dropped?: string[]; fromAi?: boolean }
   const simulationId = id ? Number(id) : null
-  // Admins open the same editor from the publish queue and stay in the Admin Portal.
-  const isAdminPortal = location.pathname.startsWith("/admin")
-  const PortalLayout = isAdminPortal ? AdminLayout : FacultyLayout
 
   const [sim, setSim] = useState<AuthorSimulation | null>(null)
   const [isLoading, setIsLoading] = useState(Boolean(simulationId))
@@ -324,6 +319,7 @@ export default function FacultySimulationEditor() {
     try {
       if (!sim) {
         const created = await createAuthorSimulation(payload())
+        showToast("Simulation created successfully.")
         navigate(`/faculty/simulations/${created.id}`, { replace: true })
         return created
       }
@@ -346,7 +342,7 @@ export default function FacultySimulationEditor() {
     setBusy("approve")
     try {
       applySimulation(await approveAuthorSimulation(saved.id))
-      setNotice("Approved. An admin will review and publish it; you can then assign it to your sections.")
+      setNotice("Approved. You can now publish it, then assign it to your sections.")
     } catch (err) {
       setErrors(errorsFrom(err))
     } finally {
@@ -372,27 +368,25 @@ export default function FacultySimulationEditor() {
     }
   }
 
-  async function adminAction(action: "publish" | "withdraw" | "send_back") {
+  async function publishOrWithdraw(action: "publish" | "withdraw") {
     if (!sim) return
-    let note: string | undefined
-    if (action === "send_back") {
-      const answer = window.prompt("Send this simulation back to the author as a draft. Add a note for them (optional):", "")
-      if (answer === null) return
-      note = answer
-    } else if (action === "withdraw" && !window.confirm("Withdraw this simulation? Students who haven't started can no longer start it; anyone who started can still finish.")) {
+    if (
+      action === "withdraw" &&
+      !window.confirm(
+        "Withdraw this simulation? Students who haven't started can no longer start it; anyone who started can still finish.",
+      )
+    ) {
       return
     }
     setBusy("publish")
     setErrors([])
     try {
-      const run = action === "publish" ? publishSimulation : action === "withdraw" ? withdrawSimulation : (sid: number) => sendBackSimulation(sid, note)
+      const run = action === "publish" ? publishSimulation : withdrawSimulation
       applySimulation(await run(sim.id))
       setNotice(
         action === "publish"
-          ? "Published. Faculty can now assign it to their sections."
-          : action === "withdraw"
-            ? "Withdrawn. It can't be newly assigned or started."
-            : "Sent back to the author as a draft.",
+          ? "Published. You can now assign it to your sections."
+          : "Withdrawn. It can't be newly assigned or started.",
       )
     } catch (err) {
       setErrors(errorsFrom(err))
@@ -410,20 +404,20 @@ export default function FacultySimulationEditor() {
 
   if (isLoading) {
     return (
-      <PortalLayout>
+      <FacultyLayout>
         <p className="py-16 text-center text-sm text-[#6b7280]">Loading simulation...</p>
-      </PortalLayout>
+      </FacultyLayout>
     )
   }
 
   return (
-    <PortalLayout>
+    <FacultyLayout>
       <div className="space-y-5">
         <Link
-          to={isAdminPortal ? "/admin/simulations" : "/faculty/simulations"}
+          to="/faculty/simulations"
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#6b7280] hover:text-[#111827]"
         >
-          <ArrowLeft size={16} aria-hidden="true" /> {isAdminPortal ? "Simulations" : "My Simulations"}
+          <ArrowLeft size={16} aria-hidden="true" /> My Simulations
         </Link>
 
         <section className="flex flex-col gap-4 rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -458,22 +452,12 @@ export default function FacultySimulationEditor() {
                 </button>
               ) : null}
             </div>
-          ) : isAdminPortal && sim ? (
+          ) : sim ? (
             <div className="flex gap-2">
-              {sim.status === "approved" ? (
-                <button
-                  type="button"
-                  onClick={() => void adminAction("send_back")}
-                  disabled={busy !== ""}
-                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-4 py-2.5 text-sm font-semibold text-[#374151] transition hover:bg-[#f6f7fb] disabled:opacity-60"
-                >
-                  <Undo2 size={16} aria-hidden="true" /> Send back
-                </button>
-              ) : null}
               {sim.status === "approved" || sim.status === "withdrawn" ? (
                 <button
                   type="button"
-                  onClick={() => void adminAction("publish")}
+                  onClick={() => void publishOrWithdraw("publish")}
                   disabled={busy !== ""}
                   className="inline-flex items-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:opacity-60"
                 >
@@ -483,7 +467,7 @@ export default function FacultySimulationEditor() {
               {sim.status === "published" ? (
                 <button
                   type="button"
-                  onClick={() => void adminAction("withdraw")}
+                  onClick={() => void publishOrWithdraw("withdraw")}
                   disabled={busy !== ""}
                   className="inline-flex items-center gap-2 rounded-md border border-[#fecaca] px-4 py-2.5 text-sm font-semibold text-[#b42318] transition hover:bg-[#fef2f2] disabled:opacity-60"
                 >
@@ -827,7 +811,7 @@ export default function FacultySimulationEditor() {
           {tasks.length === 0 ? <p className="text-sm text-[#6b7280]">No tasks yet.</p> : null}
         </Card>
       </div>
-    </PortalLayout>
+    </FacultyLayout>
   )
 }
 

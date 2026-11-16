@@ -12,7 +12,7 @@ import FacultyLayout from "../../layouts/FacultyLayout"
 
 export const AUTHOR_STATUS: Record<SimulationAuthorStatus, { label: string; className: string; note: string }> = {
   draft: { label: "Draft", className: "bg-[#f2f4f7] text-[#475467]", note: "Being edited" },
-  approved: { label: "Approved", className: "bg-[#fff7df] text-[#92702a]", note: "Waiting for an admin to publish" },
+  approved: { label: "Approved", className: "bg-[#fff7df] text-[#92702a]", note: "Ready to publish" },
   published: { label: "Published", className: "bg-[#ecfdf3] text-[#067647]", note: "Ready to assign" },
   withdrawn: { label: "Withdrawn", className: "bg-[#fff5f5] text-[#b42318]", note: "Can't be newly assigned" },
 }

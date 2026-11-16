@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router-dom"
 
 import { getFacultyTeaching } from "../../api/faculty"
 import { getCapabilityOptions, getSimulationDraft, startSimulationDraft } from "../../api/jobsim"
+import { showToast } from "../../components/Toast"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 const POLL_MS = 3000
@@ -59,6 +60,7 @@ export default function FacultySimulationNew() {
         const job = await getSimulationDraft(jobId)
         if (stopped) return
         if (job.status === "done" && job.simulation_id) {
+          showToast("Simulation created successfully.")
           navigate(`/faculty/simulations/${job.simulation_id}`, { state: { dropped: job.dropped, fromAi: true } })
           return
         }

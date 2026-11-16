@@ -1,7 +1,6 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom"
 
 import FacultyCaseBuilder from "../faculty/FacultyCaseBuilder"
-import FacultySimulationEditor from "../faculty/FacultySimulationEditor"
 
 import AdminAcademicSetup from "./AdminAcademicSetup"
 import AdminAdmins from "./AdminAdmins"
@@ -13,6 +12,7 @@ import AdminTeachingApprovals from "./AdminTeachingApprovals"
 import AdminModulePlaceholder from "./AdminModulePlaceholder"
 import AdminPromotion from "./AdminPromotion"
 import AdminSections from "./AdminSections"
+import AdminSimulationView from "./AdminSimulationView"
 import AdminSimulations from "./AdminSimulations"
 import AdminStudents from "./AdminStudents"
 import AdminUserDetail from "./AdminUserDetail"
@@ -23,11 +23,6 @@ import AdminUsers from "./AdminUsers"
 function AdminCaseBuilderRoute() {
   const { id } = useParams()
   return <FacultyCaseBuilder key={id ?? "new"} />
-}
-
-function AdminSimulationRoute() {
-  const { id } = useParams()
-  return <FacultySimulationEditor key={id} />
 }
 
 export default function AdminPortal() {
@@ -45,7 +40,7 @@ export default function AdminPortal() {
       <Route path="/case-builder" element={<AdminCaseBuilderRoute />} />
       <Route path="/case-builder/:id" element={<AdminCaseBuilderRoute />} />
       <Route path="/simulations" element={<AdminSimulations />} />
-      <Route path="/simulations/:id" element={<AdminSimulationRoute />} />
+      <Route path="/simulations/:id" element={<AdminSimulationView />} />
       <Route path="/admins" element={<AdminAdmins />} />
       <Route path="/users" element={<AdminUsers />} />
       <Route path="/user/:id" element={<AdminUserDetail />} />

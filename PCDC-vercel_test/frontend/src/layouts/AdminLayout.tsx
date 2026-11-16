@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Database,
   GraduationCap,
+  KeyRound,
   Layers,
   LayoutDashboard,
   Library,
@@ -23,20 +24,18 @@ import {
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getAdminNotifications, type AdminNotification } from "../api/admin"
+import ChangePasswordModal from "../components/ChangePasswordModal"
 import { clearAdminScope, useAdminScope } from "../hooks/useAdminScope"
-import { usePendingSimulationCount } from "../hooks/usePendingSimulationCount"
 import { useAdminAlertRefresh, usePendingTeachingCount } from "../hooks/usePendingTeachingCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
 const NOTIF_SEEN_KEY = "pcdc_admin_notif_last_seen_id"
 const TEACHING_APPROVALS_PATH = "/admin/people/teaching-approvals"
-const SIMULATIONS_PATH = "/admin/simulations"
 const TEACHING_REQUEST_EVENT = "teaching_approval_requested"
 
 // What each red count means, for screen readers.
 const BADGE_LABELS: Record<string, [string, string]> = {
   [TEACHING_APPROVALS_PATH]: ["pending teaching approval", "pending teaching approvals"],
-  [SIMULATIONS_PATH]: ["simulation waiting to publish", "simulations waiting to publish"],
 }
 
 // Red count of items waiting for the admin (teaching selections, simulations).
@@ -207,11 +206,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       .catch(() => undefined)
   })
   const pendingApprovals = usePendingTeachingCount() ?? 0
-  const pendingSimulations = usePendingSimulationCount() ?? 0
   // Red badge per menu item; a closed group shows the total of its items.
   const pendingByPath: Record<string, number> = {
     [TEACHING_APPROVALS_PATH]: pendingApprovals,
-    [SIMULATIONS_PATH]: pendingSimulations,
   }
   const pendingInGroup = (group: NavGroup) =>
     group.items.reduce((sum, item) => sum + (pendingByPath[item.to] ?? 0), 0)
@@ -244,6 +241,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   const [profileOpen, setProfileOpen] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -476,6 +474,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                     </button>
                     <button
                       type="button"
+                      onClick={() => {
+                        setProfileOpen(false)
+                        setIsChangingPassword(true)
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#17202a] transition hover:bg-[#f5f7fa]"
+                    >
+                      <KeyRound size={16} aria-hidden="true" />
+                      Change password
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleLogout}
                       className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#b42318] transition hover:bg-[#fff5f5]"
                     >
@@ -533,6 +542,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {children}
         </main>
       </div>
+
+      {isChangingPassword ? <ChangePasswordModal onClose={() => setIsChangingPassword(false)} /> : null}
     </div>
   )
 }

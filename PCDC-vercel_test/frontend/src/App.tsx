@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import ProtectedRoute from "./components/auth/ProtectedRoute"
 import SessionWatcher from "./components/auth/SessionWatcher"
+import ToastHost from "./components/Toast"
 import { AuthProvider } from "./context/AuthContext"
 import Achievements from "./pages/achievements/Achievements"
 import AdminPortal from "./pages/admin/AdminPortal"
@@ -42,6 +43,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <SessionWatcher />
+        <ToastHost />
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<Login />} />

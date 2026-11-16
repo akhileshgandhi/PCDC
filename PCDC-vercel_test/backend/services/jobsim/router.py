@@ -7,13 +7,14 @@ Student routes take the student from the login token, never from the URL.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
 from shared.database import get_db
+from shared.email import request_base_url
 
 from . import designer, publishing, questions, review, scoring, service
 from .formula import FORMAT_LABELS, SUPPORTED_FUNCTIONS
@@ -29,7 +30,9 @@ def require_student(current_user: Dict[str, Any]) -> None:
 
 
 def require_author(current_user: Dict[str, Any]) -> None:
-    if current_user["role"] not in ("faculty", "admin", "superadmin"):
+    # Faculty own every part of a simulation's lifecycle (create, edit, approve,
+    # publish, withdraw, assign) — admin has no CRUD or publish access here.
+    if current_user["role"] != "faculty":
         raise HTTPException(status_code=403, detail="Faculty access required")
 
 
@@ -200,7 +203,7 @@ def approve_simulation(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Re-check every answer, then mark the draft approved for an admin to publish."""
+    """Re-check every answer, then mark the draft approved and ready to publish."""
     require_author(current_user)
     service.approve_simulation(db, current_user, simulation_id)
     return service.load_simulation_for_author(db, current_user, simulation_id)
@@ -355,24 +358,30 @@ class AssignStudentsRequest(BaseModel):
 def assign_sections(
     simulation_id: int,
     data: AssignSectionsRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Assign a published simulation to whole sections the faculty teaches."""
     require_author(current_user)
-    return publishing.assign_to_sections(db, current_user, simulation_id, data.section_ids, data.due_date)
+    return publishing.assign_to_sections(
+        db, current_user, simulation_id, data.section_ids, data.due_date, request_base_url(request)
+    )
 
 
 @jobsim_router.post("/faculty/jobsim/{simulation_id}/assign-students")
 def assign_students(
     simulation_id: int,
     data: AssignStudentsRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Assign a published simulation to specific students from the faculty's roster."""
     require_author(current_user)
-    return publishing.assign_to_students(db, current_user, simulation_id, data.student_ids, data.due_date)
+    return publishing.assign_to_students(
+        db, current_user, simulation_id, data.student_ids, data.due_date, request_base_url(request)
+    )
 
 
 @jobsim_router.get("/faculty/jobsim/{simulation_id}/assignments")
@@ -457,58 +466,54 @@ def close_simulation_assignment(
 # --- admin: publish queue ------------------------------------------------
 
 
-class SendBackRequest(BaseModel):
-    note: Optional[str] = None
-
-
-@jobsim_router.get("/admin/jobsim")
-def admin_simulations(
-    status: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Approved, published and withdrawn simulations (drafts stay with their author)."""
-    return publishing.list_for_admin(db, current_user, status)
-
-
-@jobsim_router.get("/admin/jobsim/pending-count")
-def admin_pending_count(
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Live count for the sidebar badge: simulations waiting to be published."""
-    return {"pending": publishing.pending_count(db, current_user)}
-
-
-@jobsim_router.post("/admin/jobsim/{simulation_id}/publish")
-def admin_publish(
+@jobsim_router.post("/faculty/jobsim/{simulation_id}/publish")
+def publish_simulation(
     simulation_id: int,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
+    """Faculty publish their own approved (or previously withdrawn) simulation directly."""
+    require_author(current_user)
     publishing.publish(db, current_user, simulation_id)
     return service.load_simulation_for_author(db, current_user, simulation_id)
 
 
-@jobsim_router.post("/admin/jobsim/{simulation_id}/withdraw")
-def admin_withdraw(
+@jobsim_router.post("/faculty/jobsim/{simulation_id}/withdraw")
+def withdraw_simulation(
     simulation_id: int,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
+    """Faculty withdraw their own published simulation."""
+    require_author(current_user)
     publishing.withdraw(db, current_user, simulation_id)
     return service.load_simulation_for_author(db, current_user, simulation_id)
 
 
-@jobsim_router.post("/admin/jobsim/{simulation_id}/send-back")
-def admin_send_back(
-    simulation_id: int,
-    data: SendBackRequest,
+# --- admin: read-only visibility (no edit/publish/withdraw/assign) -------
+
+
+@jobsim_router.get("/admin/jobsim")
+def admin_list_simulations(
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    publishing.send_back(db, current_user, simulation_id, data.note)
-    return service.load_simulation_for_author(db, current_user, simulation_id)
+    """Approved, published and withdrawn simulations in this admin's scope
+    (drafts stay private to their author). View only — faculty own the
+    entire lifecycle, including publish and withdraw."""
+    return publishing.list_for_admin_view(db, current_user, status)
+
+
+@jobsim_router.get("/admin/jobsim/{simulation_id}")
+def admin_get_simulation(
+    simulation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Read-only detail for admin — same shape as the author's view, minus
+    the answer key."""
+    return service.load_simulation_for_admin(db, current_user, simulation_id)
 
 
 # --- student -------------------------------------------------------------

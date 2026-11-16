@@ -1,35 +1,28 @@
-import { isAxiosError } from "axios"
-import { Rocket, Table2 } from "lucide-react"
+import { Table2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
-import {
-  listAdminSimulations,
-  publishSimulation,
-  type AdminSimulationListItem,
-} from "../../api/jobsim"
-import { notifyTeachingApprovalsChanged } from "../../hooks/usePendingTeachingCount"
+import { listAdminSimulations, type AdminSimulationListItem } from "../../api/jobsim"
 import AdminLayout from "../../layouts/AdminLayout"
 import { AuthorStatusBadge } from "../faculty/FacultySimulations"
 
 type Tab = "approved" | "published" | "withdrawn"
 
 const TABS: Array<{ value: Tab; label: string; empty: string }> = [
-  { value: "approved", label: "Waiting to publish", empty: "Nothing is waiting. Simulations appear here when faculty approve them." },
+  { value: "approved", label: "Approved", empty: "No approved simulations yet." },
   { value: "published", label: "Published", empty: "No published simulations yet." },
   { value: "withdrawn", label: "Withdrawn", empty: "No withdrawn simulations." },
 ]
 
-/** Admin publish queue for spreadsheet job simulations (handover A1/A2).
- * Review opens the full simulation (data, tasks, answer formulas) with
- * Publish, Send back and Withdraw. */
+/** Admin's read-only view of spreadsheet job simulations (handover A1/A2).
+ * Faculty own the whole lifecycle — approve, publish, withdraw, assign — so
+ * this page only shows what exists, with no action beyond opening one to
+ * look at its data and tasks (never the answer key). */
 export default function AdminSimulations() {
   const [items, setItems] = useState<AdminSimulationListItem[]>([])
   const [counts, setCounts] = useState<Record<Tab, number>>({ approved: 0, published: 0, withdrawn: 0 })
   const [tab, setTab] = useState<Tab>("approved")
   const [isLoading, setIsLoading] = useState(true)
-  const [publishingId, setPublishingId] = useState<number | null>(null)
-  const [notice, setNotice] = useState("")
   const [error, setError] = useState("")
 
   const load = useCallback(async () => {
@@ -48,24 +41,6 @@ export default function AdminSimulations() {
     void load()
   }, [load])
 
-  async function publish(item: AdminSimulationListItem) {
-    if (!window.confirm(`Publish "${item.title}"? Faculty can then assign it to their sections.`)) return
-    setPublishingId(item.id)
-    setError("")
-    setNotice("")
-    try {
-      await publishSimulation(item.id)
-      setNotice(`Published "${item.title}".`)
-      notifyTeachingApprovalsChanged() // refreshes the sidebar red badges now
-      await load()
-    } catch (err) {
-      const detail = isAxiosError(err) ? err.response?.data?.detail : undefined
-      setError(typeof detail === "string" ? detail : "Unable to publish this simulation.")
-    } finally {
-      setPublishingId(null)
-    }
-  }
-
   const visible = items.filter((item) => item.status === tab)
   const current = TABS.find((t) => t.value === tab)!
 
@@ -75,8 +50,8 @@ export default function AdminSimulations() {
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
           <h1 className="text-3xl font-semibold tracking-normal text-[#111827]">Simulations</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6b7280]">
-            Spreadsheet job simulations approved by faculty. Review the data and every task, then publish so faculty
-            can assign it, or send it back with a note. Withdrawing stops new starts; students who already started can finish.
+            Spreadsheet job simulations faculty have approved, published or withdrawn. View only — faculty approve,
+            publish, withdraw and assign their own simulations directly; there's nothing to action here.
           </p>
           <div className="mt-5 flex flex-wrap gap-2" role="tablist">
             {TABS.map((t) => (
@@ -98,9 +73,6 @@ export default function AdminSimulations() {
           </div>
         </section>
 
-        {notice ? (
-          <div className="rounded-lg border border-[#a6f4c5] bg-[#ecfdf3] px-4 py-3 text-sm font-medium text-[#067647]">{notice}</div>
-        ) : null}
         {error ? (
           <div className="rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-sm font-medium text-[#b91c1c]">{error}</div>
         ) : null}
@@ -152,24 +124,12 @@ export default function AdminSimulations() {
                         {new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(item.updated_at))}
                       </td>
                       <td className="py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            to={`/admin/simulations/${item.id}`}
-                            className="rounded-md border border-[#e6e8eb] px-3 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#f6f7fb]"
-                          >
-                            Review
-                          </Link>
-                          {item.status === "approved" ? (
-                            <button
-                              type="button"
-                              onClick={() => void publish(item)}
-                              disabled={publishingId !== null}
-                              className="inline-flex items-center gap-1.5 rounded-md bg-[#c9a227] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] hover:bg-[#e0b84e] disabled:opacity-60"
-                            >
-                              <Rocket size={13} aria-hidden="true" /> {publishingId === item.id ? "Publishing..." : "Publish"}
-                            </button>
-                          ) : null}
-                        </div>
+                        <Link
+                          to={`/admin/simulations/${item.id}`}
+                          className="rounded-md border border-[#e6e8eb] px-3 py-1.5 text-xs font-semibold text-[#374151] hover:bg-[#f6f7fb]"
+                        >
+                          View
+                        </Link>
                       </td>
                     </tr>
                   ))}

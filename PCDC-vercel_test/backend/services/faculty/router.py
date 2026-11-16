@@ -28,6 +28,7 @@ from services.auth.service import get_current_user, hash_password
 from services.bank.service import archive_deleted_case, release_used_entries, upsert_ai_bank_entry
 from shared.cache import cache_delete_prefix, cache_get, cache_set
 from shared.database import SessionLocal, get_db
+from shared.email import case_assigned_email, request_base_url, send_email
 from shared.llm import (
     create_with_retry,
     get_llm_client,
@@ -4412,9 +4413,9 @@ def get_faculty_teaching(
 def _alert_base_url(request: Request) -> str:
     """Admin-facing links point at the frontend the faculty is using (the
     request Origin), like invite emails; APP_BASE_URL when there is none."""
-    from shared.email import app_base_url
+    from shared.email import request_base_url
 
-    return (request.headers.get("origin") or "").rstrip("/") or app_base_url()
+    return request_base_url(request)
 
 
 @faculty_router.post("/teaching")
@@ -4699,14 +4700,40 @@ def remove_faculty_teaching(
     return {"status": "deleted", "id": selection_id}
 
 
+def _notify_case_assigned(
+    db: Session, student_user_id: int, student_email: Optional[str], student_name: Optional[str],
+    case_title: str, case_id: int, due_date: Optional[str], base_url: str,
+) -> None:
+    """Email the student that a case study was assigned, and log the outcome."""
+    case_url = f"{base_url}/student/case-studies/{case_id}"
+    subject, text_body, html_body = case_assigned_email(student_name or "", case_title, due_date, case_url)
+    email_sent = send_email(student_email, subject, text_body, html_body) if student_email else False
+    db.execute(
+        text("""
+            INSERT INTO notification_log (
+                recipient_user_id, event_type, channel, status, subject, body
+            )
+            VALUES (:recipient_user_id, 'case_assigned', 'email', :status, :subject, :body)
+        """),
+        {
+            "recipient_user_id": student_user_id,
+            "status": "sent" if email_sent else "failed",
+            "subject": subject,
+            "body": text_body,
+        },
+    )
+
+
 @faculty_router.post("/cases/{case_id}/assign-section")
 def assign_case_to_sections(
     case_id: int,
     data: AssignCaseToSectionsRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     require_faculty(current_user)
+    base_url = request_base_url(request)
     if not data.section_ids:
         raise HTTPException(status_code=400, detail="At least one section is required")
     case_row = db.execute(
@@ -4769,9 +4796,10 @@ def assign_case_to_sections(
 
         students = db.execute(
             text("""
-                SELECT s.id AS student_id, s.user_id
+                SELECT s.id AS student_id, s.user_id, u.name, u.email
                 FROM student_sections ss
                 JOIN students s ON s.id = ss.student_id
+                JOIN users u ON u.id = s.user_id
                 WHERE ss.section_id = :section_id AND ss.status = 'active'
             """),
             {"section_id": section_id},
@@ -4816,20 +4844,9 @@ def assign_case_to_sections(
                     "due_date": data.due_date,
                 },
             )
-            db.execute(
-                text("""
-                    INSERT INTO notification_log (
-                        recipient_user_id, event_type, channel, status, subject, body
-                    )
-                    VALUES (
-                        :recipient_user_id, 'case_assigned', 'email', 'pending',
-                        'New case study assigned', :body
-                    )
-                """),
-                {
-                    "recipient_user_id": student.user_id,
-                    "body": f'"{case_row.title}" has been assigned to your class.',
-                },
+            _notify_case_assigned(
+                db, student.user_id, student.email, student.name,
+                case_row.title, case_id, data.due_date, base_url,
             )
             cache_delete_prefix(f"student_dashboard_summary:{student.user_id}")
             newly_assigned += 1
@@ -4851,6 +4868,7 @@ def assign_case_to_sections(
 def assign_case_to_students(
     case_id: int,
     data: AssignCaseToStudentsRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -4858,6 +4876,7 @@ def assign_case_to_students(
     faculty's own roster — the individual/group counterpart to whole-section
     assignment."""
     require_faculty(current_user)
+    base_url = request_base_url(request)
     if not data.student_ids:
         raise HTTPException(status_code=400, detail="At least one student is required")
     case_row = db.execute(
@@ -4872,7 +4891,7 @@ def assign_case_to_students(
         scope_sql, scope_params = admin_section_filter(current_user)
         valid = db.execute(
             text(f"""
-                SELECT DISTINCT s.id AS student_id, s.user_id, u.name
+                SELECT DISTINCT s.id AS student_id, s.user_id, u.name, u.email
                 FROM students s
                 JOIN users u ON u.id = s.user_id
                 JOIN student_sections ss ON ss.student_id = s.id AND ss.status = 'active'
@@ -4885,7 +4904,7 @@ def assign_case_to_students(
         # Only students in sections this faculty teaches can be targeted.
         valid = db.execute(
             text("""
-                SELECT DISTINCT s.id AS student_id, s.user_id, u.name
+                SELECT DISTINCT s.id AS student_id, s.user_id, u.name, u.email
                 FROM students s
                 JOIN users u ON u.id = s.user_id
                 JOIN student_sections ss ON ss.student_id = s.id AND ss.status = 'active'
@@ -4932,20 +4951,9 @@ def assign_case_to_students(
                 "due_date": data.due_date,
             },
         )
-        db.execute(
-            text("""
-                INSERT INTO notification_log (
-                    recipient_user_id, event_type, channel, status, subject, body
-                )
-                VALUES (
-                    :recipient_user_id, 'case_assigned', 'email', 'pending',
-                    'New case study assigned', :body
-                )
-            """),
-            {
-                "recipient_user_id": student.user_id,
-                "body": f'"{case_row.title}" has been assigned to you.',
-            },
+        _notify_case_assigned(
+            db, student.user_id, student.email, student.name,
+            case_row.title, case_id, data.due_date, base_url,
         )
         cache_delete_prefix(f"student_dashboard_summary:{student.user_id}")
         newly_assigned += 1

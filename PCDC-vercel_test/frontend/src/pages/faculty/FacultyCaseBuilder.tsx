@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  Save,
   Send,
   Sparkles,
   Trash2,
@@ -691,48 +690,6 @@ export default function FacultyCaseBuilder() {
     }
   }
 
-  async function handleSaveDraft() {
-    if (!caseData || !validateCoreForm()) {
-      return
-    }
-    setIsSaving(true)
-    setNotice("")
-    try {
-      const data = await updateFacultyCase(caseData.id, {
-        title: coreForm.title,
-        expected_outcomes: coreForm.description,
-        outcome_statement: coreForm.outcomeStatement,
-        decision_options: coreForm.decisionOptions.map((item) => item.trim()).filter(Boolean),
-        learning_takeaways: coreForm.learningTakeaways.map((item) => item.trim()).filter(Boolean),
-        industry: coreForm.industry,
-        difficulty: Number(coreForm.difficulty),
-        duration_minutes: Number(coreForm.duration_minutes),
-        capabilities: coreForm.capabilities,
-        subject_areas: coreForm.subjectAreas,
-        sections: caseData.sections,
-        section_meta: caseData.section_meta,
-        metadata: { ...caseData.metadata, blooms_levels: coreForm.bloomsLevels },
-        timing: caseData.timing,
-        marks: caseData.marks,
-        instructions: caseData.instructions,
-        questions: caseData.questions,
-        rapid_fire_questions: caseData.rapid_fire_questions.slice(0, RAPID_FIRE_QUESTION_COUNT),
-        recommendation: {
-          recommended_course_ids: coreForm.programIds,
-          recommended_semesters: coreForm.semesters,
-        },
-      })
-      setCaseData(normalizeCaseData(data))
-      setCoreForm(caseToCoreForm(data))
-      setErrors([])
-      setNotice("Draft saved.")
-    } catch (error) {
-      setErrors([describeApiError(error, "Unable to save draft.")])
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
   function updateSection(section: CaseSectionKey, value: string) {
     setCaseData((current) => {
       if (!current) return current
@@ -911,20 +868,53 @@ export default function FacultyCaseBuilder() {
   }
 
   async function handlePublish() {
-    if (!caseData) {
-      return
-    }
-    if (publishBlockers.length > 0) {
-      setErrors([
-        `Publish is blocked until these items are complete: ${publishBlockers.join(", ")}.`,
-      ])
+    if (!caseData || !validateCoreForm()) {
       return
     }
     setIsPublishing(true)
     setNotice("")
     try {
+      // Publish now autosaves whatever's been edited, so faculty don't have
+      // to click Save Draft first — same payload Save Draft sends.
+      const saved = await updateFacultyCase(caseData.id, {
+        title: coreForm.title,
+        expected_outcomes: coreForm.description,
+        outcome_statement: coreForm.outcomeStatement,
+        decision_options: coreForm.decisionOptions.map((item) => item.trim()).filter(Boolean),
+        learning_takeaways: coreForm.learningTakeaways.map((item) => item.trim()).filter(Boolean),
+        industry: coreForm.industry,
+        difficulty: Number(coreForm.difficulty),
+        duration_minutes: Number(coreForm.duration_minutes),
+        capabilities: coreForm.capabilities,
+        subject_areas: coreForm.subjectAreas,
+        sections: caseData.sections,
+        section_meta: caseData.section_meta,
+        metadata: { ...caseData.metadata, blooms_levels: coreForm.bloomsLevels },
+        timing: caseData.timing,
+        marks: caseData.marks,
+        instructions: caseData.instructions,
+        questions: caseData.questions,
+        rapid_fire_questions: caseData.rapid_fire_questions.slice(0, RAPID_FIRE_QUESTION_COUNT),
+        recommendation: {
+          recommended_course_ids: coreForm.programIds,
+          recommended_semesters: coreForm.semesters,
+        },
+      })
+      const normalizedSave = normalizeCaseData(saved)
+      // Re-check against what was just saved, not the possibly-stale state
+      // from before this save, so unsaved edits can't cause a false block.
+      const blockers: string[] = []
+      if (!normalizedSave.expected_outcomes.trim()) blockers.push("Description")
+      if (!normalizedSave.rubric_exists) blockers.push("Rubric")
+      if (blockers.length > 0) {
+        setCaseData(normalizedSave)
+        setCoreForm(caseToCoreForm(normalizedSave))
+        setErrors([`Publish is blocked until these items are complete: ${blockers.join(", ")}.`])
+        return
+      }
       const data = await publishFacultyCase(caseData.id)
       setCaseData(normalizeCaseData(data))
+      setCoreForm(caseToCoreForm(data))
       setNotice("Case published.")
       setErrors([])
     } catch (error) {
@@ -963,17 +953,6 @@ export default function FacultyCaseBuilder() {
 
           {caseData ? (
             <div className="flex flex-wrap gap-2">
-              {!isReadOnly ? (
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  disabled={isSaving}
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSaving ? <Loader2 className="animate-spin" size={17} /> : <Save size={17} />}
-                  Save Draft
-                </button>
-              ) : null}
               {canPublish && caseData.status === "draft" ? (
                 <button
                   type="button"
@@ -2221,6 +2200,7 @@ function DurationField({ value, onChange }: DurationFieldProps) {
           min={0}
           value={hours}
           onChange={(event) => setParts(Number(event.target.value) || 0, minutes)}
+          onFocus={(event) => event.target.select()}
           className={inputClass}
           aria-label="Duration hours"
         />
@@ -2230,6 +2210,7 @@ function DurationField({ value, onChange }: DurationFieldProps) {
           min={0}
           value={minutes}
           onChange={(event) => setParts(hours, Number(event.target.value) || 0)}
+          onFocus={(event) => event.target.select()}
           className={inputClass}
           aria-label="Duration minutes"
         />
