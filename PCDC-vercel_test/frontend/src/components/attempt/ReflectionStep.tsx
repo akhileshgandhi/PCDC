@@ -13,10 +13,10 @@ export default function ReflectionStep({ questions, isSubmitting, onSubmit }: Re
 
   return (
     <section className="mx-auto max-w-[720px] rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
         Almost Done
       </p>
-      <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Reflect on Your Attempt</h2>
+      <h2 className="mt-3 text-3xl font-semibold text-[#0c1f3d]">Reflect on Your Attempt</h2>
       <p className="mt-3 text-sm leading-6 text-[#6B7280]">
         Before you see your evaluation, take a moment to reflect on your approach.
       </p>
@@ -39,7 +39,7 @@ export default function ReflectionStep({ questions, isSubmitting, onSubmit }: Re
         onChange={(event) => setReflectionText(event.target.value)}
         rows={8}
         placeholder="What did you learn from this case? What would you do differently?"
-        className="mt-6 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+        className="mt-6 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       />
 
       <button
@@ -48,7 +48,7 @@ export default function ReflectionStep({ questions, isSubmitting, onSubmit }: Re
         disabled={!isReady || isSubmitting}
         className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
           isReady && !isSubmitting
-            ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
+            ? "bg-[#2563eb] text-white hover:bg-[#3b82f6]"
             : "cursor-not-allowed bg-[#D1D5DB] text-white"
         }`}
       >

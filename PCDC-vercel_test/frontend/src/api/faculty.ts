@@ -37,6 +37,7 @@ export interface FacultySection {
   semester_name: string
   batch_name: string
   course_name: string
+  course_code?: string | null
   /** Only sent to admins, who can see sections across institutes. */
   institution_name?: string | null
   subjects: string | null
@@ -50,8 +51,11 @@ export interface FacultyStudent {
   user_id: number
   name: string
   email: string
+  scholar_number?: string | null
   section_id: number
   section_name: string
+  course_code?: string | null
+  batch_name?: string | null
   average_score: number
   last_activity_at: string | null
   assigned_count: number

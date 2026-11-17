@@ -2,6 +2,8 @@ import { ArrowRight, type LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 
+import CountUp from "../common/CountUp"
+
 // Small shared pieces for the role dashboards' "insights" sections. Each
 // portal passes its own accent so the blocks match the page they sit on.
 
@@ -9,25 +11,25 @@ export type InsightAccent = "admin" | "faculty" | "student"
 
 const ACCENTS: Record<InsightAccent, { icon: string; bar: string; link: string; border: string; hover: string }> = {
   admin: {
-    icon: "bg-[#e8f8f4] text-[#176b5a]",
-    bar: "bg-[#34c6a3]",
-    link: "text-[#176b5a] hover:text-[#102033]",
+    icon: "bg-[#dbeafe] text-[#1d4ed8]",
+    bar: "bg-[#2563eb]",
+    link: "text-[#1d4ed8] hover:text-[#0c1f3d]",
     border: "border-[#dde4ec]",
-    hover: "hover:border-[#34c6a3]",
+    hover: "hover:border-[#2563eb]",
   },
   faculty: {
-    icon: "bg-[#eef3f8] text-[#0b1d3a]",
-    bar: "bg-[#c9a227]",
-    link: "text-[#92702a] hover:text-[#0b1d3a]",
+    icon: "bg-[#dbeafe] text-[#1d4ed8]",
+    bar: "bg-[#2563eb]",
+    link: "text-[#1d4ed8] hover:text-[#0c1f3d]",
     border: "border-[#e6e8eb]",
-    hover: "hover:border-[#c9a227]",
+    hover: "hover:border-[#2563eb]",
   },
   student: {
-    icon: "bg-[#fff7df] text-[#92702a]",
-    bar: "bg-[#c9a227]",
-    link: "text-[#92702a] hover:text-[#081d3a]",
+    icon: "bg-[#dbeafe] text-[#1d4ed8]",
+    bar: "bg-[#2563eb]",
+    link: "text-[#1d4ed8] hover:text-[#0c1f3d]",
     border: "border-[#e6e8eb]",
-    hover: "hover:border-[#c9a227]",
+    hover: "hover:border-[#2563eb]",
   },
 }
 
@@ -53,20 +55,20 @@ export function AlertTile({ accent, label, value, hint, icon: Icon, isLoading, u
   const body = (
     <>
       <div className="flex items-center gap-3">
-        <span className={`grid size-9 shrink-0 place-items-center rounded-md ${highlighted ? "bg-[#fff1f0] text-[#b42318]" : a.icon}`}>
-          <Icon size={17} aria-hidden="true" />
+        <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${highlighted ? "bg-[#fff1f0] text-[#b42318]" : a.icon}`}>
+          <Icon size={19} aria-hidden="true" />
         </span>
         <p className="text-sm font-semibold text-[#667085]">{label}</p>
       </div>
-      <p className={`mt-3 text-3xl font-semibold ${highlighted ? "text-[#b42318]" : "text-[#17202a]"}`}>
-        {isLoading ? "..." : value}
+      <p className={`mt-4 text-3xl font-semibold ${highlighted ? "text-[#b42318]" : "text-[#17202a]"}`}>
+        <CountUp value={value} isLoading={isLoading} />
       </p>
       <p className="mt-1 text-xs leading-5 text-[#98a2b3]">{hint}</p>
     </>
   )
-  const className = `block rounded-lg border ${a.border} bg-white p-4 shadow-sm`
+  const className = `block rounded-2xl border ${a.border} bg-white p-5 shadow-md shadow-blue-500/[0.06] transition hover:-translate-y-0.5 hover:scale-[1.02] ${a.hover} hover:shadow-lg hover:shadow-blue-500/20`
   return to ? (
-    <Link to={to} className={`${className} transition ${a.hover} hover:shadow-md`}>
+    <Link to={to} className={className}>
       {body}
     </Link>
   ) : (
@@ -85,8 +87,10 @@ interface PanelProps {
 export function Panel({ accent, title, subtitle, action, children }: PanelProps) {
   const a = ACCENTS[accent]
   return (
-    <section className={`rounded-lg border ${a.border} bg-white p-5 shadow-sm`}>
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <section
+      className={`rounded-2xl border ${a.border} bg-white p-6 shadow-md shadow-blue-500/[0.06] transition hover:shadow-lg hover:shadow-blue-500/20`}
+    >
+      <div className="mb-5 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[#17202a]">{title}</h2>
           {subtitle ? <p className="mt-0.5 text-sm text-[#667085]">{subtitle}</p> : null}
@@ -120,7 +124,7 @@ export function ProgressBar({ accent, pct, label }: { accent: InsightAccent; pct
 }
 
 export function EmptyNote({ children }: { children: ReactNode }) {
-  return <p className="rounded-md bg-[#f5f7fa] px-4 py-6 text-center text-sm text-[#667085]">{children}</p>
+  return <p className="rounded-xl bg-[#f5f7fa] px-4 py-6 text-center text-sm text-[#667085]">{children}</p>
 }
 
 export function pctText(value: number | null | undefined) {

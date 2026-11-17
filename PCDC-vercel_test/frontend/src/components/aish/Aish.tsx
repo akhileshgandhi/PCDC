@@ -33,7 +33,7 @@ export function AishAvatar({ size = 40, className = "" }: AishAvatarProps) {
         </linearGradient>
         <radialGradient id={face} cx="0.35" cy="0.3" r="0.8">
           <stop offset="0%" stopColor="#1E3A66" />
-          <stop offset="100%" stopColor="#0B1D3A" />
+          <stop offset="100%" stopColor="#0c1f3d" />
         </radialGradient>
       </defs>
       {/* Gold ring + navy face */}
@@ -42,8 +42,8 @@ export function AishAvatar({ size = 40, className = "" }: AishAvatarProps) {
       {/* Eyes */}
       <ellipse cx="18" cy="22" rx="2.4" ry="3" fill="#FFFFFF" />
       <ellipse cx="30" cy="22" rx="2.4" ry="3" fill="#FFFFFF" />
-      <circle cx="18.6" cy="22.6" r="1.1" fill="#0B1D3A" />
-      <circle cx="30.6" cy="22.6" r="1.1" fill="#0B1D3A" />
+      <circle cx="18.6" cy="22.6" r="1.1" fill="#0c1f3d" />
+      <circle cx="30.6" cy="22.6" r="1.1" fill="#0c1f3d" />
       {/* Smile */}
       <path
         d="M17.5 29.5 Q24 35 30.5 29.5"
@@ -53,13 +53,13 @@ export function AishAvatar({ size = 40, className = "" }: AishAvatarProps) {
         strokeLinecap="round"
       />
       {/* Cheeks */}
-      <circle cx="14.5" cy="28" r="1.6" fill="#C9A227" opacity="0.45" />
-      <circle cx="33.5" cy="28" r="1.6" fill="#C9A227" opacity="0.45" />
+      <circle cx="14.5" cy="28" r="1.6" fill="#2563eb" opacity="0.45" />
+      <circle cx="33.5" cy="28" r="1.6" fill="#2563eb" opacity="0.45" />
       {/* AI sparkle */}
       <path
         d="M37 6 L38.4 9.6 L42 11 L38.4 12.4 L37 16 L35.6 12.4 L32 11 L35.6 9.6 Z"
         fill="#FFFFFF"
-        stroke="#C9A227"
+        stroke="#2563eb"
         strokeWidth="0.8"
         strokeLinejoin="round"
       />
@@ -83,12 +83,12 @@ export function AishIntro({ children, role, size = "md", className = "" }: AishI
     <div className={`flex items-start gap-3 ${className}`}>
       <AishAvatar size={avatar} />
       <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-[#F3E7BF] bg-[#FFFBEB] px-4 py-3">
-        <p className="text-xs font-semibold text-[#92702A]">
+        <p className="text-xs font-semibold text-[#1d4ed8]">
           {AISH_NAME}
           {role ? <span className="font-medium text-[#B08D20]"> · {role}</span> : null}
         </p>
         <p className={`mt-1 leading-6 text-[#374151] ${size === "sm" ? "text-xs" : "text-sm"}`}>
-          <span className="font-semibold text-[#0B1D3A]">{AISH_GREETING}</span> {children}
+          <span className="font-semibold text-[#0c1f3d]">{AISH_GREETING}</span> {children}
         </p>
       </div>
     </div>
@@ -106,7 +106,7 @@ export function AishSays({ children, className = "" }: AishSaysProps) {
     <div className={`flex items-start gap-2 ${className}`}>
       <AishAvatar size={22} className="mt-0.5" />
       <div className="min-w-0 flex-1 text-sm leading-6 text-[#374151]">
-        <span className="mr-1 font-semibold text-[#92702A]">{AISH_NAME}:</span>
+        <span className="mr-1 font-semibold text-[#1d4ed8]">{AISH_NAME}:</span>
         {children}
       </div>
     </div>

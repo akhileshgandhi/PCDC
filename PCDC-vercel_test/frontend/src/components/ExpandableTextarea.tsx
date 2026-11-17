@@ -47,7 +47,7 @@ export default function ExpandableTextarea({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="inline-flex items-center gap-1.5 justify-self-start text-xs font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
+          className="inline-flex items-center gap-1.5 justify-self-start text-xs font-semibold text-[#0C1F3D] transition hover:text-[#2563EB]"
         >
           <Maximize2 size={13} aria-hidden="true" />
           Expand to full screen
@@ -63,7 +63,7 @@ export default function ExpandableTextarea({
             // instead of truly covering the viewport. A portal sidesteps
             // that entirely regardless of where this component is used.
             <div
-              className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4"
+              className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-[#0c1f3d]/50 backdrop-blur-[2px] p-4"
               onClick={() => setIsOpen(false)}
             >
               <div
@@ -74,7 +74,7 @@ export default function ExpandableTextarea({
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-center justify-between border-b border-[#E6EBEB] px-6 py-4">
-                  <h2 id="expandable-textarea-title" className="text-base font-semibold text-[#0B1D3A]">
+                  <h2 id="expandable-textarea-title" className="text-base font-semibold text-[#0C1F3D]">
                     {label}
                   </h2>
                   <button

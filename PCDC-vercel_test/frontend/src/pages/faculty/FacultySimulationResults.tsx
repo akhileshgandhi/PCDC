@@ -48,7 +48,7 @@ function SectionsTable({ items, maxMarks }: { items: ResultItem[]; maxMarks: num
           const mean = average(submitted.map((item) => item.marks))
           return (
             <tr key={section.key}>
-              <td className="py-3 pr-4 font-semibold text-[#0b1d3a]">{section.label}</td>
+              <td className="py-3 pr-4 font-semibold text-[#2563eb]">{section.label}</td>
               <td className="py-3 text-right tabular-nums text-[#374151]">{inSection.length}</td>
               <td className="py-3 text-right tabular-nums text-[#374151]">{submitted.length}</td>
               <td className="py-3 text-right tabular-nums text-[#374151]">{mean === null ? "—" : `${mean} / ${maxMarks}`}</td>
@@ -230,7 +230,7 @@ export default function FacultySimulationResults() {
               type="button"
               onClick={() => void download()}
               disabled={isDownloading}
-              className="inline-flex items-center gap-2 rounded-md border border-[#0b1d3a] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-md border border-[#2563eb] px-3 py-2 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white disabled:opacity-60"
             >
               {isDownloading ? (
                 <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -266,7 +266,7 @@ export default function FacultySimulationResults() {
                       aria-pressed={view === option.id}
                       onClick={() => setView(option.id)}
                       className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                        view === option.id ? "bg-[#0b1d3a] text-white" : "text-[#374151] hover:bg-[#f2f4f7]"
+                        view === option.id ? "bg-[#2563eb] text-white" : "text-[#374151] hover:bg-[#f2f4f7]"
                       }`}
                     >
                       {option.label}
@@ -315,7 +315,7 @@ export default function FacultySimulationResults() {
                       {items.map((item) => (
                         <tr key={item.attempt_id}>
                           <td className="py-3 pr-4">
-                            <p className="font-semibold text-[#0b1d3a]">{item.student_name}</p>
+                            <p className="font-semibold text-[#2563eb]">{item.student_name}</p>
                             {item.college_id ? <p className="text-xs text-[#6b7280]">{item.college_id}</p> : null}
                           </td>
                           <td className="py-3 pr-4 text-[#374151]">{item.section_label ?? "—"}</td>
@@ -343,7 +343,7 @@ export default function FacultySimulationResults() {
                           <td className="py-3 pl-4 text-right">
                             <Link
                               to={`/faculty/simulations/attempts/${item.attempt_id}`}
-                              className="inline-flex rounded-md border border-[#0b1d3a] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+                              className="inline-flex rounded-md border border-[#2563eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
                             >
                               View answers
                             </Link>

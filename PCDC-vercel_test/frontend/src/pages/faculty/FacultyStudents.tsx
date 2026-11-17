@@ -78,7 +78,7 @@ export default function FacultyStudents() {
             <select
               value={sectionName}
               onChange={(e) => setSectionName(e.target.value)}
-              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             >
               <option value="">All sections</option>
               {sectionNames.map((n) => (
@@ -112,7 +112,7 @@ export default function FacultyStudents() {
                     to={`/faculty/student-attempts/${s.user_id}`}
                     className="flex items-center gap-4 px-1 py-4 transition hover:bg-[#f9fafb]"
                   >
-                    <div className="grid size-10 shrink-0 place-items-center rounded-md bg-[#0b1d3a] text-sm font-semibold text-white">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-md bg-[#2563eb] text-sm font-semibold text-white">
                       {initials(s.name)}
                     </div>
                     <div className="min-w-0 flex-1">

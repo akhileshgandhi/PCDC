@@ -66,9 +66,9 @@ export default function RadarChart({ metrics }: RadarChartProps) {
         })}
         <polygon
           points={polygonPoints}
-          fill="#C9A227"
+          fill="#2563eb"
           fillOpacity="0.28"
-          stroke="#C9A227"
+          stroke="#2563eb"
           strokeWidth="3"
         />
         {points.map((point, index) => (
@@ -77,7 +77,7 @@ export default function RadarChart({ metrics }: RadarChartProps) {
             cx={point.x}
             cy={point.y}
             r="4"
-            fill="#0B1D3A"
+            fill="#0c1f3d"
           />
         ))}
       </svg>

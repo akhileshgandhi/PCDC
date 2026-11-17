@@ -36,9 +36,23 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState<FacultyCaseBulkUploadResult | null>(null)
+  // Remounted (via `key`) after every pick instead of resetting its DOM
+  // `value` — on some Chrome builds, clearing value in place leaves a file
+  // input unable to reopen the picker on the next click, which looked like
+  // "selecting a second file does nothing."
+  const [inputKey, setInputKey] = useState(0)
 
   function addFiles(picked: FileList | null) {
     if (!picked || picked.length === 0) return
+    // Once a batch finishes, its file chips and the Upload button are
+    // replaced by the results table — so picking more files to start a new
+    // batch must clear that result, or the new selection has nothing to
+    // render into and looks like it was silently ignored.
+    if (result) {
+      setResult(null)
+      setFiles(Array.from(picked))
+      return
+    }
     setFiles((prev) => [...prev, ...Array.from(picked)])
   }
 
@@ -76,7 +90,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
   }
 
   return (
-    <ModalShell title="Bulk upload case studies" onClose={onClose} wide>
+    <ModalShell title="Bulk upload case studies" onClose={onClose} wide align="top">
       {error ? <div className={errorBanner}>{error}</div> : null}
 
       <p className="mb-3 text-sm leading-6 text-[#6b7280]">
@@ -89,7 +103,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
         type="button"
         onClick={() => void handleDownloadTemplate()}
         disabled={isDownloadingTemplate}
-        className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#0b1d3a] hover:underline disabled:opacity-60"
+        className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[#0c1f3d] hover:underline disabled:opacity-60"
       >
         <Download size={15} />
         {isDownloadingTemplate ? "Downloading…" : "Download case study template"}
@@ -115,15 +129,16 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
         </div>
       </div>
 
-      <label className="block cursor-pointer rounded-md border-2 border-dashed border-[#e6e8eb] px-4 py-6 text-center text-sm text-[#6b7280] transition hover:border-[#c9a227] hover:bg-[#fdfaf1]">
+      <label className="block cursor-pointer rounded-md border-2 border-dashed border-[#e6e8eb] px-4 py-6 text-center text-sm text-[#6b7280] transition hover:border-[#2563eb] hover:bg-[#fdfaf1]">
         <input
+          key={inputKey}
           type="file"
           accept=".docx,.pdf"
           multiple
           className="hidden"
           onChange={(event) => {
             addFiles(event.target.files)
-            event.target.value = ""
+            setInputKey((key) => key + 1)
           }}
         />
         {files.length > 0
@@ -220,7 +235,7 @@ export default function BulkUploadCaseDialog({ onClose, onDone }: {
             type="button"
             onClick={() => void handleUpload()}
             disabled={isUploading || files.length === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isUploading ? "Processing…" : "Upload"}
           </button>

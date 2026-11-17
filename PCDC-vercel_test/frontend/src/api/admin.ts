@@ -28,6 +28,9 @@ export interface AdminUser {
   semester_number?: number | null
   /** Student's current section (single-user responses only). */
   section_id?: number | null
+  /** Faculty's admin-assigned scope (single-user responses only). */
+  institution_ids?: number[]
+  department_ids?: number[]
 }
 
 export interface AdminUsersResponse {
@@ -48,6 +51,7 @@ export interface AdminUserFilters {
   batch_id?: number
   semester?: number
   section_id?: number
+  without_section?: boolean
   page?: number
   page_size?: number
 }
@@ -78,6 +82,8 @@ export interface UpdateAdminUserPayload {
   employee_id?: string
   experience_years?: number
   college_id?: string
+  institution_ids?: number[]
+  department_ids?: number[]
 }
 
 export async function updateAdminUser(userId: number, payload: UpdateAdminUserPayload) {
@@ -335,6 +341,7 @@ export async function getAdminUsers(filters: AdminUserFilters = {}) {
       batch_id: filters.batch_id || undefined,
       semester: filters.semester || undefined,
       section_id: filters.section_id || undefined,
+      without_section: filters.without_section || undefined,
       page: filters.page || 1,
       page_size: filters.page_size || 25,
     },
@@ -661,7 +668,7 @@ export async function createAdminDepartment(payload: {
 
 export async function updateAdminDepartment(
   departmentId: number,
-  payload: { name?: string; status?: "active" | "inactive"; institution_id?: number | null },
+  payload: { name?: string; code?: string; status?: "active" | "inactive"; institution_id?: number | null },
 ) {
   const response = await api.patch<AdminDepartment>(
     `/admin/departments/${departmentId}`,
@@ -745,7 +752,14 @@ export async function createAdminCourse(payload: {
 
 export async function updateAdminCourse(
   courseId: number,
-  payload: { name?: string; code?: string; status?: "active" | "inactive"; department_id?: number },
+  payload: {
+    name?: string
+    code?: string
+    status?: "active" | "inactive"
+    department_id?: number
+    total_semesters?: number
+    duration_years?: number
+  },
 ) {
   const response = await api.patch<AdminCourse>(`/admin/courses/${courseId}`, payload)
   return response.data

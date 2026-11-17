@@ -43,6 +43,7 @@ import {
   type FacultyCourseOption,
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
+import ConfirmDialog from "../../components/ConfirmDialog"
 import ExpandableTextarea from "../../components/ExpandableTextarea"
 import { apiErrorDetail } from "../../components/bank/shared"
 import AssignToClassDialog from "../../components/faculty/AssignToClassDialog"
@@ -282,6 +283,7 @@ export default function FacultyCaseBuilder() {
   const [generatingSection, setGeneratingSection] = useState<CaseSectionKey | null>(null)
   const [generationJob, setGenerationJob] = useState<FacultyCaseGenerationJob | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [confirmingPublish, setConfirmingPublish] = useState(false)
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [caseSummary, setCaseSummary] = useState("")
   const [showQuestionsModal, setShowQuestionsModal] = useState(false)
@@ -867,7 +869,18 @@ export default function FacultyCaseBuilder() {
     }
   }
 
-  async function handlePublish() {
+  // Publishing locks the case to read-only for faculty (only an admin can
+  // edit it afterwards) — a single accidental click shouldn't be able to do
+  // that, so this asks first instead of publishing immediately.
+  function handlePublishClick() {
+    if (!caseData || !validateCoreForm()) {
+      return
+    }
+    setConfirmingPublish(true)
+  }
+
+  async function confirmPublish() {
+    setConfirmingPublish(false)
     if (!caseData || !validateCoreForm()) {
       return
     }
@@ -956,9 +969,9 @@ export default function FacultyCaseBuilder() {
               {canPublish && caseData.status === "draft" ? (
                 <button
                   type="button"
-                  onClick={handlePublish}
+                  onClick={handlePublishClick}
                   disabled={isPublishing}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isPublishing ? (
                     <Loader2 className="animate-spin" size={17} />
@@ -984,7 +997,7 @@ export default function FacultyCaseBuilder() {
                 }
                 className={`inline-flex items-center justify-center gap-2 rounded-md border px-4 py-3 text-sm font-semibold transition ${
                   caseData.status === "published"
-                    ? "border-[#c9a227] text-[#92702a] hover:bg-[#fff7df]"
+                    ? "border-[#2563eb] text-[#1d4ed8] hover:bg-[#dbeafe]"
                     : "border-[#e6e8eb] text-[#9ca3af] hover:bg-[#f9fafb]"
                 }`}
               >
@@ -1099,6 +1112,17 @@ export default function FacultyCaseBuilder() {
         )}
       </div>
 
+      {confirmingPublish ? (
+        <ConfirmDialog
+          title="Publish this case?"
+          message="Once published, it becomes read-only for you — only an admin can edit it after this."
+          confirmLabel="Publish"
+          danger={false}
+          onConfirm={() => void confirmPublish()}
+          onCancel={() => setConfirmingPublish(false)}
+        />
+      ) : null}
+
       {showAssignDialog && caseData ? (
         <AssignToClassDialog
           caseStudy={{ id: caseData.id, title: caseData.title }}
@@ -1149,9 +1173,9 @@ function EntryCard({ title, description, icon: Icon, onClick }: EntryCardProps) 
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-[#e6e8eb] bg-white p-6 text-left shadow-sm transition hover:border-[#c9a227] hover:shadow-md"
+      className="rounded-lg border border-[#e6e8eb] bg-white p-6 text-left shadow-sm transition hover:border-[#2563eb] hover:shadow-md"
     >
-      <span className="grid size-12 place-items-center rounded-md bg-[#fff7df] text-[#92702a]">
+      <span className="grid size-12 place-items-center rounded-md bg-[#dbeafe] text-[#1d4ed8]">
         <Icon size={23} aria-hidden="true" />
       </span>
       <span className="mt-6 block text-2xl font-semibold text-[#111827]">{title}</span>
@@ -1200,7 +1224,7 @@ function AiBriefStep({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-semibold">Describe your case</h2>
-            <span className="rounded-full bg-[#fff7df] px-2 py-0.5 text-xs font-semibold text-[#92702a]">
+            <span className="rounded-full bg-[#dbeafe] px-2 py-0.5 text-xs font-semibold text-[#1d4ed8]">
               Test
             </span>
           </div>
@@ -1218,7 +1242,7 @@ function AiBriefStep({
         onChange={(event) => onBriefChange(event.target.value)}
         rows={4}
         placeholder="e.g. A regional healthy-snacks company negotiating shelf space and trade terms with a large retail chain. Focus on negotiation strategy under a limited budget."
-        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       />
       <div className="mt-5 grid gap-5">
         <TaxonomyFields
@@ -1240,7 +1264,7 @@ function AiBriefStep({
             step={1}
             value={form.totalMarks}
             onChange={(event) => onFieldChange("totalMarks", event.target.value)}
-            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <span className="text-xs font-normal text-[#6b7280]">
             Rapid Fire is fixed at 3; the rest splits across the 3 written questions.
@@ -1251,7 +1275,7 @@ function AiBriefStep({
         type="button"
         onClick={onGenerate}
         disabled={isBusy || !canGenerate}
-        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isBusy ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
         {isBusy ? "Generating the whole case…" : "Generate entire case"}
@@ -1412,7 +1436,7 @@ function CoreFieldsStep({
               <button
                 type="button"
                 onClick={onScratchRubricReset}
-                className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+                className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[#2563eb] transition hover:text-[#2563eb]"
               >
                 <RotateCcw size={13} aria-hidden="true" />
                 Reset to default
@@ -1430,7 +1454,7 @@ function CoreFieldsStep({
                         max={100}
                         value={scratchRubric.weights[criterion.key]}
                         onChange={(event) => onScratchRubricWeightChange(criterion.key, event.target.value)}
-                        className="h-9 w-16 rounded-md border border-[#e6e8eb] bg-white px-2 text-right text-sm font-semibold outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                        className="h-9 w-16 rounded-md border border-[#e6e8eb] bg-white px-2 text-right text-sm font-semibold outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                       />
                       <span className="text-sm font-semibold text-[#6b7280]">%</span>
                     </div>
@@ -1441,7 +1465,7 @@ function CoreFieldsStep({
                     max={100}
                     value={scratchRubric.weights[criterion.key]}
                     onChange={(event) => onScratchRubricWeightChange(criterion.key, event.target.value)}
-                    className="w-full accent-[#0b1d3a]"
+                    className="w-full accent-[#2563eb]"
                     aria-label={`${criterion.label} weight`}
                   />
                 </div>
@@ -1498,13 +1522,13 @@ function CoreFieldsStep({
                     ? "Maximum of 2 criteria reached"
                     : "Add a short qualitative criterion"
                 }
-                className="h-11 min-w-0 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb]"
+                className="h-11 min-w-0 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb]"
               />
               <button
                 type="button"
                 onClick={onScratchAddCriterion}
                 disabled={!scratchNewCriterion.trim() || scratchRubric.case_specific_criteria.length >= 2}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#2563eb] px-4 py-2.5 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Plus size={15} aria-hidden="true" />
                 Add
@@ -1552,7 +1576,7 @@ function CoreFieldsStep({
         type="button"
         onClick={onContinue}
         disabled={!canContinue}
-        className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSaving ? <Loader2 className="animate-spin" size={17} /> : <FileText size={17} />}
         Create Draft
@@ -1671,13 +1695,13 @@ function EditorStep({
             onChange={(event) => onRegenerateBriefChange(event.target.value)}
             rows={3}
             placeholder="e.g. A regional healthy-snacks company negotiating shelf space and trade terms with a large retail chain. Focus on negotiation strategy under a limited budget."
-            className="mt-4 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="mt-4 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <button
             type="button"
             onClick={onRegenerateWithAi}
             disabled={isRegenerating || !regenerateBrief.trim()}
-            className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isRegenerating ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />}
             {isRegenerating ? "Regenerating…" : "Regenerate entire case"}
@@ -1784,7 +1808,7 @@ function EditorStep({
 
       <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
-          <Zap size={20} className="mt-0.5 shrink-0 text-[#C9A227]" aria-hidden="true" />
+          <Zap size={20} className="mt-0.5 shrink-0 text-[#2563eb]" aria-hidden="true" />
           <div>
             <h2 className="text-2xl font-semibold text-[#111827]">Rapid Fire Round</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b7280]">
@@ -1920,7 +1944,7 @@ function CaseBackgroundFields({
           placeholder="The case's full narrative shown to students: company/industry context, the situation and decision at stake, key people, constraints, timeline, and the facts and data students will need — all in one place."
           rows={8}
           readOnly={readOnly}
-          className={`rounded-md border px-3 py-2 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 ${
+          className={`rounded-md border px-3 py-2 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 ${
             readOnly ? "border-[#e6e8eb] bg-[#f9fafb] cursor-default" : "border-[#e6e8eb] bg-white"
           }`}
         />
@@ -1988,7 +2012,7 @@ function ListField({ label, hint, items, minItems, maxItems, placeholder, onChan
               value={item}
               placeholder={placeholder}
               onChange={(event) => onChange(index, event.target.value)}
-              className="h-11 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              className="h-11 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
             {items.length > minItems ? (
               <button
@@ -2007,7 +2031,7 @@ function ListField({ label, hint, items, minItems, maxItems, placeholder, onChan
         <button
           type="button"
           onClick={onAdd}
-          className="w-fit text-sm font-semibold text-[#0b1d3a] underline underline-offset-2"
+          className="w-fit text-sm font-semibold text-[#2563eb] underline underline-offset-2"
         >
           + Add option
         </button>
@@ -2063,20 +2087,24 @@ function TaxonomyFields({
             </span>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {courses.map((course) => (
-                <label
-                  key={course.id}
-                  className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-[#e6e8eb] bg-white px-2.5 py-1.5 text-sm font-medium text-[#111827]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.programIds.includes(course.id)}
-                    onChange={() => onProgramToggle(course.id)}
-                    className="size-4"
-                  />
-                  {course.name}
-                </label>
-              ))}
+              {courses.map((course) => {
+                const isSelected = form.programIds.includes(course.id)
+                return (
+                  <button
+                    key={course.id}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => onProgramToggle(course.id)}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                      isSelected
+                        ? "border-[#2563eb] bg-[#2563eb] text-white"
+                        : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
+                    }`}
+                  >
+                    {course.name}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -2091,20 +2119,24 @@ function TaxonomyFields({
             </span>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {subjectOptions.map((area) => (
-                <label
-                  key={area}
-                  className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-[#e6e8eb] bg-white px-2.5 py-1.5 text-sm font-medium text-[#111827]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.subjectAreas.includes(area)}
-                    onChange={() => onSubjectAreaToggle(area)}
-                    className="size-4"
-                  />
-                  {area}
-                </label>
-              ))}
+              {subjectOptions.map((area) => {
+                const isSelected = form.subjectAreas.includes(area)
+                return (
+                  <button
+                    key={area}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => onSubjectAreaToggle(area)}
+                    className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                      isSelected
+                        ? "border-[#2563eb] bg-[#2563eb] text-white"
+                        : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
+                    }`}
+                  >
+                    {area}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -2114,7 +2146,7 @@ function TaxonomyFields({
           <select
             value={form.difficulty}
             onChange={(event) => onFieldChange("difficulty", event.target.value)}
-            className="h-9 w-64 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="h-9 w-64 rounded-lg border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           >
             {DIFFICULTY_LEVELS.map((level) => (
               <option key={level} value={level}>
@@ -2128,20 +2160,24 @@ function TaxonomyFields({
       <div className="grid gap-1.5 text-sm font-semibold text-[#111827]">
         <span>Semester</span>
         <div className="flex flex-wrap gap-1.5">
-          {semesterOptions.map((semester) => (
-            <label
-              key={semester}
-              className="flex items-center gap-1.5 rounded-md border border-[#e6e8eb] bg-white px-2.5 py-1.5 text-sm font-medium text-[#111827]"
-            >
-              <input
-                type="checkbox"
-                checked={form.semesters.includes(semester)}
-                onChange={() => onSemesterToggle(semester)}
-                className="size-4"
-              />
-              {semester}
-            </label>
-          ))}
+          {semesterOptions.map((semester) => {
+            const isSelected = form.semesters.includes(semester)
+            return (
+              <button
+                key={semester}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSemesterToggle(semester)}
+                className={`size-9 rounded-full border text-sm font-semibold transition ${
+                  isSelected
+                    ? "border-[#2563eb] bg-[#2563eb] text-white"
+                    : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
+                }`}
+              >
+                {semester}
+              </button>
+            )
+          })}
         </div>
         <span className="text-xs font-normal text-[#6b7280]">
           {selectedCourses.length > 0
@@ -2153,20 +2189,24 @@ function TaxonomyFields({
       <div className="grid gap-1.5 text-sm font-semibold text-[#111827]">
         <span>Bloom's Taxonomy Level</span>
         <div className="flex flex-wrap gap-1.5">
-          {BLOOM_LEVELS.map((level) => (
-            <label
-              key={level}
-              className="flex items-center gap-1.5 rounded-md border border-[#e6e8eb] bg-white px-2.5 py-1.5 text-sm font-medium text-[#111827]"
-            >
-              <input
-                type="checkbox"
-                checked={form.bloomsLevels.includes(level)}
-                onChange={() => onBloomsLevelToggle(level)}
-                className="size-4"
-              />
-              {level}
-            </label>
-          ))}
+          {BLOOM_LEVELS.map((level) => {
+            const isSelected = form.bloomsLevels.includes(level)
+            return (
+              <button
+                key={level}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onBloomsLevelToggle(level)}
+                className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                  isSelected
+                    ? "border-[#2563eb] bg-[#2563eb] text-white"
+                    : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
+                }`}
+              >
+                {level}
+              </button>
+            )
+          })}
         </div>
         <span className="text-xs font-normal text-[#6b7280]">
           Auto-selected from the Difficulty level above — adjust here only if this case needs to differ.
@@ -2190,7 +2230,7 @@ function DurationField({ value, onChange }: DurationFieldProps) {
     onChange(String(Math.max(0, Math.round(h * 60 + m))))
   }
   const inputClass =
-    "h-11 w-20 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+    "h-11 w-20 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
   return (
     <div className="grid gap-2 text-sm font-semibold text-[#111827]">
       Duration
@@ -2238,7 +2278,7 @@ function TextField({ label, value, type = "text", placeholder, onChange }: TextF
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       />
     </label>
   )
@@ -2262,7 +2302,7 @@ function NumberField({ label, value, placeholder, onChange }: NumberFieldProps) 
         onChange={(event) =>
           onChange(event.target.value === "" ? null : Number(event.target.value))
         }
-        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       />
     </label>
   )
@@ -2291,7 +2331,7 @@ function TextAreaField({ label, value, rows = 3, placeholder, onChange, readOnly
         onChange={(event) => onChange(event.target.value)}
         rows={rows}
         readOnly={readOnly}
-        className={`pointer-events-auto rounded-md border px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 ${
+        className={`pointer-events-auto rounded-md border px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 ${
           readOnly ? "border-[#e6e8eb] bg-[#f9fafb] cursor-default" : "border-[#e6e8eb] bg-white"
         }`}
       />
@@ -2313,7 +2353,7 @@ function SelectField({ label, value, options, onChange }: SelectFieldProps) {
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       >
         <option value="">Select...</option>
         {options.map((option) => (
@@ -2476,7 +2516,7 @@ function QuestionsPanel({
           <button
             type="button"
             onClick={onOpenGenerateModal}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#2563eb] px-4 py-2.5 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
           >
             <Sparkles size={16} aria-hidden="true" />
             Generate Questions with AI
@@ -2615,7 +2655,7 @@ function GenerateQuestionsModal({
             value={summary}
             onChange={(event) => onSummaryChange(event.target.value)}
             rows={4}
-            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </label>
         <div className="mt-4 rounded-md bg-[#f9fafb] p-3 text-sm text-[#6b7280]">
@@ -2635,7 +2675,7 @@ function GenerateQuestionsModal({
             type="button"
             onClick={onCancel}
             disabled={isGenerating}
-            className="rounded-md border border-[#e6e8eb] px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#c9a227] disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-[#e6e8eb] px-4 py-2.5 text-sm font-semibold text-[#111827] transition hover:border-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>
@@ -2643,7 +2683,7 @@ function GenerateQuestionsModal({
             type="button"
             onClick={onGenerate}
             disabled={isGenerating || !summary.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isGenerating ? (
               <Loader2 className="animate-spin" size={16} aria-hidden="true" />
@@ -2692,7 +2732,7 @@ function SectionEditor({
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-lg font-semibold text-[#111827]">{label}</h3>
           {required ? (
-            <span className="rounded-full bg-[#fff7df] px-2 py-1 text-xs font-semibold text-[#92702a]">
+            <span className="rounded-full bg-[#dbeafe] px-2 py-1 text-xs font-semibold text-[#1d4ed8]">
               Required
             </span>
           ) : null}
@@ -2702,7 +2742,7 @@ function SectionEditor({
           type="button"
           onClick={onGenerate}
           disabled={generationDisabled}
-          className="inline-flex items-center gap-1.5 rounded-md border border-[#e6e8eb] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#c9a227] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md border border-[#e6e8eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:border-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Bot size={14} />}
           {isGenerating ? "Generating…" : "Generate with AI"}
@@ -2713,7 +2753,7 @@ function SectionEditor({
         placeholder={SECTION_HINTS[sectionKey]}
         onChange={(event) => onChange(event.target.value)}
         rows={7}
-        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       />
     </article>
   )

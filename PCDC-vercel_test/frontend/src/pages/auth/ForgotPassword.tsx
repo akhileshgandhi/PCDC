@@ -61,7 +61,7 @@ export default function ForgotPassword() {
       <AuthLayout>
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-md bg-slate-50 px-3 py-3">
-            <Mail size={20} className="mt-0.5 shrink-0 text-[#c9a227]" aria-hidden="true" />
+            <Mail size={20} className="mt-0.5 shrink-0 text-[#2563eb]" aria-hidden="true" />
             <div className="text-sm">
               <p className="font-semibold text-slate-900">Check your email</p>
               <p className="mt-0.5 text-slate-600">

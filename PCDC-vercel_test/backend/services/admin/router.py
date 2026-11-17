@@ -108,6 +108,7 @@ class AdminDepartmentCreate(BaseModel):
 
 class AdminDepartmentUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     status: Optional[str] = None
     institution_id: Optional[int] = None
 
@@ -142,6 +143,8 @@ class AdminCourseUpdate(BaseModel):
     code: Optional[str] = None
     status: Optional[str] = None
     department_id: Optional[int] = None
+    total_semesters: Optional[int] = None
+    duration_years: Optional[int] = None
 
 
 class AdminBatchCreate(BaseModel):
@@ -217,6 +220,37 @@ def check_user_placement(
     ensure_institution_ids_in_scope(current_user, institution_ids or [])
     for department_id in department_ids or []:
         ensure_department_in_scope(db, current_user, department_id)
+
+
+def set_faculty_scope(
+    db: Session, faculty_id: int, institution_ids: List[int], department_ids: List[int],
+) -> None:
+    """Replace a faculty member's admin-assigned scope (which institutes and
+    programs' sections they're offered when self-selecting teaching during
+    onboarding) with exactly the given institutions/departments. Shared by
+    create and edit so both support the same multi-program selection."""
+    db.execute(text("DELETE FROM faculty_scope WHERE faculty_id = :f"), {"f": faculty_id})
+    scope_pairs = set()  # (institution_id, department_id|None)
+    for dept_id in department_ids or []:
+        drow = db.execute(
+            text("SELECT institution_id FROM departments WHERE id = :id"),
+            {"id": dept_id},
+        ).fetchone()
+        if drow and drow.institution_id is not None:
+            scope_pairs.add((drow.institution_id, dept_id))
+    # Institutions selected without any of their departments -> institution-wide.
+    depts_by_inst = {inst for inst, _ in scope_pairs}
+    for inst_id in institution_ids or []:
+        if inst_id not in depts_by_inst:
+            scope_pairs.add((inst_id, None))
+    for inst_id, dept_id in scope_pairs:
+        db.execute(
+            text(
+                "INSERT INTO faculty_scope (faculty_id, institution_id, department_id) "
+                "VALUES (:f, :i, :d)"
+            ),
+            {"f": faculty_id, "i": inst_id, "d": dept_id},
+        )
 
 
 def normalize_title(title: Optional[str]) -> Optional[str]:
@@ -683,6 +717,7 @@ def list_admin_users(
     batch_id: Optional[int] = None,
     semester: Optional[int] = None,
     section_id: Optional[int] = None,
+    without_section: Optional[bool] = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -703,7 +738,15 @@ def list_admin_users(
         where_clauses.append("u.status = :status")
         params["status"] = normalize_status(status)
     if batch:
-        where_clauses.append("u.admission_year = :batch")
+        # "Batch" means different things per role: for students it's the
+        # cohort they were enrolled into (batches.start_year/end_year, e.g.
+        # "2026-2029" covers 2026-2029); admission_year is a generic field
+        # that's only ever set via CSV import or a manual profile edit, so
+        # matching on it alone missed virtually every student added through
+        # the normal "Add a student" flow.
+        where_clauses.append(
+            "(u.admission_year = :batch OR (sub.start_year IS NOT NULL AND :batch BETWEEN sub.start_year AND sub.end_year))"
+        )
         params["batch"] = batch
     if search:
         # college_id holds a student's scholar number (their login).
@@ -721,6 +764,10 @@ def list_admin_users(
             key = column.split(".")[1]
             where_clauses.append(f"{column} = :{key}")
             params[key] = value
+    if without_section:
+        # Matches the "Students Without a Section" dashboard tile: active
+        # students whose student record has no current section assigned.
+        where_clauses.append("sub.section_id IS NULL")
     if admin_scope(current_user) is not None:
         where_clauses.append(user_in_scope_sql("u"))
         params.update(scope_params(current_user))
@@ -746,7 +793,8 @@ def list_admin_users(
                        s.course_id, s.batch_id, s.current_section_id AS section_id,
                        c.department_id, d.name AS department_name,
                        d.institution_id, inst.name AS institution_name,
-                       COALESCE(s.current_semester_number, sem.semester_number) AS semester_number
+                       COALESCE(s.current_semester_number, sem.semester_number) AS semester_number,
+                       b.start_year, b.end_year
                 FROM students s
                 LEFT JOIN courses c ON c.id = s.course_id
                 LEFT JOIN departments d ON d.id = c.department_id
@@ -906,27 +954,7 @@ def create_admin_user(
     # Record the admin-assigned scope (institutions/departments) for faculty so
     # onboarding only shows what they're allowed to pick from.
     if role == "faculty":
-        scope_pairs = set()  # (institution_id, department_id|None)
-        for dept_id in data.department_ids or []:
-            drow = db.execute(
-                text("SELECT institution_id FROM departments WHERE id = :id"),
-                {"id": dept_id},
-            ).fetchone()
-            if drow and drow.institution_id is not None:
-                scope_pairs.add((drow.institution_id, dept_id))
-        # Institutions selected without any of their departments -> institution-wide.
-        depts_by_inst = {inst for inst, _ in scope_pairs}
-        for inst_id in data.institution_ids or []:
-            if inst_id not in depts_by_inst:
-                scope_pairs.add((inst_id, None))
-        for inst_id, dept_id in scope_pairs:
-            db.execute(
-                text(
-                    "INSERT INTO faculty_scope (faculty_id, institution_id, department_id) "
-                    "VALUES (:f, :i, :d)"
-                ),
-                {"f": row.id, "i": inst_id, "d": dept_id},
-            )
+        set_faculty_scope(db, row.id, data.institution_ids or [], data.department_ids or [])
 
     for institution_id in admin_institution_ids:
         link_admin_to_institution(db, row.id, institution_id)
@@ -1233,6 +1261,10 @@ class AdminUserUpdate(BaseModel):
     employee_id: Optional[str] = None
     experience_years: Optional[int] = None
     college_id: Optional[str] = None
+    # Faculty only — replaces the whole set when provided (even an empty list
+    # clears it), mirroring how Invite Faculty assigns multiple programs.
+    institution_ids: Optional[List[int]] = None
+    department_ids: Optional[List[int]] = None
 
 
 @admin_router.get("/users/{user_id}")
@@ -1260,6 +1292,13 @@ def get_admin_user(
     ).fetchall()
 
     detail = user_response(row)
+    if row.role == "faculty":
+        scope_rows = db.execute(
+            text("SELECT institution_id, department_id FROM faculty_scope WHERE faculty_id = :f"),
+            {"f": user_id},
+        ).fetchall()
+        detail["institution_ids"] = sorted({r.institution_id for r in scope_rows if r.institution_id is not None})
+        detail["department_ids"] = sorted({r.department_id for r in scope_rows if r.department_id is not None})
     detail["login_history"] = [
         {
             "id": r.id,
@@ -1313,7 +1352,8 @@ def update_admin_user(
         sets.append("college_id = :college_id")
         params["college_id"] = data.college_id.strip() or None
 
-    if not sets:
+    scope_changed = data.department_ids is not None or data.institution_ids is not None
+    if not sets and not scope_changed:
         raise HTTPException(status_code=400, detail="No fields to update")
 
     sets.append("updated_at = NOW()")
@@ -1324,12 +1364,17 @@ def update_admin_user(
             UPDATE users
             SET {set_sql}
             WHERE id = :user_id
-            RETURNING id, name
+            RETURNING id, name, role
         """),
         params,
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if scope_changed:
+        if row.role != "faculty":
+            raise HTTPException(status_code=400, detail="Only faculty have an institute/program scope")
+        set_faculty_scope(db, user_id, data.institution_ids or [], data.department_ids or [])
 
     record_system_event(
         db,
@@ -2450,16 +2495,31 @@ def update_admin_department(
         ensure_institution_ids_in_scope(current_user, [data.institution_id])
     if data.status is not None and data.status not in {"active", "inactive"}:
         raise HTTPException(status_code=400, detail="Invalid department status")
+    new_code = None
+    if data.code is not None:
+        new_code = data.code.strip().upper()
+        if not new_code:
+            raise HTTPException(status_code=400, detail="Program code can't be empty")
+        if len(new_code) > 50:
+            raise HTTPException(status_code=400, detail="Program code must be 50 characters or fewer")
+        clash = db.execute(
+            text("SELECT id FROM departments WHERE code = :code AND id <> :id"),
+            {"code": new_code, "id": department_id},
+        ).fetchone()
+        if clash:
+            raise HTTPException(status_code=409, detail="Another program already uses this code")
     db.execute(
         text("""
             UPDATE departments
             SET name = COALESCE(:name, name),
+                code = COALESCE(:code, code),
                 status = COALESCE(:status, status),
                 institution_id = COALESCE(:institution_id, institution_id)
             WHERE id = :id
         """),
         {
             "name": data.name.strip() if data.name else None,
+            "code": new_code,
             "status": data.status,
             "institution_id": data.institution_id,
             "id": department_id,
@@ -2881,13 +2941,80 @@ def update_admin_course(
         old_code = db.execute(
             text("SELECT code FROM courses WHERE id = :course_id"), {"course_id": course_id}
         ).scalar()
+
+    # Changing how many semesters/years a specialization runs for also has to
+    # keep the semesters table (one row per semester number, created
+    # alongside the course) in sync — add rows when growing, and when
+    # shrinking, refuse if any semester being dropped already has sections on
+    # it (that would silently orphan real class/enrollment data).
+    new_total_semesters = None
+    new_duration_years = None
+    if data.total_semesters is not None or data.duration_years is not None:
+        current = db.execute(
+            text("SELECT total_semesters, duration_years FROM courses WHERE id = :course_id"),
+            {"course_id": course_id},
+        ).fetchone()
+        new_total_semesters = data.total_semesters if data.total_semesters is not None else current.total_semesters
+        new_duration_years = data.duration_years if data.duration_years is not None else current.duration_years
+        if new_total_semesters < 1:
+            raise HTTPException(status_code=400, detail="Total semesters must be at least 1")
+        if new_duration_years < 1:
+            raise HTTPException(status_code=400, detail="Duration must be at least 1 year")
+        expected_semesters = new_duration_years * 2
+        if new_total_semesters != expected_semesters:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{new_duration_years} year(s) should have {expected_semesters} "
+                    f"semesters (2 per year), not {new_total_semesters}."
+                ),
+            )
+        if new_total_semesters < current.total_semesters:
+            blocked = db.execute(
+                text("""
+                    SELECT s.semester_number, COUNT(cs.id) AS section_count
+                    FROM semesters s
+                    LEFT JOIN class_sections cs ON cs.semester_id = s.id
+                    WHERE s.course_id = :course_id AND s.semester_number > :new_total
+                    GROUP BY s.semester_number
+                    HAVING COUNT(cs.id) > 0
+                    ORDER BY s.semester_number
+                """),
+                {"course_id": course_id, "new_total": new_total_semesters},
+            ).fetchall()
+            if blocked:
+                nums = ", ".join(str(b.semester_number) for b in blocked)
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Can't lower total semesters — semester(s) {nums} already have class sections. Remove those sections first.",
+                )
+            db.execute(
+                text("DELETE FROM semesters WHERE course_id = :course_id AND semester_number > :new_total"),
+                {"course_id": course_id, "new_total": new_total_semesters},
+            )
+        elif new_total_semesters > current.total_semesters:
+            for semester_number in range(current.total_semesters + 1, new_total_semesters + 1):
+                db.execute(
+                    text("""
+                        INSERT INTO semesters (course_id, semester_number, name)
+                        VALUES (:course_id, :semester_number, :name)
+                    """),
+                    {
+                        "course_id": course_id,
+                        "semester_number": semester_number,
+                        "name": semester_name(semester_number),
+                    },
+                )
+
     db.execute(
         text("""
             UPDATE courses
             SET name = COALESCE(:name, name),
                 code = COALESCE(:code, code),
                 status = COALESCE(:status, status),
-                department_id = COALESCE(:department_id, department_id)
+                department_id = COALESCE(:department_id, department_id),
+                total_semesters = COALESCE(:total_semesters, total_semesters),
+                duration_years = COALESCE(:duration_years, duration_years)
             WHERE id = :course_id
         """),
         {
@@ -2895,6 +3022,8 @@ def update_admin_course(
             "code": new_code,
             "status": data.status,
             "department_id": data.department_id,
+            "total_semesters": new_total_semesters,
+            "duration_years": new_duration_years,
             "course_id": course_id,
         },
     )

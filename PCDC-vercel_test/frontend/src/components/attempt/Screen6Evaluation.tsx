@@ -132,16 +132,16 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
 
       {/* Header — Grade + Marks */}
       <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">Report Card</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">Report Card</p>
         <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             {hasMarks ? (
-              <h2 className="text-3xl font-semibold text-[#0B1D3A]">
+              <h2 className="text-3xl font-semibold text-[#0c1f3d]">
                 Marks Scored: <span className={scoreColor(marksPct)}>{marksScored}</span>
                 <span className="text-lg text-[#6B7280]"> / {totalMarks}</span>
               </h2>
             ) : (
-              <h2 className="text-3xl font-semibold text-[#0B1D3A]">
+              <h2 className="text-3xl font-semibold text-[#0c1f3d]">
                 Overall Score: <span className={scoreColor(evaluation.total_score)}>{evaluation.total_score}</span>
                 <span className="text-lg text-[#6B7280]"> / 100</span>
               </h2>
@@ -173,7 +173,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
               return (
               <div key={qs.question_number} className="rounded-lg border border-[#E6EBEB] p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#2563eb]">
                     Question {qs.question_number}
                   </p>
                   <span className={`text-base font-bold ${scoreColor(qs.marks_awarded / qs.marks_total * 100)}`}>
@@ -199,7 +199,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
                 {qs.feedback && <AishSays className="mt-3">{qs.feedback}</AishSays>}
                 {qs.improvement && (
                   <div className="mt-2 flex gap-2 rounded-lg bg-[#FFFBEB] p-3">
-                    <TrendingUp size={15} className="mt-0.5 shrink-0 text-[#C9A227]" />
+                    <TrendingUp size={15} className="mt-0.5 shrink-0 text-[#2563eb]" />
                     <p className="text-xs leading-5 text-[#92400E]"><span className="font-semibold">Improve: </span>{qs.improvement}</p>
                   </div>
                 )}
@@ -214,7 +214,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
       {(evaluation.rapid_fire_scores.length > 0 || evaluation.rapid_fire_feedback) && (
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2">
-            <Zap size={18} className="text-[#C9A227]" />
+            <Zap size={18} className="text-[#2563eb]" />
             <h3 className="text-lg font-semibold text-[#111827]">Rapid Fire Round</h3>
             <span className={`ml-auto text-lg font-bold ${scoreColor(rapidTotal > 0 ? (rapidMarks / rapidTotal) * 100 : 0)}`}>
               {rapidMarks} / {rapidTotal} marks
@@ -230,7 +230,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
                 return (
                   <div key={rf.sequence} className="rounded-lg border border-[#E6EBEB] p-4">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[#C9A227]">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#2563eb]">
                         Question {rf.sequence}
                       </p>
                       <span className={`text-sm font-bold ${scoreColor(rf.marks_awarded * 100)}`}>
@@ -328,7 +328,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
           <ul className="mt-3 space-y-2 text-sm leading-7 text-[#374151]">
             {toBulletItems(evaluation.improvement_areas).map((item, index) => (
               <li key={index} className="flex gap-2">
-                <span className="text-[#C9A227]">•</span>
+                <span className="text-[#2563eb]">•</span>
                 <span>{item}</span>
               </li>
             ))}
@@ -341,13 +341,13 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-[#111827]">Next Recommended Case</h3>
           <div className="mt-4 rounded-xl bg-[#F6F7F9] p-5">
-            <h4 className="text-base font-semibold text-[#0B1D3A]">{evaluation.next_case.title}</h4>
+            <h4 className="text-base font-semibold text-[#0c1f3d]">{evaluation.next_case.title}</h4>
             <p className="mt-1 text-sm text-[#6B7280]">
               {evaluation.next_case.domain} · Level {evaluation.next_case.difficulty} · {evaluation.next_case.estimated_minutes} min
             </p>
             <Link
               to={`/student/case-studies/${evaluation.next_case.id}`}
-              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B08D20]"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3b82f6]"
             >
               View Case <ArrowRight size={14} />
             </Link>
@@ -357,7 +357,7 @@ export default function Screen6Evaluation({ evaluation, answeredQuestions, rapid
 
       <Link
         to="/student/case-studies"
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#0B1D3A] px-5 py-3 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#0B1D3A] hover:text-white"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#0c1f3d] px-5 py-3 text-sm font-semibold text-[#0c1f3d] transition hover:bg-[#0c1f3d] hover:text-white"
       >
         <MessageSquare size={16} />
         Back to My Case Studies
@@ -384,7 +384,7 @@ function InsightCard({ title, text, tone, icon }: InsightCardProps) {
       <div className={`flex items-center gap-1.5 ${styles}`}>
         {icon}
         <h3 className="text-xs font-semibold uppercase tracking-wide">{title}</h3>
-        <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold normal-case text-[#92702A]">
+        <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold normal-case text-[#1d4ed8]">
           <AishAvatar size={18} />
           {AISH_NAME}
         </span>

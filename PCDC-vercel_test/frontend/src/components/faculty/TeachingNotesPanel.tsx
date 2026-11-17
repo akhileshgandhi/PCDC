@@ -109,7 +109,7 @@ export default function TeachingNotesPanel({ caseId }: TeachingNotesPanelProps) 
             type="button"
             onClick={saveNotes}
             disabled={!hasChanges || tooLong || isSaving || isGenerating}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
             Save Notes
@@ -153,13 +153,13 @@ export default function TeachingNotesPanel({ caseId }: TeachingNotesPanelProps) 
                 rows={2}
                 maxLength={MAX_PROMPT_CHARS}
                 placeholder="e.g. Explain break-even analysis and how to use it to discuss this case in class."
-                className="mt-3 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                className="mt-3 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               />
               <button
                 type="button"
                 onClick={generateNotes}
                 disabled={!prompt.trim() || isGenerating || isSaving}
-                className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-3 inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
                 {isGenerating ? "Writing notes…" : "Write notes with AI"}
@@ -180,7 +180,7 @@ export default function TeachingNotesPanel({ caseId }: TeachingNotesPanelProps) 
             readOnly={!canEdit}
             rows={14}
             placeholder={canEdit ? "Write your notes here." : "No teaching notes yet."}
-            className="mt-2 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="mt-2 w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
           {canEdit ? (
             <p className={`mt-1 text-xs ${tooLong ? "font-semibold text-[#b42318]" : "text-[#6b7280]"}`}>

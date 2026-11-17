@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { getStudentDashboardInsights, type StudentDashboardInsights } from "../../api/student"
+import Reveal from "../common/Reveal"
 import { AlertTile, EmptyNote, Panel, dueText, pctText } from "./InsightBits"
 import { AssignmentStatusBar, ScoreTrendChart } from "./InsightCharts"
 
@@ -35,37 +36,44 @@ export default function StudentInsights() {
 
   return (
     <>
-      <section className="grid gap-4 sm:grid-cols-3">
-        <AlertTile
-          accent="student"
-          label="Overdue"
-          value={progress?.overdue ?? 0}
-          hint="Assigned cases past their due date."
-          icon={CalendarX}
-          isLoading={isLoading}
-          urgent
-          to="/student/case-studies"
-        />
-        <AlertTile
-          accent="student"
-          label="Due This Week"
-          value={progress?.due_next_7_days ?? 0}
-          hint="Cases due in the next 7 days."
-          icon={CalendarClock}
-          isLoading={isLoading}
-          to="/student/case-studies"
-        />
-        <AlertTile
-          accent="student"
-          label="Completed"
-          value={isLoading ? 0 : `${progress?.completed ?? 0}/${progress?.assigned ?? 0}`}
-          hint={`${pctText(progress?.completion_pct)} of your assigned cases are done.`}
-          icon={CheckCircle2}
-          isLoading={isLoading}
-        />
+      <section className="grid gap-6 sm:grid-cols-3">
+        <Reveal index={0}>
+          <AlertTile
+            accent="student"
+            label="Overdue"
+            value={progress?.overdue ?? 0}
+            hint="Assigned cases past their due date."
+            icon={CalendarX}
+            isLoading={isLoading}
+            urgent
+            to="/student/case-studies"
+          />
+        </Reveal>
+        <Reveal index={1}>
+          <AlertTile
+            accent="student"
+            label="Due This Week"
+            value={progress?.due_next_7_days ?? 0}
+            hint="Cases due in the next 7 days."
+            icon={CalendarClock}
+            isLoading={isLoading}
+            to="/student/case-studies"
+          />
+        </Reveal>
+        <Reveal index={2}>
+          <AlertTile
+            accent="student"
+            label="Completed"
+            value={isLoading ? 0 : `${progress?.completed ?? 0}/${progress?.assigned ?? 0}`}
+            hint={`${pctText(progress?.completion_pct)} of your assigned cases are done.`}
+            icon={CheckCircle2}
+            isLoading={isLoading}
+          />
+        </Reveal>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-2">
+      <section className="grid gap-6 xl:grid-cols-2">
+        <Reveal index={0}>
         <Panel
           accent="student"
           title="Upcoming Deadlines"
@@ -96,7 +104,7 @@ export default function StudentInsights() {
                       </div>
                       <span
                         className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          due.overdue ? "bg-[#fff1f0] text-[#b42318]" : "bg-[#fff7df] text-[#92702a]"
+                          due.overdue ? "bg-[#fff1f0] text-[#b42318]" : "bg-[#dbeafe] text-[#1d4ed8]"
                         }`}
                       >
                         {due.text}
@@ -108,7 +116,9 @@ export default function StudentInsights() {
             </ul>
           )}
         </Panel>
+        </Reveal>
 
+        <Reveal index={1}>
         <Panel accent="student" title="Recent Scores" subtitle="Your last evaluated case studies">
           {isLoading ? (
             <p className="text-sm text-[#6b7280]">Loading...</p>
@@ -123,13 +133,14 @@ export default function StudentInsights() {
                     <span className="min-w-0 truncate text-[#6b7280]">
                       #{index + 1} {item.title}
                     </span>
-                    <span className="shrink-0 font-semibold text-[#081d3a]">{pctText(item.score_pct)}</span>
+                    <span className="shrink-0 font-semibold text-[#0c1f3d]">{pctText(item.score_pct)}</span>
                   </li>
                 ))}
               </ol>
             </>
           )}
         </Panel>
+        </Reveal>
       </section>
     </>
   )

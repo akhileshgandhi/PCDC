@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
 
+import PageTransition from "../components/common/PageTransition"
 import { useNewAssignmentsCount } from "../hooks/useNewAssignmentsCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
@@ -97,7 +98,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-[#111827]">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#081d3a] p-5 text-white lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#0c1f3d] p-6 text-white lg:block">
         <div className="border-b border-white/10 pb-6">
           <div className="text-xl font-semibold leading-tight">Student Portal</div>
           <p className="mt-1 text-xs text-white/70">PCDC Case Studio</p>
@@ -113,10 +114,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-medium transition ${
+                  `flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-medium transition ${
                     isActive
-                      ? "bg-[#c9a227] text-[#081d3a] shadow-md"
-                      : "text-white/85 hover:bg-[#122a54]"
+                      ? "bg-[#2563eb] text-white shadow-md"
+                      : "text-white/85 hover:bg-[#16305a]"
                   }`
                 }
               >
@@ -130,7 +131,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           })}
         </nav>
 
-        <div className="absolute bottom-5 left-5 right-5 space-y-5">
+        <div className="absolute bottom-6 left-6 right-6 space-y-5">
           <div className="space-y-3 border-t border-white/10 pt-5">
             <button type="button" className="flex items-center gap-3 text-sm text-white/80">
               <Settings size={17} aria-hidden="true" />
@@ -153,7 +154,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-[#e6e8eb] bg-white">
+        <header className="sticky top-0 z-10 border-b border-[#e6e8eb] bg-white shadow-sm shadow-slate-900/[0.02]">
           <div className="mx-auto flex min-h-20 max-w-[1280px] items-center gap-4 px-4 py-3 sm:px-6">
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold text-[#111827] sm:text-2xl">
@@ -161,7 +162,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </h1>
             </div>
 
-            <label className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex">
+            <label className="hidden w-full max-w-xs items-center gap-3 rounded-lg border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex">
               <Search size={17} aria-hidden="true" />
               <span className="sr-only">Search insights</span>
               <input
@@ -174,7 +175,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="hidden items-center gap-2 sm:flex">
               <button
                 type="button"
-                className="relative grid size-9 place-items-center rounded-md border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
+                className="relative grid size-9 place-items-center rounded-lg border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
                 aria-label={
                   newAssignments.total > 0
                     ? `Notifications (${newAssignments.total} new)`
@@ -188,7 +189,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </button>
               <button
                 type="button"
-                className="grid size-9 place-items-center rounded-md border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
+                className="grid size-9 place-items-center rounded-lg border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
                 aria-label="Help"
               >
                 <CircleHelp size={18} aria-hidden="true" />
@@ -201,9 +202,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 onClick={() => setIsMenuOpen((open) => !open)}
                 aria-expanded={isMenuOpen}
                 aria-haspopup="true"
-                className="flex items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-2 py-2 transition hover:border-[#c9a227]"
+                className="flex items-center gap-3 rounded-lg border border-[#e6e8eb] bg-white px-2 py-2 transition hover:border-[#2563eb]"
               >
-                <div className="grid size-10 place-items-center rounded-md bg-[#081d3a] text-sm font-semibold text-white">
+                <div className="grid size-10 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
                   {userInitials(currentUser?.name)}
                 </div>
                 <div className="hidden min-w-36 text-left sm:block">
@@ -215,9 +216,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </button>
 
               {isMenuOpen ? (
-                <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-md border border-[#e6e8eb] bg-white py-2 shadow-lg">
+                <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-[#e6e8eb] bg-white py-2 shadow-xl shadow-slate-900/10">
                   <div className="flex items-center gap-3 px-4 pb-2">
-                    <div className="grid size-9 place-items-center rounded-md bg-[#081d3a] text-xs font-semibold text-white">
+                    <div className="grid size-9 place-items-center rounded-lg bg-[#0c1f3d] text-xs font-semibold text-white">
                       {userInitials(currentUser?.name)}
                     </div>
                     <div className="min-w-0">
@@ -259,14 +260,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6">
+        <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
           <div className="lg:hidden">
-            <div className="mb-4 flex items-center justify-between rounded-md bg-[#081d3a] px-4 py-3 text-white">
+            <div className="mb-4 flex items-center justify-between rounded-lg bg-[#0c1f3d] px-4 py-3 text-white">
               <span className="font-semibold">PCDC</span>
               <CalendarDays size={18} aria-hidden="true" />
             </div>
           </div>
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
     </div>

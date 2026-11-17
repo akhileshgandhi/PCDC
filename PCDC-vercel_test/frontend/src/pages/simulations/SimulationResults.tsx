@@ -128,7 +128,7 @@ export default function SimulationResults() {
               ].map(([label, value]) => (
                 <div key={label}>
                   <p className="text-xs font-semibold text-[#6B7280]">{label}</p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums text-[#0B1D3A]">{value}</p>
+                  <p className="mt-1 text-2xl font-semibold tabular-nums text-[#0C1F3D]">{value}</p>
                 </div>
               ))}
               {data.memos_pending ? (
@@ -181,7 +181,7 @@ export default function SimulationResults() {
                         </p>
                       ) : null}
                       {task.status === "incorrect" ? <p className="mt-1 text-sm text-[#6B7280]">{task.reason}</p> : null}
-                      {task.marks_changed ? <p className="mt-1 text-xs text-[#92702A]">Marks changed by your faculty.</p> : null}
+                      {task.marks_changed ? <p className="mt-1 text-xs text-[#1D4ED8]">Marks changed by your faculty.</p> : null}
                     </li>
                   )
                 })}
@@ -237,7 +237,7 @@ function WrittenSection({ title, items, meta }: { title: string; items: StudentM
                   <p className="mt-1 text-sm leading-6 text-[#374151]">{memo.feedback}</p>
                 </div>
               ) : null}
-              {memo.marks_changed ? <p className="mt-2 text-xs text-[#92702A]">Marks changed by your faculty.</p> : null}
+              {memo.marks_changed ? <p className="mt-2 text-xs text-[#1D4ED8]">Marks changed by your faculty.</p> : null}
             </li>
           )
         })}

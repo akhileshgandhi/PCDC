@@ -43,7 +43,7 @@ function attemptAction(caseId: string, data: CaseDetailData) {
       statusText: `Completed${scoreText}${attempt.grade_label ? ` (${attempt.grade_label})` : ""}`,
       to: `/student/case-studies/${caseId}/attempt`,
       buttonText: "View My Results",
-      buttonClassName: "bg-white text-[#0B1D3A] hover:bg-[#F6F7F9]",
+      buttonClassName: "bg-white text-[#0c1f3d] hover:bg-[#F6F7F9]",
       icon: CheckCircle2,
     }
   }
@@ -53,7 +53,7 @@ function attemptAction(caseId: string, data: CaseDetailData) {
       statusText: "Time Expired - this attempt could not be completed",
       to: `/student/case-studies/${caseId}/attempt`,
       buttonText: "View Attempt",
-      buttonClassName: "bg-white text-[#0B1D3A] hover:bg-[#F6F7F9]",
+      buttonClassName: "bg-white text-[#0c1f3d] hover:bg-[#F6F7F9]",
       icon: AlertTriangle,
     }
   }
@@ -63,7 +63,7 @@ function attemptAction(caseId: string, data: CaseDetailData) {
       statusText: `In Progress - ${attempt.stage_label} (Stage ${attempt.stage}/6)`,
       to: `/student/case-studies/${caseId}/attempt`,
       buttonText: "Continue Attempt",
-      buttonClassName: "bg-[#C9A227] text-white hover:bg-[#B08D20]",
+      buttonClassName: "bg-[#2563eb] text-white hover:bg-[#3b82f6]",
       icon: Target,
     }
   }
@@ -72,7 +72,7 @@ function attemptAction(caseId: string, data: CaseDetailData) {
     statusText: "Ready to Start",
     to: null,
     buttonText: "Start Attempt",
-    buttonClassName: "bg-[#C9A227] text-white hover:bg-[#B08D20]",
+    buttonClassName: "bg-[#2563eb] text-white hover:bg-[#3b82f6]",
     icon: Target,
   }
 }
@@ -140,7 +140,7 @@ export default function CaseDetail() {
         <div className="space-y-5">
           <Link
             to="/student/case-studies"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#0c1f3d] transition hover:text-[#2563eb]"
           >
             <ArrowLeft size={16} aria-hidden="true" />
             My Case Studies
@@ -153,7 +153,7 @@ export default function CaseDetail() {
     )
   }
 
-  const { case: caseContent, attempt } = data
+  const { case: caseContent, attempt, assignment } = data
   const action = attemptAction(id!, data)
   const ActionIcon = action.icon
 
@@ -162,7 +162,7 @@ export default function CaseDetail() {
       <div className="space-y-5">
         <Link
           to="/student/case-studies"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0c1f3d] transition hover:text-[#2563eb]"
         >
           <ArrowLeft size={16} aria-hidden="true" />
           My Case Studies
@@ -176,7 +176,7 @@ export default function CaseDetail() {
                 <DifficultyBadge level={caseContent.difficulty} />
               </div>
 
-              <h1 className="mt-5 text-[28px] font-semibold leading-tight text-[#0B1D3A]">
+              <h1 className="mt-5 text-[28px] font-semibold leading-tight text-[#0c1f3d]">
                 {caseContent.title}
               </h1>
               <ExpandableText
@@ -214,7 +214,7 @@ export default function CaseDetail() {
           </main>
 
           <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
-            <section className="rounded-xl bg-[#0B1D3A] p-6 text-white shadow-sm">
+            <section className="rounded-xl bg-[#0c1f3d] p-6 text-white shadow-sm">
               <h2 className="text-xl font-semibold">Your Attempt</h2>
 
               <div className="mt-6 space-y-4 text-sm">
@@ -226,16 +226,28 @@ export default function CaseDetail() {
                   }`}
                 />
                 <InfoRow icon={Target} text="One attempt only" />
+                {assignment.due_date ? (
+                  <InfoRow icon={CalendarDays} text={`Due: ${formatDate(assignment.due_date)}`} />
+                ) : null}
               </div>
 
               <div className="mt-6 rounded-lg border border-white/15 bg-white/10 p-4">
                 <div className="flex gap-3">
-                  <AlertTriangle className="mt-0.5 shrink-0 text-[#C9A227]" size={18} />
+                  <AlertTriangle className="mt-0.5 shrink-0 text-[#2563eb]" size={18} />
                   <p className="text-sm leading-6 text-white/88">
                     Read the full case before starting. You cannot restart once begun.
                   </p>
                 </div>
               </div>
+
+              {assignment.instructions ? (
+                <div className="mt-4 rounded-lg border border-white/15 bg-white/10 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
+                    Note from your faculty
+                  </p>
+                  <p className="mt-1.5 text-sm leading-6 text-white/88">{assignment.instructions}</p>
+                </div>
+              ) : null}
 
               <div className="mt-6 flex items-center gap-2 text-sm font-semibold">
                 <ActionIcon size={18} aria-hidden="true" />
@@ -281,7 +293,7 @@ interface MetaItemProps {
 function MetaItem({ icon: Icon, label }: MetaItemProps) {
   return (
     <div className="flex items-center gap-2">
-      <Icon className="shrink-0 text-[#0B1D3A]" size={17} aria-hidden="true" />
+      <Icon className="shrink-0 text-[#0c1f3d]" size={17} aria-hidden="true" />
       <span>{label}</span>
     </div>
   )
@@ -295,7 +307,7 @@ interface InfoRowProps {
 function InfoRow({ icon: Icon, text }: InfoRowProps) {
   return (
     <div className="flex items-center gap-3">
-      <Icon className="shrink-0 text-[#C9A227]" size={18} aria-hidden="true" />
+      <Icon className="shrink-0 text-[#2563eb]" size={18} aria-hidden="true" />
       <span className="leading-6 text-white/90">{text}</span>
     </div>
   )
@@ -309,7 +321,7 @@ interface TimeStatProps {
 function TimeStat({ label, minutes }: TimeStatProps) {
   return (
     <div className="rounded-lg border border-[#E6EBEB] bg-[#F9FAFB] px-4 py-3 text-center">
-      <p className="text-xl font-semibold text-[#0B1D3A]">{minutes ?? "-"}</p>
+      <p className="text-xl font-semibold text-[#0c1f3d]">{minutes ?? "-"}</p>
       <p className="mt-0.5 text-xs font-medium text-[#6B7280]">{label} {minutes ? "min" : ""}</p>
     </div>
   )
@@ -328,7 +340,7 @@ function TagCard({ title, tags }: TagCardProps) {
         {tags.map((tag) => (
           <span
             key={tag}
-            className="rounded-full border border-[#C9A227] px-3 py-1 text-xs font-semibold text-[#0B1D3A]"
+            className="rounded-full border border-[#2563eb] px-3 py-1 text-xs font-semibold text-[#0c1f3d]"
           >
             {tag}
           </span>

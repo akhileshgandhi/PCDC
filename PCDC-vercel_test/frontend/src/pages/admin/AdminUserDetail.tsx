@@ -91,14 +91,14 @@ export default function AdminUserDetail() {
       <div className="space-y-5">
         <Link
           to="/admin/users"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#176b5a] transition hover:text-[#102033]"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#1d4ed8] transition hover:text-[#0c1f3d]"
         >
           <ArrowLeft size={16} aria-hidden="true" />
           Users
         </Link>
 
         {notice ? (
-          <div className="rounded-lg border border-[#bdebdc] bg-[#f0fcf8] px-4 py-3 text-sm font-medium text-[#176b5a]">
+          <div className="rounded-lg border border-[#a6f4c5] bg-[#ecfdf3] px-4 py-3 text-sm font-medium text-[#067647]">
             {notice}
           </div>
         ) : null}
@@ -128,7 +128,7 @@ export default function AdminUserDetail() {
             <section className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-4">
-                  <span className="grid size-14 shrink-0 place-items-center rounded-full bg-[#e8f8f4] text-lg font-semibold text-[#176b5a]">
+                  <span className="grid size-14 shrink-0 place-items-center rounded-full bg-[#dbeafe] text-lg font-semibold text-[#1d4ed8]">
                     {initials(user.name)}
                   </span>
                   <div>
@@ -140,7 +140,7 @@ export default function AdminUserDetail() {
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-[#667085]">{user.email}</p>
-                    <p className="mt-1 text-sm font-medium text-[#0f766e]">{titleCase(user.role)}</p>
+                    <p className="mt-1 text-sm font-medium text-[#1d4ed8]">{titleCase(user.role)}</p>
                   </div>
                 </div>
 
@@ -148,7 +148,7 @@ export default function AdminUserDetail() {
                   <button
                     type="button"
                     onClick={() => setEditing(true)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
                   >
                     <UserCog size={15} aria-hidden="true" />
                     Edit
@@ -156,7 +156,7 @@ export default function AdminUserDetail() {
                   <button
                     type="button"
                     onClick={handlePasswordReset}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
                   >
                     <KeyRound size={15} aria-hidden="true" />
                     Reset password
@@ -164,7 +164,7 @@ export default function AdminUserDetail() {
                   <button
                     type="button"
                     onClick={handleStatusToggle}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
                   >
                     {user.status === "active" ? (
                       <ShieldOff size={15} aria-hidden="true" />

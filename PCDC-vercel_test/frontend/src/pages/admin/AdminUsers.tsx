@@ -17,6 +17,7 @@ import {
   deleteAdminUser,
   enrollAdminSectionStudents,
   getAdminDepartments,
+  getAdminInstitutions,
   getAdminSections,
   getAdminUser,
   getAdminUsers,
@@ -25,6 +26,7 @@ import {
   updateAdminUserRole,
   updateAdminUserStatus,
   type AdminDepartment,
+  type AdminInstitution,
   type AdminSectionListItem,
   type AdminUser,
   type AdminUserRole,
@@ -34,6 +36,7 @@ import ConfirmDialog from "../../components/ConfirmDialog"
 import { useAdminScope } from "../../hooks/useAdminScope"
 import AdminLayout from "../../layouts/AdminLayout"
 import { DESIGNATION_OPTIONS, TITLE_OPTIONS } from "../../constants/designations"
+import { DepartmentPicker } from "./AdminFaculty"
 import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "./StudentPlacementFields"
 
 const roles: Array<{ label: string; value: "" | AdminUserRole }> = [
@@ -62,14 +65,17 @@ export default function AdminUsers() {
       (option.value !== "admin" || scope.isUnrestricted) &&
       (option.value !== "superadmin" || scope.isSuperadmin),
   )
+  // Filters live in the URL so that navigating to a user's detail page and
+  // clicking the browser's Back button lands on this exact filtered/paged
+  // view again, instead of a fresh component mount resetting everything.
   const [searchParams, setSearchParams] = useSearchParams()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(() => Number(searchParams.get("page")) || 1)
   const [search, setSearch] = useState(searchParams.get("search") ?? "")
   const [role, setRole] = useState(searchParams.get("role") ?? "")
   const [status, setStatus] = useState(searchParams.get("status") ?? "")
-  const [batch, setBatch] = useState("")
+  const [batch, setBatch] = useState(searchParams.get("batch") ?? "")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
@@ -102,8 +108,13 @@ export default function AdminUsers() {
     }
   }
 
+  // On first mount, resume the page restored from the URL (e.g. coming back
+  // from a user's detail page); an actual filter change always goes to page 1.
+  const didMountFilters = useRef(false)
   useEffect(() => {
-    loadUsers(1)
+    const initialPage = didMountFilters.current ? 1 : page
+    didMountFilters.current = true
+    loadUsers(initialPage)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, status, batch])
 
@@ -119,6 +130,19 @@ export default function AdminUsers() {
     loadUsers(1, searchQuery)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
+
+  // Keep the URL in sync with every filter + the current page, dropping any
+  // that are back at their default so the URL stays clean when unfiltered.
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (search) next.set("search", search)
+    if (role) next.set("role", role)
+    if (status) next.set("status", status)
+    if (batch) next.set("batch", batch)
+    if (page > 1) next.set("page", String(page))
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, role, status, batch, page])
 
   const activeCount = useMemo(
     () => users.filter((user) => user.status === "active").length,
@@ -202,7 +226,7 @@ export default function AdminUsers() {
       <div className="min-w-0">
         <Link
           to={`/admin/user/${user.id}`}
-          className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#176b5a]"
+          className="truncate text-sm font-semibold text-[#17202a] transition hover:text-[#1d4ed8]"
         >
           {user.name}
         </Link>
@@ -305,7 +329,7 @@ export default function AdminUsers() {
             onSubmit={handleSearchSubmit}
             className="grid gap-3 xl:grid-cols-[1fr_150px_150px_160px_130px_auto]"
           >
-            <label className="flex h-11 items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-3 text-[#667085] transition focus-within:border-[#34c6a3] focus-within:ring-2 focus-within:ring-[#34c6a3]/20">
+            <label className="flex h-11 items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-3 text-[#667085] transition focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20">
               <Search size={17} aria-hidden="true" />
               <span className="sr-only">Search users</span>
               <input
@@ -320,7 +344,7 @@ export default function AdminUsers() {
             <select
               value={role}
               onChange={(event) => setRole(event.target.value)}
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               aria-label="Role"
             >
               {visibleRoles.map((option) => (
@@ -333,7 +357,7 @@ export default function AdminUsers() {
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value)}
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               aria-label="Status"
             >
               {statuses.map((option) => (
@@ -345,15 +369,20 @@ export default function AdminUsers() {
 
             <input
               value={batch}
-              onChange={(event) => setBatch(event.target.value)}
-              placeholder="Batch"
+              // The backend's `batch` filter is an integer (admission year) —
+              // anything else fails FastAPI's query validation with a 422,
+              // which surfaced as a generic "Unable to load users" error
+              // while the previous results stayed on screen. Keep this
+              // digits-only so that request is never sent.
+              onChange={(event) => setBatch(event.target.value.replace(/\D/g, ""))}
+              placeholder="Batch (year)"
               inputMode="numeric"
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
 
             <button
               type="submit"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#102033] px-4 text-sm font-semibold text-white transition hover:bg-[#1b3452]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
             >
               <RefreshCw size={16} aria-hidden="true" />
               Apply
@@ -362,7 +391,7 @@ export default function AdminUsers() {
         </section>
 
         {notice ? (
-          <div className="rounded-lg border border-[#bdebdc] bg-[#f0fcf8] px-4 py-3 text-sm font-medium text-[#176b5a]">
+          <div className="rounded-lg border border-[#a6f4c5] bg-[#ecfdf3] px-4 py-3 text-sm font-medium text-[#067647]">
             {notice}
           </div>
         ) : null}
@@ -505,7 +534,7 @@ function UserRow({
         <button
           type="button"
           onClick={() => onStatusToggle(user)}
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#0c1f3d] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
           aria-label={user.status === "active" ? `Deactivate ${user.name}` : `Reactivate ${user.name}`}
           title={user.status === "active" ? "Deactivate" : "Reactivate"}
         >
@@ -518,7 +547,7 @@ function UserRow({
         <button
           type="button"
           onClick={() => onPasswordReset(user)}
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#0c1f3d] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
           aria-label={`Reset password for ${user.name}`}
           title="Reset password"
         >
@@ -527,7 +556,7 @@ function UserRow({
         <button
           type="button"
           onClick={() => onEdit(user)}
-          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+          className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#0c1f3d] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
           aria-label={`Edit ${user.name}`}
           title="Edit"
         >
@@ -537,7 +566,7 @@ function UserRow({
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
-            className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#102033] transition hover:border-[#34c6a3] hover:bg-[#e8f8f4]"
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#dde4ec] text-[#0c1f3d] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
             aria-label={`More actions for ${user.name}`}
             title="More"
           >
@@ -584,7 +613,6 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
   const [admissionYear, setAdmissionYear] = useState(
     user.admission_year ? String(user.admission_year) : "",
   )
-  const [department, setDepartment] = useState(user.department || "")
   const [designation, setDesignation] = useState(user.designation || "")
   const [employeeId, setEmployeeId] = useState(user.employee_id || "")
   const [experienceYears, setExperienceYears] = useState(
@@ -595,6 +623,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
   const [isSaving, setIsSaving] = useState(false)
   const [departments, setDepartments] = useState<AdminDepartment[]>([])
   const isStudent = user.role === "student"
+  const isFaculty = user.role === "faculty"
   // A student's Institute / Program come from the section they're enrolled in;
   // changing them here moves the student to the chosen section.
   const [sections, setSections] = useState<AdminSectionListItem[]>([])
@@ -605,8 +634,53 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
     user.section_id ? { ...emptyPlacement, sectionId: String(user.section_id) } : emptyPlacement,
   )
 
+  // Faculty can be assigned multiple institutes/programs, same as Invite
+  // Faculty — this used to be a single <select>, out of step with creation.
+  const [institutions, setInstitutions] = useState<AdminInstitution[]>([])
+  const [selectedInstitutions, setSelectedInstitutions] = useState<number[]>([])
+  const [initialInstitutions, setInitialInstitutions] = useState<number[]>([])
+  const [selectedDepartments, setSelectedDepartments] = useState<number[]>([])
+  const [initialDepartments, setInitialDepartments] = useState<number[]>([])
+  const [openDeptInst, setOpenDeptInst] = useState<number | null>(null)
+
+  function toggleInstitution(id: number) {
+    setSelectedInstitutions((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      setSelectedDepartments((deps) =>
+        deps.filter((depId) => {
+          const dep = departments.find((d) => d.id === depId)
+          return dep?.institution_id != null && next.includes(dep.institution_id)
+        }),
+      )
+      return next
+    })
+  }
+
+  function toggleDepartment(id: number) {
+    setSelectedDepartments((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
   useEffect(() => {
     getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
+    if (isFaculty) {
+      getAdminInstitutions().then((d) => setInstitutions(d.items)).catch(() => undefined)
+      // List rows don't carry the current scope; the detail response does.
+      if (user.institution_ids === undefined) {
+        getAdminUser(user.id)
+          .then((detail) => {
+            setSelectedInstitutions(detail.institution_ids || [])
+            setInitialInstitutions(detail.institution_ids || [])
+            setSelectedDepartments(detail.department_ids || [])
+            setInitialDepartments(detail.department_ids || [])
+          })
+          .catch(() => undefined)
+      } else {
+        setSelectedInstitutions(user.institution_ids)
+        setInitialInstitutions(user.institution_ids)
+        setSelectedDepartments(user.department_ids || [])
+        setInitialDepartments(user.department_ids || [])
+      }
+    }
     if (!isStudent) return
     getAdminSections().then((d) => setSections(d.items)).catch(() => undefined)
     // List rows don't carry the current section; the detail response does.
@@ -619,7 +693,8 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
         })
         .catch(() => undefined)
     }
-  }, [isStudent, user.id, user.section_id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStudent, isFaculty, user.id, user.section_id, user.institution_ids, user.department_ids])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -634,6 +709,16 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
       if (sectionChanged) {
         await enrollAdminSectionStudents(Number(placement.sectionId), [user.id])
       }
+      const sameIds = (a: number[], b: number[]) =>
+        a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i])
+      const institutionsChanged = isFaculty && !sameIds(selectedInstitutions, initialInstitutions)
+      const departmentsChanged = isFaculty && !sameIds(selectedDepartments, initialDepartments)
+      const departmentNames = isFaculty
+        ? departments
+            .filter((d) => selectedDepartments.includes(d.id))
+            .map((d) => d.name)
+            .join(", ")
+        : ""
       const payload = {
         name: name !== user.name ? name : undefined,
         title: title !== (user.title || "") ? title : undefined,
@@ -643,7 +728,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
               ? Number(admissionYear)
               : 0
             : undefined,
-        department: department !== (user.department || "") ? department : undefined,
+        department: departmentsChanged ? departmentNames : undefined,
         designation: designation !== (user.designation || "") ? designation : undefined,
         employee_id: employeeId !== (user.employee_id || "") ? employeeId : undefined,
         experience_years:
@@ -653,6 +738,8 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
               : 0
             : undefined,
         college_id: collegeId !== (user.college_id || "") ? collegeId : undefined,
+        institution_ids: institutionsChanged || departmentsChanged ? selectedInstitutions : undefined,
+        department_ids: departmentsChanged ? selectedDepartments : undefined,
       }
       const hasProfileChanges = Object.values(payload).some((v) => v !== undefined)
       // The profile endpoint rejects an empty update, so a section-only change
@@ -669,7 +756,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[#0c1f3d]/45 p-4 pt-20">
       <div className="w-full max-w-xl">
         <form
           onSubmit={handleSubmit}
@@ -698,7 +785,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                   <select
                     value={title}
                     onChange={(event) => setTitle(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   >
                     <option value="">—</option>
                     {title && !TITLE_OPTIONS.includes(title) ? <option value={title}>{title}</option> : null}
@@ -713,35 +800,73 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                   required
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                 />
               </Field>
             </div>
 
             {user.role === "faculty" ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Program">
-                  <select
-                    value={department}
-                    onChange={(event) => setDepartment(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-                  >
-                    <option value="">Select program</option>
-                    {department && !departments.some((d) => d.name === department) ? (
-                      <option value={department}>{department} (unlisted)</option>
-                    ) : null}
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+              <>
+                <div className="grid gap-1.5 text-sm font-semibold text-[#17202a]">
+                  <span>Institution(s)</span>
+                  {institutions.length === 0 ? (
+                    <p className="text-sm font-normal text-[#98a2b3]">Loading…</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {institutions.map((inst) => {
+                        const active = selectedInstitutions.includes(inst.id)
+                        return (
+                          <button
+                            type="button"
+                            key={inst.id}
+                            onClick={() => toggleInstitution(inst.id)}
+                            className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+                              active
+                                ? "border-[#2563eb] bg-[#eaf1fd] text-[#1d4ed8]"
+                                : "border-[#dde4ec] bg-white text-[#344054] hover:border-[#b7c2d0]"
+                            }`}
+                          >
+                            <span className="truncate">{inst.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-1.5 text-sm font-semibold text-[#17202a]">
+                  <span>Program(s)</span>
+                  {selectedInstitutions.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-[#dde4ec] px-3 py-3 text-sm font-normal text-[#98a2b3]">
+                      Select an institution first.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4">
+                      {selectedInstitutions.map((instId) => {
+                        const inst = institutions.find((i) => i.id === instId)
+                        const deptsForInst = departments.filter((d) => d.institution_id === instId)
+                        return (
+                          <DepartmentPicker
+                            key={instId}
+                            institutionName={inst?.name ?? "Institution"}
+                            departments={deptsForInst}
+                            selectedIds={selectedDepartments}
+                            onToggle={toggleDepartment}
+                            open={openDeptInst === instId}
+                            onToggleOpen={() => setOpenDeptInst((cur) => (cur === instId ? null : instId))}
+                          />
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Designation">
                   <select
                     value={designation}
                     onChange={(event) => setDesignation(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   >
                     <option value="">Select designation</option>
                     {DESIGNATION_OPTIONS.map((opt) => (
@@ -753,7 +878,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                   <input
                     value={employeeId}
                     onChange={(event) => setEmployeeId(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   />
                 </Field>
                 <Field label="Experience (Years)">
@@ -761,10 +886,11 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                     value={experienceYears}
                     onChange={(event) => setExperienceYears(event.target.value)}
                     inputMode="numeric"
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   />
                 </Field>
-              </div>
+                </div>
+              </>
             ) : null}
 
             {user.role === "student" ? (
@@ -773,7 +899,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                   sections={sections}
                   value={placement}
                   onChange={setPlacement}
-                  fieldClass="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                  fieldClass="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   labelClass="grid gap-2 text-sm font-semibold text-[#17202a]"
                 />
                 {placement.sectionId !== currentSectionId && placement.sectionId ? (
@@ -785,7 +911,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                   <input
                     value={collegeId}
                     onChange={(event) => setCollegeId(event.target.value)}
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   />
                 </Field>
                 <Field label="Admission Year">
@@ -793,7 +919,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
                     value={admissionYear}
                     onChange={(event) => setAdmissionYear(event.target.value)}
                     inputMode="numeric"
-                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                    className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                   />
                 </Field>
               </div>
@@ -817,7 +943,7 @@ export function EditUserDialog({ user, onClose, onSaved }: EditUserDialogProps) 
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "Saving..." : "Save Changes"}
             </button>
@@ -866,7 +992,7 @@ function StatPill({ label, value }: StatPillProps) {
   return (
     <div className="rounded-full border border-[#dde4ec] bg-[#f5f7fa] px-4 py-2 text-sm">
       <span className="font-semibold text-[#17202a]">{label}:</span>{" "}
-      <span className="font-semibold text-[#176b5a]">{value}</span>
+      <span className="font-semibold text-[#1d4ed8]">{value}</span>
     </div>
   )
 }

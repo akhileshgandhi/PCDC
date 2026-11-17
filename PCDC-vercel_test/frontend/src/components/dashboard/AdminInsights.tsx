@@ -2,6 +2,8 @@ import { CalendarClock, LayoutGrid, Sparkles, UserX } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { getAdminDashboardInsights, type AdminDashboardInsights } from "../../api/admin"
+import CountUp from "../common/CountUp"
+import Reveal from "../common/Reveal"
 import { AlertTile, EmptyNote, Panel, ProgressBar, pctText } from "./InsightBits"
 import {
   AssignmentStatusBar,
@@ -49,48 +51,57 @@ export default function AdminInsights() {
     <>
       <section>
         <h2 className="mb-3 text-xl font-semibold text-[#17202a]">Needs Attention</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <AlertTile
-            accent="admin"
-            label="Students Without a Section"
-            value={attention?.students_without_section ?? 0}
-            hint="Active students not enrolled in any class section yet."
-            icon={UserX}
-            isLoading={isLoading}
-            urgent
-            to="/admin/people/students"
-          />
-          <AlertTile
-            accent="admin"
-            label="Sections Without Faculty"
-            value={attention?.sections_without_faculty ?? 0}
-            hint="Active sections with no approved faculty teaching them."
-            icon={LayoutGrid}
-            isLoading={isLoading}
-            urgent
-            to="/admin/academic/sections"
-          />
-          <AlertTile
-            accent="admin"
-            label="Overdue Assignments"
-            value={attention?.overdue_assignments ?? 0}
-            hint="Assigned cases past their due date and not yet completed."
-            icon={CalendarClock}
-            isLoading={isLoading}
-            urgent
-          />
-          <AlertTile
-            accent="admin"
-            label="AI-Flagged Attempts"
-            value={attention?.ai_flagged_attempts_30d ?? 0}
-            hint="Attempts with an answer flagged as likely AI-written (last 30 days, faculty-checked)."
-            icon={Sparkles}
-            isLoading={isLoading}
-          />
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <Reveal index={0}>
+            <AlertTile
+              accent="admin"
+              label="Students Without a Section"
+              value={attention?.students_without_section ?? 0}
+              hint="Active students not enrolled in any class section yet."
+              icon={UserX}
+              isLoading={isLoading}
+              urgent
+              to="/admin/people/students?section=none"
+            />
+          </Reveal>
+          <Reveal index={1}>
+            <AlertTile
+              accent="admin"
+              label="Sections Without Faculty"
+              value={attention?.sections_without_faculty ?? 0}
+              hint="Active sections with no approved faculty teaching them."
+              icon={LayoutGrid}
+              isLoading={isLoading}
+              urgent
+              to="/admin/academic/sections"
+            />
+          </Reveal>
+          <Reveal index={2}>
+            <AlertTile
+              accent="admin"
+              label="Overdue Assignments"
+              value={attention?.overdue_assignments ?? 0}
+              hint="Assigned cases past their due date and not yet completed."
+              icon={CalendarClock}
+              isLoading={isLoading}
+              urgent
+            />
+          </Reveal>
+          <Reveal index={3}>
+            <AlertTile
+              accent="admin"
+              label="AI-Flagged Attempts"
+              value={attention?.ai_flagged_attempts_30d ?? 0}
+              hint="Attempts with an answer flagged as likely AI-written (last 30 days, faculty-checked)."
+              icon={Sparkles}
+              isLoading={isLoading}
+            />
+          </Reveal>
         </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+      <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+        <Reveal index={0}>
         <Panel accent="admin" title="Case Study Activity" subtitle="Attempts started and evaluated per week, last 8 weeks">
           {isLoading ? (
             <p className="text-sm text-[#667085]">Loading...</p>
@@ -104,6 +115,8 @@ export default function AdminInsights() {
             />
           )}
         </Panel>
+        </Reveal>
+        <Reveal index={1}>
         <Panel accent="admin" title="Assignment Status" subtitle="Every assigned case right now">
           {isLoading ? (
             <p className="text-sm text-[#667085]">Loading...</p>
@@ -111,9 +124,11 @@ export default function AdminInsights() {
             <AssignmentStatusBar counts={data.assignment_status} />
           )}
         </Panel>
+        </Reveal>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1fr_1.4fr]">
+      <section className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
+        <Reveal index={0}>
         <Panel accent="admin" title="Engagement" subtitle="Last 30 days">
           <div className="grid grid-cols-2 gap-3">
             <Metric label="Cases assigned" value={engagement?.cases_assigned} isLoading={isLoading} />
@@ -139,14 +154,18 @@ export default function AdminInsights() {
               ["Faculty", totals?.faculty],
               ["Published cases", totals?.published_cases],
             ].map(([label, value]) => (
-              <div key={label as string}>
-                <p className="text-lg font-semibold text-[#17202a]">{isLoading ? "..." : value}</p>
+              <div key={label as string} className="transition hover:-translate-y-0.5 hover:scale-[1.02]">
+                <p className="text-lg font-semibold text-[#17202a]">
+                  <CountUp value={(value as number) ?? 0} isLoading={isLoading} />
+                </p>
                 <p className="text-[11px] font-medium text-[#98a2b3]">{label}</p>
               </div>
             ))}
           </div>
         </Panel>
+        </Reveal>
 
+        <Reveal index={1}>
         <Panel
           accent="admin"
           title={`By ${data?.breakdown.group_label ?? "Institute"}`}
@@ -203,6 +222,7 @@ export default function AdminInsights() {
             </div>
           )}
         </Panel>
+        </Reveal>
       </section>
     </>
   )
@@ -210,8 +230,10 @@ export default function AdminInsights() {
 
 function Metric({ label, value, isLoading }: { label: string; value: number | string | undefined; isLoading: boolean }) {
   return (
-    <div className="rounded-md bg-[#f5f7fa] px-3 py-2.5">
-      <p className="text-xl font-semibold text-[#17202a]">{isLoading ? "..." : value ?? 0}</p>
+    <div className="rounded-lg bg-[#f5f7fa] px-3 py-2.5 transition hover:bg-[#eef2f7]">
+      <p className="text-xl font-semibold text-[#17202a]">
+        {typeof value === "number" ? <CountUp value={value} isLoading={isLoading} /> : isLoading ? "..." : value ?? 0}
+      </p>
       <p className="text-xs font-medium text-[#667085]">{label}</p>
     </div>
   )

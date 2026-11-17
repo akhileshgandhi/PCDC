@@ -1,5 +1,7 @@
 import { ArrowRight, Loader2 } from "lucide-react"
+import { useState } from "react"
 import type { WrittenQuestion } from "../../api/cases"
+import ConfirmDialog from "../ConfirmDialog"
 import CountdownTimer from "./CountdownTimer"
 
 function countWords(text: string): number {
@@ -45,6 +47,23 @@ export default function Screen2Analysis({
   onNext,
   isSubmitting = false,
 }: Screen2AnalysisProps) {
+  // Submitting locks the answers (Rapid Fire starts right after) — a single
+  // accidental click shouldn't be able to do that, so this asks first.
+  const [confirming, setConfirming] = useState(false)
+  const confirmDialog = confirming ? (
+    <ConfirmDialog
+      title="Submit your answers?"
+      message="You cannot change them afterwards, and the Rapid Fire round starts immediately."
+      confirmLabel="Submit"
+      danger={false}
+      onConfirm={() => {
+        setConfirming(false)
+        onNext()
+      }}
+      onCancel={() => setConfirming(false)}
+    />
+  ) : null
+
   // Use written_questions if available, otherwise fall back to reflectionQuestions as plain prompts
   const hasStructured = questions.length > 0
 
@@ -88,8 +107,8 @@ export default function Screen2Analysis({
         <div className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">Think First</p>
-              <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Initial Analysis</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">Think First</p>
+              <h2 className="mt-3 text-3xl font-semibold text-[#0c1f3d]">Initial Analysis</h2>
             </div>
             {remainingSeconds != null ? (
               <CountdownTimer seconds={remainingSeconds} label="Writing time" onExpire={onNext} hidden />
@@ -104,7 +123,7 @@ export default function Screen2Analysis({
         {/* Ungraded initial analysis — comes before the structured questions. */}
         <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
               Initial Analysis
             </p>
             <span className="rounded-full bg-[#F6F7F9] px-2 py-0.5 text-xs font-semibold text-[#6B7280]">
@@ -126,7 +145,7 @@ export default function Screen2Analysis({
             onChange={(e) => onInitialSummaryChange(e.target.value)}
             rows={10}
             placeholder="Write your initial analysis here..."
-            className="mt-4 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+            className="mt-4 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs font-semibold">
@@ -137,7 +156,7 @@ export default function Screen2Analysis({
             </div>
             <div className="mt-1.5 h-1.5 rounded-full bg-[#E6EBEB]">
               <div
-                className={`h-1.5 rounded-full transition-all ${summaryReady ? "bg-[#16A34A]" : "bg-[#C9A227]"}`}
+                className={`h-1.5 rounded-full transition-all ${summaryReady ? "bg-[#16A34A]" : "bg-[#2563eb]"}`}
                 style={{ width: `${summaryProgress}%` }}
               />
             </div>
@@ -145,7 +164,7 @@ export default function Screen2Analysis({
         </article>
 
         <div className="rounded-xl border border-[#E6EBEB] bg-white px-6 py-4 shadow-sm">
-          <h3 className="text-lg font-semibold text-[#0B1D3A]">Structured Written Questions</h3>
+          <h3 className="text-lg font-semibold text-[#0c1f3d]">Structured Written Questions</h3>
           <p className="mt-1 text-sm text-[#6B7280]">
             These are marked. Minimum word counts apply per question.
           </p>
@@ -161,11 +180,11 @@ export default function Screen2Analysis({
 
           return (
             <article key={q.question_number} className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
                 Question {q.question_number}
                 {marksLabel(q.marks)}
               </p>
-              <h3 className="text-base font-semibold text-[#0B1D3A]">{q.question_text}</h3>
+              <h3 className="text-base font-semibold text-[#0c1f3d]">{q.question_text}</h3>
               {q.instructions && (
                 <p className="mt-1 text-sm text-[#6B7280]">{q.instructions}</p>
               )}
@@ -180,7 +199,7 @@ export default function Screen2Analysis({
                 onChange={(e) => onAnswerChange(i, e.target.value)}
                 rows={8}
                 placeholder="Write your answer here..."
-                className="mt-3 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+                className="mt-3 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               />
 
               <div className="mt-3">
@@ -194,7 +213,7 @@ export default function Screen2Analysis({
                 </div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-[#E6EBEB]">
                   <div
-                    className={`h-1.5 rounded-full transition-all ${overMax ? "bg-[#B91C1C]" : met ? "bg-[#16A34A]" : "bg-[#C9A227]"}`}
+                    className={`h-1.5 rounded-full transition-all ${overMax ? "bg-[#B91C1C]" : met ? "bg-[#16A34A]" : "bg-[#2563eb]"}`}
                     style={{ width: `${overMax ? 100 : progress}%` }}
                   />
                 </div>
@@ -218,11 +237,11 @@ export default function Screen2Analysis({
           ) : null}
           <button
             type="button"
-            onClick={onNext}
+            onClick={() => setConfirming(true)}
             disabled={!isReady || isSubmitting}
             className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
               isReady && !isSubmitting
-                ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
+                ? "bg-[#2563eb] text-white hover:bg-[#3b82f6]"
                 : "cursor-not-allowed bg-[#D1D5DB] text-white"
             }`}
           >
@@ -242,6 +261,7 @@ export default function Screen2Analysis({
             Once submitted, you cannot edit your answers. The Rapid Fire round begins immediately.
           </p>
         </div>
+        {confirmDialog}
       </section>
     )
   }
@@ -263,8 +283,8 @@ export default function Screen2Analysis({
     <section className="w-full rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">Think First</p>
-          <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Initial Analysis</h2>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">Think First</p>
+          <h2 className="mt-3 text-3xl font-semibold text-[#0c1f3d]">Initial Analysis</h2>
         </div>
         {remainingSeconds != null ? (
           <CountdownTimer seconds={remainingSeconds} label="Writing time" onExpire={onNext} hidden />
@@ -288,7 +308,7 @@ export default function Screen2Analysis({
         onChange={(e) => onAnswerChange(0, e.target.value)}
         rows={12}
         placeholder="Write your initial analysis here..."
-        className="mt-6 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+        className="mt-6 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
       />
 
       <div className="mt-4">
@@ -300,7 +320,7 @@ export default function Screen2Analysis({
         </div>
         <div className="mt-2 h-2 rounded-full bg-[#E6EBEB]">
           <div
-            className={`h-2 rounded-full transition-all ${isReady ? "bg-[#16A34A]" : "bg-[#C9A227]"}`}
+            className={`h-2 rounded-full transition-all ${isReady ? "bg-[#16A34A]" : "bg-[#2563eb]"}`}
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -308,11 +328,11 @@ export default function Screen2Analysis({
 
       <button
         type="button"
-        onClick={onNext}
+        onClick={() => setConfirming(true)}
         disabled={!isReady || isSubmitting}
         className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
           isReady && !isSubmitting
-            ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
+            ? "bg-[#2563eb] text-white hover:bg-[#3b82f6]"
             : "cursor-not-allowed bg-[#D1D5DB] text-white"
         }`}
       >
@@ -331,6 +351,7 @@ export default function Screen2Analysis({
       <p className="mt-3 text-center text-xs leading-5 text-[#6B7280]">
         Once submitted, you cannot edit your answers. The Rapid Fire round begins immediately.
       </p>
+      {confirmDialog}
     </section>
   )
 }

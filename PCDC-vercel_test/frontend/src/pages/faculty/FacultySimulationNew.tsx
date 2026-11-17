@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { getFacultyTeaching } from "../../api/faculty"
 import { getCapabilityOptions, getSimulationDraft, startSimulationDraft } from "../../api/jobsim"
 import { showToast } from "../../components/Toast"
+import ToggleSwitch from "../../components/common/ToggleSwitch"
 import FacultyLayout from "../../layouts/FacultyLayout"
 
 const POLL_MS = 3000
@@ -111,7 +112,7 @@ export default function FacultySimulationNew() {
   }
 
   const field =
-    "h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 disabled:bg-[#f9fafb]"
+    "h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:bg-[#f9fafb]"
   const isRunning = jobId !== null
   const step = Math.min(PROGRESS_STEPS.length - 1, Math.floor(elapsed / 12))
 
@@ -133,7 +134,7 @@ export default function FacultySimulationNew() {
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
           <form onSubmit={handleSubmit} className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center gap-2">
-              <Sparkles size={18} className="text-[#c9a227]" aria-hidden="true" />
+              <Sparkles size={18} className="text-[#2563eb]" aria-hidden="true" />
               <h2 className="text-xl font-semibold text-[#111827]">AI Simulation Designer</h2>
             </div>
 
@@ -194,37 +195,23 @@ export default function FacultySimulationNew() {
               </Field>
             </div>
 
-            <label className="mt-5 flex items-start gap-3 rounded-md border border-[#e6e8eb] p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-[#0b1d3a]"
-                checked={includeMemo}
-                disabled={isRunning}
-                onChange={(e) => setIncludeMemo(e.target.checked)}
-              />
-              <span>
-                <span className="font-semibold text-[#111827]">Include a memo</span>
-                <span className="mt-0.5 block text-[#6b7280]">
-                  The AI also drafts a memo brief, its required sections and a marking rubric. You can edit them before approving.
-                </span>
-              </span>
-            </label>
+            <ToggleSwitch
+              id="include-memo"
+              checked={includeMemo}
+              disabled={isRunning}
+              onChange={setIncludeMemo}
+              label="Include a memo"
+              description="The AI also drafts a memo brief, its required sections and a marking rubric. You can edit them before approving."
+            />
 
-            <label className="mt-3 flex items-start gap-3 rounded-md border border-[#e6e8eb] p-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-[#0b1d3a]"
-                checked={includeSlides}
-                disabled={isRunning}
-                onChange={(e) => setIncludeSlides(e.target.checked)}
-              />
-              <span>
-                <span className="font-semibold text-[#111827]">Include slides</span>
-                <span className="mt-0.5 block text-[#6b7280]">
-                  The AI also drafts a slide deck brief, a slide-by-slide plan and a marking rubric. Students build the deck last, after the spreadsheet and memo.
-                </span>
-              </span>
-            </label>
+            <ToggleSwitch
+              id="include-slides"
+              checked={includeSlides}
+              disabled={isRunning}
+              onChange={setIncludeSlides}
+              label="Include slides"
+              description="The AI also drafts a slide deck brief, a slide-by-slide plan and a marking rubric. Students build the deck last, after the spreadsheet and memo."
+            />
 
             {capabilities.length ? (
               <fieldset className="mt-5">
@@ -240,7 +227,7 @@ export default function FacultySimulationNew() {
                         aria-pressed={on}
                         onClick={() => setSkills((cur) => (on ? cur.filter((id) => id !== c.id) : [...cur, c.id]))}
                         className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                          on ? "border-[#0b1d3a] bg-[#0b1d3a] text-white" : "border-[#e6e8eb] text-[#374151] hover:border-[#c9a227]"
+                          on ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-[#e6e8eb] text-[#374151] hover:border-[#2563eb]"
                         }`}
                       >
                         {c.name}
@@ -258,7 +245,7 @@ export default function FacultySimulationNew() {
                 disabled={isRunning}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="e.g. An FMCG company in India; focus on regional sales, discounts and returns."
-                className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               />
             </Field>
 
@@ -267,7 +254,7 @@ export default function FacultySimulationNew() {
             {isRunning ? (
               <div className="mt-5 rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4" role="status" aria-live="polite">
                 <p className="flex items-center gap-2 text-sm font-semibold text-[#111827]">
-                  <Loader2 size={16} className="animate-spin text-[#c9a227]" aria-hidden="true" /> Creating your simulation… {elapsed}s
+                  <Loader2 size={16} className="animate-spin text-[#2563eb]" aria-hidden="true" /> Creating your simulation… {elapsed}s
                 </p>
                 <ol className="mt-3 space-y-1.5 text-sm">
                   {PROGRESS_STEPS.map((label, i) => (
@@ -281,7 +268,7 @@ export default function FacultySimulationNew() {
             ) : (
               <button
                 type="submit"
-                className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e]"
+                className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
               >
                 <Sparkles size={17} aria-hidden="true" /> Generate draft
               </button>
@@ -290,7 +277,7 @@ export default function FacultySimulationNew() {
 
           <aside className="h-fit rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2">
-              <PencilRuler size={18} className="text-[#c9a227]" aria-hidden="true" />
+              <PencilRuler size={18} className="text-[#2563eb]" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-[#111827]">Build it yourself</h2>
             </div>
             <p className="mt-2 text-sm leading-6 text-[#6b7280]">
@@ -298,7 +285,7 @@ export default function FacultySimulationNew() {
             </p>
             <Link
               to="/faculty/simulations/new/manual"
-              className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+              className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-[#2563eb] px-4 py-2.5 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
             >
               Start from scratch
             </Link>

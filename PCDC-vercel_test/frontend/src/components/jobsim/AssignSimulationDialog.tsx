@@ -1,5 +1,6 @@
 import type { FormEvent } from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 
 import {
   getFacultySections,
@@ -8,6 +9,7 @@ import {
   type FacultyStudent,
 } from "../../api/faculty"
 import { assignSimulationToSections, assignSimulationToStudents } from "../../api/jobsim"
+import { useModalArea } from "../../hooks/useModalArea"
 import { getCurrentUser, isAdminRole } from "../../utils/auth"
 
 function todayDateString() {
@@ -39,6 +41,18 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
   const [isLoadingStudents, setIsLoadingStudents] = useState(false)
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const areaTop = useModalArea()
+
+  // Esc closes the dialog, same as the Close/Cancel buttons.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onCloseRef.current()
+    }
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -88,7 +102,10 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
     return (
       student.name.toLowerCase().includes(term) ||
       student.email.toLowerCase().includes(term) ||
-      student.section_name.toLowerCase().includes(term)
+      student.section_name.toLowerCase().includes(term) ||
+      (student.scholar_number ?? "").toLowerCase().includes(term) ||
+      (student.course_code ?? "").toLowerCase().includes(term) ||
+      (student.batch_name ?? "").toLowerCase().includes(term)
     )
   })
 
@@ -151,28 +168,37 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
       type="button"
       onClick={() => setMode(value)}
       className={`rounded px-3 py-2 text-sm font-semibold transition ${
-        mode === value ? "bg-white text-[#0b1d3a] shadow-sm" : "text-[#6b7280]"
+        mode === value ? "bg-white text-[#0c1f3d] shadow-sm" : "text-[#6b7280]"
       }`}
     >
       {label}
     </button>
   )
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1d3a]/45 p-4">
-      <div className="w-full max-w-lg">
-        <form onSubmit={handleSubmit} className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold text-[#111827]">Assign simulation</h2>
-              <p className="mt-1 text-sm text-[#6b7280]">{simulation.title}</p>
-            </div>
-            <button type="button" onClick={onClose} className="rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold">
-              Close
-            </button>
+  // See AssignToClassDialog for why this is portaled to <body> and inset to
+  // the content area.
+  return createPortal(
+    <div
+      style={{ top: areaTop }}
+      className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center bg-[#0c1f3d]/45 p-4 lg:left-64"
+      onMouseDown={onClose}
+    >
+      <form
+        onSubmit={handleSubmit}
+        onMouseDown={(event) => event.stopPropagation()}
+        className="flex max-h-full w-full max-w-lg flex-col rounded-lg bg-white p-5 shadow-2xl sm:p-6"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-semibold text-[#111827]">Assign simulation</h2>
+            <p className="mt-1 text-sm text-[#6b7280]">{simulation.title}</p>
           </div>
+          <button type="button" onClick={onClose} className="rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold">
+            Close
+          </button>
+        </div>
 
-          <div className="mt-5 grid gap-4">
+        <div className="-mx-1 mt-5 min-h-0 space-y-4 overflow-y-auto px-1 pb-1">
             <div className="grid grid-cols-2 gap-1 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] p-1">
               {tab("sections", "Whole class")}
               {tab("students", "Specific students")}
@@ -200,7 +226,7 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
                           className="size-4"
                         />
                         <span>
-                          {section.name} · {section.semester_name} · {section.batch_name}
+                          {section.name} · {section.course_name} · Sem {section.semester_number} · {section.batch_name}
                           {section.institution_name ? ` · ${section.institution_name}` : ""} ({section.student_count} students)
                         </span>
                       </label>
@@ -221,7 +247,7 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
                   value={studentSearch}
                   onChange={(event) => setStudentSearch(event.target.value)}
                   placeholder="Search name, email, or section…"
-                  className="mt-2 h-10 w-full rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                  className="mt-2 h-10 w-full rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                 />
                 <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-md border border-[#e6e8eb] p-2">
                   {isLoadingStudents ? (
@@ -244,7 +270,13 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
                         />
                         <span className="min-w-0">
                           <span className="font-medium text-[#111827]">{student.name}</span>{" "}
-                          <span className="text-[#9ca3af]">· {student.section_name}</span>
+                          <span className="text-[#9ca3af]">
+                            ·{" "}
+                            {[student.course_code, student.section_name, student.batch_name]
+                              .filter(Boolean)
+                              .join(" · ")}
+                            {student.scholar_number ? ` · ${student.scholar_number}` : ""}
+                          </span>
                         </span>
                       </label>
                     ))
@@ -263,33 +295,33 @@ export default function AssignSimulationDialog({ simulation, onClose, onAssigned
                 min={todayDateString()}
                 value={dueDate}
                 onChange={(event) => setDueDate(event.target.value)}
-                className="h-11 rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                className="h-11 rounded-md border border-[#e6e8eb] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               />
             </label>
-          </div>
+        </div>
 
-          {error ? (
-            <div className="mt-4 rounded-md border border-[#f3c4c4] bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</div>
-          ) : null}
+        {error ? (
+          <div className="mt-4 shrink-0 rounded-md border border-[#f3c4c4] bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</div>
+        ) : null}
 
-          <div className="mt-6 flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="rounded-md border border-[#e6e8eb] px-4 py-3 text-sm font-semibold">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="rounded-md bg-[#c9a227] px-4 py-3 text-sm font-semibold text-[#0b1d3a] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving
-                ? "Assigning..."
-                : mode === "sections"
-                  ? "Assign to Selected Sections"
-                  : `Assign to ${selectedStudentIds.length || ""} Student${selectedStudentIds.length === 1 ? "" : "s"}`.replace("  ", " ")}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="mt-5 flex shrink-0 justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded-md border border-[#e6e8eb] px-4 py-3 text-sm font-semibold">
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSaving
+              ? "Assigning..."
+              : mode === "sections"
+                ? "Assign to Selected Sections"
+                : `Assign to ${selectedStudentIds.length || ""} Student${selectedStudentIds.length === 1 ? "" : "s"}`.replace("  ", " ")}
+          </button>
+        </div>
+      </form>
+    </div>,
+    document.body,
   )
 }

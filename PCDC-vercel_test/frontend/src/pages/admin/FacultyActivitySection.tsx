@@ -171,7 +171,7 @@ export default function FacultyActivitySection({ facultyId }: { facultyId: numbe
               type="button"
               onClick={() => setTab(t.key)}
               className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
-                tab === t.key ? "bg-[#e8f8f4] text-[#176b5a]" : "text-[#667085] hover:bg-[#f5f7fa]"
+                tab === t.key ? "bg-[#dbeafe] text-[#1d4ed8]" : "text-[#667085] hover:bg-[#f5f7fa]"
               }`}
             >
               {t.label}
@@ -189,7 +189,7 @@ export default function FacultyActivitySection({ facultyId }: { facultyId: numbe
                 const Icon = TIMELINE_ICONS[item.type] ?? Settings2
                 return (
                   <li key={`${item.type}-${item.occurred_at}-${i}`} className="flex gap-3 rounded-md px-1 py-2.5">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#f0f4f8] text-[#176b5a]">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#f0f4f8] text-[#1d4ed8]">
                       <Icon size={15} aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -200,7 +200,7 @@ export default function FacultyActivitySection({ facultyId }: { facultyId: numbe
                         item.ref_id && item.type.startsWith("case_") ? (
                           <Link
                             to={`/admin/case-builder/${item.ref_id}`}
-                            className="block truncate text-sm text-[#0f766e] hover:underline"
+                            className="block truncate text-sm text-[#1d4ed8] hover:underline"
                           >
                             {item.detail}
                           </Link>
@@ -238,7 +238,7 @@ export default function FacultyActivitySection({ facultyId }: { facultyId: numbe
               {activity.cases.map((c) => (
                 <tr key={c.id}>
                   <Td strong>
-                    <Link to={`/admin/case-builder/${c.id}`} className="text-[#0f766e] hover:underline">
+                    <Link to={`/admin/case-builder/${c.id}`} className="text-[#1d4ed8] hover:underline">
                       {c.title}
                     </Link>
                   </Td>
@@ -379,7 +379,7 @@ function Pill({ value }: { value: string | null | undefined }) {
   const v = (value || "").toLowerCase()
   const tone =
     v === "published" || v === "active" || v === "completed" || v === "approved"
-      ? "bg-[#e8f8f4] text-[#176b5a]"
+      ? "bg-[#ecfdf3] text-[#067647]"
       : v === "draft" || v === "pending" || v === "available"
         ? "bg-[#fff7e6] text-[#b54708]"
         : v === "rejected" || v === "closed" || v === "archived"

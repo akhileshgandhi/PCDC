@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, CalendarDays } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 
 import {
@@ -36,6 +36,12 @@ const STATUS_STAGE: Record<string, number> = {
   solution_submitted: 3,
   defense_complete: 4,
   evaluated: 4,
+}
+
+function formatDueDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date)
 }
 
 function countWords(value: string) {
@@ -132,6 +138,8 @@ export default function CaseAttempt() {
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null)
   const [rapidFireAnswerPairs, setRapidFireAnswerPairs] = useState<RapidFireAnswerPair[]>([])
   const [expired, setExpired] = useState(false)
+  const [dueDate, setDueDate] = useState<string | null>(null)
+  const [facultyNote, setFacultyNote] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -172,6 +180,9 @@ export default function CaseAttempt() {
 
         const attemptDetail = await getAttemptDetail(resolvedAttemptId)
         if (!isMounted) return
+
+        setDueDate(attemptDetail.due_date)
+        setFacultyNote(attemptDetail.instructions)
 
         const qs2 = detail.case.written_questions || []
         let draft: { summary?: string; answers?: string[] } | null = null
@@ -399,7 +410,7 @@ export default function CaseAttempt() {
           <button
             type="button"
             onClick={goBack}
-            className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
+            className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#2563eb] transition hover:text-[#3b82f6]"
           >
             <ArrowLeft size={16} aria-hidden="true" />
             Back
@@ -425,7 +436,7 @@ export default function CaseAttempt() {
             <button
               type="button"
               onClick={() => navigate("/student/case-studies")}
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#0B1D3A] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#132a4f]"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
             >
               Back to My Case Studies
             </button>
@@ -456,7 +467,7 @@ export default function CaseAttempt() {
         <button
           type="button"
           onClick={goBack}
-          className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A] transition hover:text-[#C9A227] focus:outline-none focus:ring-2 focus:ring-[#C9A227] focus:ring-offset-2 focus:ring-offset-[#F6F7F9]"
+          className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-[#2563eb] transition hover:text-[#3b82f6] focus:outline-none focus:ring-2 focus:ring-[#3b82f6] focus:ring-offset-2 focus:ring-offset-[#F6F7F9]"
           aria-label="Go back to the previous page"
         >
           <ArrowLeft size={16} aria-hidden="true" />
@@ -466,6 +477,23 @@ export default function CaseAttempt() {
         {actionError ? (
           <div className="mb-5 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm font-medium text-[#B91C1C]">
             {actionError}
+          </div>
+        ) : null}
+
+        {dueDate || facultyNote ? (
+          <div className="mb-5 flex flex-col gap-2 rounded-lg border border-[#E6EBEB] bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:gap-4">
+            {dueDate ? (
+              <span className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-[#0c1f3d]">
+                <CalendarDays size={16} aria-hidden="true" className="text-[#2563eb]" />
+                Due: {formatDueDate(dueDate)}
+              </span>
+            ) : null}
+            {facultyNote ? (
+              <p className="text-sm leading-5 text-[#6B7280] sm:border-l sm:border-[#E6EBEB] sm:pl-4">
+                <span className="font-semibold text-[#111827]">Note from your faculty: </span>
+                {facultyNote}
+              </p>
+            ) : null}
           </div>
         ) : null}
 

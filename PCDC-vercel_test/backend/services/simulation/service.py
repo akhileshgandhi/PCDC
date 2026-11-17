@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from shared.cache import cache_delete_prefix
 from shared.llm import create_with_retry, get_llm_client, get_llm_model, is_gemini
 from .models import CaseStudyCreate
+
+logger = logging.getLogger(__name__)
 
 
 # Every student-facing AI message comes from "Aish", PCDC's AI mentor. The
@@ -250,6 +253,7 @@ def case_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
         "created_at": str(row.created_at),
         "assignment_source": values.get("assignment_source"),
         "due_date": str(values["due_date"]) if values.get("due_date") else None,
+        "instructions": values.get("instructions"),
     }
 
 
@@ -364,6 +368,10 @@ def list_assigned_case_studies(
     career_track: Optional[str],
     capability: Optional[str],
 ) -> List[Dict[str, Any]]:
+    # Close out anything that timed out unattended before reading — otherwise
+    # a case whose timer ran out stays "In progress" here until the student
+    # happens to reopen it (which is what actually flips the status today).
+    finalize_expired_case_attempts(db, current_user["id"])
     where_clauses = ["ac.student_id = s.id", "u.id = :student_user_id"]
     params: Dict[str, Any] = {"student_user_id": current_user["id"]}
     add_case_filters(where_clauses, params, domain, difficulty, career_track, capability)
@@ -381,7 +389,7 @@ def list_assigned_case_studies(
                    cs.total_marks, cs.written_marks, cs.rapid_fire_marks,
                    cs.reading_time_minutes, cs.answer_writing_time_minutes,
                    cs.rapid_fire_time_minutes, ac.assigned_at AS created_at,
-                   ac.assignment_source, ac.due_date
+                   ac.assignment_source, ac.due_date, ac.instructions
             FROM assigned_cases ac
             JOIN students s ON s.id = ac.student_id
             JOIN users u ON u.id = s.user_id
@@ -544,7 +552,7 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
 
     assignment = db.execute(
         text("""
-            SELECT 1
+            SELECT ac.due_date, ac.instructions
             FROM assigned_cases ac
             JOIN students s ON s.id = ac.student_id
             WHERE s.user_id = :user_id AND ac.case_study_id = :case_id
@@ -553,6 +561,10 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
     ).fetchone()
     if not assignment:
         raise HTTPException(status_code=403, detail="This case has not been assigned to you")
+    assignment_info = {
+        "due_date": str(assignment.due_date) if assignment.due_date else None,
+        "instructions": assignment.instructions,
+    }
 
     estimated_minutes = (
         (row.reading_time_minutes or 0)
@@ -641,7 +653,7 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         attempt = {"exists": False, "attempt_id": None, "status": None, "stage": None,
                    "stage_label": None, "total_score": None, "grade_label": None,
                    "marks_scored": None, "marks_total": None}
-        return {"case": case, "attempt": attempt}
+        return {"case": case, "attempt": attempt, "assignment": assignment_info}
 
     stage = ATTEMPT_STATUS_STAGE.get(attempt_row.status, 1)
     total_score = None
@@ -666,7 +678,7 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         "marks_total": marks_total,
         "grade_label": grade_label(total_score),
     }
-    return {"case": case, "attempt": attempt}
+    return {"case": case, "attempt": attempt, "assignment": assignment_info}
 
 
 def update_case_status(
@@ -946,6 +958,101 @@ def mark_attempt_expired(db: Session, attempt_id: int) -> None:
     ).fetchone()
     if attempt is not None:
         mark_assignment_completed(db, attempt.student_id, attempt_id)
+
+
+# Phases whose timer running out, left unattended, must close the attempt on
+# its own — mirrors the per-click check in start_attempt_phase (no grace
+# period; that's only for a submit request arriving slightly late), but
+# scans every attempt instead of only the one a student happens to reopen.
+# Reading has no submission and never expires the attempt by itself.
+_EXPIRABLE_PHASE_SQL = """
+    (
+        a.status = 'analysis_submitted'
+        AND a.writing_started_at IS NOT NULL
+        AND cs.answer_writing_time_minutes IS NOT NULL
+        AND cs.answer_writing_time_minutes > 0
+        AND EXTRACT(EPOCH FROM (NOW()::timestamp - a.writing_started_at)) >= cs.answer_writing_time_minutes * 60
+    )
+    OR
+    (
+        a.status IN ('ai_discussion', 'analysis_submitted')
+        AND a.rapid_fire_started_at IS NOT NULL
+        AND cs.rapid_fire_time_minutes IS NOT NULL
+        AND cs.rapid_fire_time_minutes > 0
+        AND EXTRACT(EPOCH FROM (NOW()::timestamp - a.rapid_fire_started_at)) >= cs.rapid_fire_time_minutes * 60
+    )
+"""
+
+
+def sweep_expired_case_attempts(db: Session) -> int:
+    """Expire every case attempt whose timed phase has run out, whether or
+    not the student ever reopens it. Mirrors jobsim's sweep_expired_attempts:
+    one transaction per attempt, so a failure on one can't block the rest,
+    and a row already locked by a live request is simply skipped."""
+    candidates = db.execute(
+        text(f"""
+            SELECT a.id
+            FROM case_study_attempts a
+            JOIN case_studies cs ON cs.id = a.case_study_id
+            WHERE a.status NOT IN ('expired', 'evaluated', 'completed')
+              AND ({_EXPIRABLE_PHASE_SQL})
+        """)
+    ).fetchall()
+    db.rollback()
+    expired_count = 0
+    for row in candidates:
+        try:
+            locked = db.execute(
+                text("""
+                    SELECT id FROM case_study_attempts
+                    WHERE id = :attempt_id
+                      AND status NOT IN ('expired', 'evaluated', 'completed')
+                    FOR UPDATE SKIP LOCKED
+                """),
+                {"attempt_id": row.id},
+            ).fetchone()
+            if locked:
+                mark_attempt_expired(db, row.id)
+                expired_count += 1
+            db.commit()
+        except Exception:  # noqa: BLE001 - logged; retried on the next sweep
+            db.rollback()
+            logger.exception("Couldn't expire case attempt %s", row.id)
+    return expired_count
+
+
+def finalize_expired_case_attempts(
+    db: Session, student_user_id: Optional[int] = None, attempt_id: Optional[int] = None,
+) -> int:
+    """Expire every overdue attempt before a read, so nobody sees a dead
+    attempt as still in progress between sweeps, or on a host with no
+    background sweeper at all (e.g. serverless, where a thread can't
+    survive between requests)."""
+    params: Dict[str, Any] = {}
+    extra_clauses = ""
+    if student_user_id is not None:
+        extra_clauses += "AND a.student_id = :student_user_id\n"
+        params["student_user_id"] = student_user_id
+    if attempt_id is not None:
+        extra_clauses += "AND a.id = :attempt_id\n"
+        params["attempt_id"] = attempt_id
+    rows = db.execute(
+        text(f"""
+            SELECT a.id
+            FROM case_study_attempts a
+            JOIN case_studies cs ON cs.id = a.case_study_id
+            WHERE a.status NOT IN ('expired', 'evaluated', 'completed')
+              {extra_clauses}
+              AND ({_EXPIRABLE_PHASE_SQL})
+            FOR UPDATE OF a SKIP LOCKED
+        """),
+        params,
+    ).fetchall()
+    for row in rows:
+        mark_attempt_expired(db, row.id)
+    if rows:
+        db.commit()
+    return len(rows)
 
 
 def assert_phase_not_expired(db: Session, attempt_id: int, phase: str) -> None:
@@ -2008,6 +2115,10 @@ def get_attempt_detail(
 
 
 def get_attempt_for_view(db: Session, attempt_id: int, current_user: Dict[str, Any]) -> Any:
+    # Catches this one attempt if its timer ran out since the last sweep —
+    # otherwise a faculty/admin report (or a student reopening it) could still
+    # read it as "in progress" for up to a sweep interval.
+    finalize_expired_case_attempts(db, attempt_id=attempt_id)
     row = db.execute(
         text("SELECT * FROM case_study_attempts WHERE id = :attempt_id"),
         {"attempt_id": attempt_id},
@@ -2056,6 +2167,17 @@ def faculty_created_case(db: Session, faculty_id: int, case_study_id: int) -> bo
 
 
 def attempt_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
+    # So the attempt screens can show the same due date / faculty note as the
+    # case detail page — a student mid-attempt shouldn't lose sight of either.
+    assignment = db.execute(
+        text("""
+            SELECT ac.due_date, ac.instructions
+            FROM assigned_cases ac
+            JOIN students s ON s.id = ac.student_id
+            WHERE s.user_id = :student_id AND ac.case_study_id = :case_study_id
+        """),
+        {"student_id": row.student_id, "case_study_id": row.case_study_id},
+    ).fetchone()
     return {
         "id": row.id,
         "case_study_id": row.case_study_id,
@@ -2073,6 +2195,8 @@ def attempt_row_to_response(db: Session, row: Any) -> Dict[str, Any]:
         "conversations": get_conversations_for_response(db, row.id),
         "evaluation": get_evaluation(db, row.id),
         "question_answers": get_question_answers_for_response(db, row.id),
+        "due_date": str(assignment.due_date) if assignment and assignment.due_date else None,
+        "instructions": assignment.instructions if assignment else None,
     }
 
 

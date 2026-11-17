@@ -107,7 +107,7 @@ function MarksEditor({
           type="button"
           onClick={() => void save()}
           disabled={isSaving}
-          className="inline-flex items-center gap-2 rounded-md bg-[#0b1d3a] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#13294d] disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#13294d] disabled:opacity-60"
         >
           {isSaving ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : null} Save marks
         </button>
@@ -215,7 +215,7 @@ function TaskCard({
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="mt-3 inline-flex rounded-md border border-[#0b1d3a] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+            className="mt-3 inline-flex rounded-md border border-[#2563eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
           >
             Change marks
           </button>
@@ -338,12 +338,12 @@ function DeckCard({
           {deck.slides.length ? (
             <ol className="max-h-[480px] space-y-2 overflow-y-auto">
               {deck.slides.map((slide, i) => (
-                <li key={i} className="rounded-md border border-[#e6e8eb] border-l-4 border-l-[#0b1d3a] bg-white p-3">
+                <li key={i} className="rounded-md border border-[#e6e8eb] border-l-4 border-l-[#2563eb] bg-white p-3">
                   <p className="text-[11px] font-semibold text-[#6b7280]">
                     Slide {i + 1}
                     {deck.slide_plan[i] && deck.slide_plan[i].title !== slide.title ? ` · planned as "${deck.slide_plan[i].title}"` : ""}
                   </p>
-                  <h4 className="mt-0.5 text-sm font-semibold text-[#0b1d3a]">{slide.title || "Untitled"}</h4>
+                  <h4 className="mt-0.5 text-sm font-semibold text-[#2563eb]">{slide.title || "Untitled"}</h4>
                   <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-[#374151]">
                     {slide.points.filter((point) => point.trim()).map((point, j) => (
                       <li key={j}>{point}</li>
@@ -439,7 +439,7 @@ function WrittenCard({
                   </p>
                   {criterion.reason ? <p className="mt-0.5 text-[#374151]">{criterion.reason}</p> : null}
                   {criterion.evidence ? (
-                    <blockquote className="mt-1 border-l-2 border-[#c9a227] pl-2 text-xs italic text-[#6b7280]">
+                    <blockquote className="mt-1 border-l-2 border-[#2563eb] pl-2 text-xs italic text-[#6b7280]">
                       “{criterion.evidence}”
                     </blockquote>
                   ) : null}
@@ -505,7 +505,7 @@ function WrittenCard({
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="inline-flex rounded-md border border-[#0b1d3a] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+            className="inline-flex rounded-md border border-[#2563eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
           >
             {memo.status === "scored" ? "Change marks" : "Set marks"}
           </button>

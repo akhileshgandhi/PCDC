@@ -38,8 +38,8 @@ export default function CapabilityRadar({ capabilities }: CapabilityRadarProps) 
           <Radar
             name="Current"
             dataKey="score"
-            stroke="#C9A227"
-            fill="#C9A227"
+            stroke="#2563eb"
+            fill="#2563eb"
             fillOpacity={0.35}
             strokeWidth={3}
           />

@@ -79,7 +79,7 @@ export default function Screen3AIChat({
     <section className="w-full space-y-5">
       <div className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
             Rapid Fire Round
           </p>
           {remainingSeconds != null && !allDone ? (
@@ -105,8 +105,8 @@ export default function Screen3AIChat({
 
         {isGenerating && total === 0 ? (
           <div className="mt-6 flex flex-col items-center gap-3 py-12 text-center text-[#6B7280]">
-            <Loader2 size={32} className="animate-spin text-[#C9A227]" />
-            <p className="text-sm font-medium text-[#0B1D3A]">
+            <Loader2 size={32} className="animate-spin text-[#2563eb]" />
+            <p className="text-sm font-medium text-[#0c1f3d]">
               {AISH_NAME} is preparing your rapid fire questions…
             </p>
             <p className="text-xs text-[#9CA3AF]">
@@ -122,7 +122,7 @@ export default function Screen3AIChat({
               type="button"
               onClick={() => onSubmit("No rapid fire questions")}
               disabled={isSubmitting}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#C9A227] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#B08D20]"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#3b82f6]"
             >
               Continue to Evaluation
               <ArrowRight size={15} />
@@ -131,14 +131,14 @@ export default function Screen3AIChat({
         ) : allDone ? (
           <div className="mt-4 flex flex-col items-center gap-4 py-10 text-center">
             {isSubmitting ? (
-              <Loader2 size={56} className="animate-spin text-[#C9A227]" aria-hidden="true" />
+              <Loader2 size={56} className="animate-spin text-[#2563eb]" aria-hidden="true" />
             ) : (
               <CheckCircle size={56} className="text-[#16A34A]" aria-hidden="true" />
             )}
-            <h3 className="text-3xl font-bold text-[#0B1D3A]">All questions answered!</h3>
+            <h3 className="text-3xl font-bold text-[#0c1f3d]">All questions answered!</h3>
             <p
               className={`text-lg font-medium ${
-                isSubmitting ? "animate-pulse text-[#C9A227]" : "text-[#16A34A]"
+                isSubmitting ? "animate-pulse text-[#2563eb]" : "text-[#16A34A]"
               }`}
             >
               {isSubmitting ? `${AISH_NAME} is evaluating your performance…` : "Your answers have been submitted. Evaluation is ready."}
@@ -146,7 +146,7 @@ export default function Screen3AIChat({
             <div className="mt-4 w-full space-y-3 text-left">
               {rapidFireQuestions.map((q, i) => (
                 <div key={q.sequence} className="rounded-lg border border-[#E6EBEB] p-4">
-                  <p className="text-xs font-semibold uppercase text-[#C9A227]">
+                  <p className="text-xs font-semibold uppercase text-[#2563eb]">
                     Q{q.sequence}
                     {marksLabel(q.marks)}
                   </p>
@@ -168,7 +168,7 @@ export default function Screen3AIChat({
                   <span
                     key={i}
                     className={`size-2.5 rounded-full transition-colors ${
-                      i < currentQ ? "bg-[#16A34A]" : i === currentQ ? "bg-[#C9A227]" : "bg-[#E6EBEB]"
+                      i < currentQ ? "bg-[#16A34A]" : i === currentQ ? "bg-[#2563eb]" : "bg-[#E6EBEB]"
                     }`}
                   />
                 ))}
@@ -177,8 +177,8 @@ export default function Screen3AIChat({
             <div className="flex items-start gap-3">
               <AishAvatar size={36} />
               <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm bg-[#F6F7F9] p-5">
-                <p className="text-xs font-semibold text-[#92702A]">{AISH_NAME} asks</p>
-                <p className="mt-1 text-base font-semibold text-[#0B1D3A]">
+                <p className="text-xs font-semibold text-[#1d4ed8]">{AISH_NAME} asks</p>
+                <p className="mt-1 text-base font-semibold text-[#0c1f3d]">
                   {rapidFireQuestions[currentQ].question_text}
                 </p>
               </div>
@@ -188,7 +188,7 @@ export default function Screen3AIChat({
               onChange={(e) => handleAnswerChange(e.target.value)}
               rows={6}
               placeholder="Type your answer here..."
-              className="mt-4 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+              className="mt-4 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
             <button
               type="button"
@@ -196,7 +196,7 @@ export default function Screen3AIChat({
               disabled={!currentAnswer.trim()}
               className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
                 currentAnswer.trim()
-                  ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
+                  ? "bg-[#2563eb] text-white hover:bg-[#3b82f6]"
                   : "cursor-not-allowed bg-[#D1D5DB] text-white"
               }`}
             >

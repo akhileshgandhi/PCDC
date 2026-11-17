@@ -154,7 +154,7 @@ export default function RubricEditor({ caseId, readOnly = false }: RubricEditorP
           type="button"
           onClick={saveRubric}
           disabled={!canSave}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
           Save Rubric
@@ -186,7 +186,7 @@ export default function RubricEditor({ caseId, readOnly = false }: RubricEditorP
             <button
               type="button"
               onClick={resetDefaults}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0c1f3d] transition hover:text-[#2563eb]"
             >
               <RotateCcw size={13} aria-hidden="true" />
               Reset to default
@@ -254,13 +254,13 @@ export default function RubricEditor({ caseId, readOnly = false }: RubricEditorP
                   ? "Maximum of 2 criteria reached"
                   : "Add a short qualitative criterion"
               }
-              className="h-11 min-w-0 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb]"
+              className="h-11 min-w-0 flex-1 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb]"
             />
             <button
               type="button"
               onClick={addCriterion}
               disabled={!newCriterion.trim() || criteriaLimitReached}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#0c1f3d] px-4 py-2.5 text-sm font-semibold text-[#0c1f3d] transition hover:bg-[#0c1f3d] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Plus size={15} aria-hidden="true" />
               Add
@@ -293,7 +293,7 @@ function WeightControl({ criterion, value, onChange }: WeightControlProps) {
             max={100}
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="h-9 w-16 rounded-md border border-[#e6e8eb] bg-white px-2 text-right text-sm font-semibold outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="h-9 w-16 rounded-md border border-[#e6e8eb] bg-white px-2 text-right text-sm font-semibold outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
           <span className="text-sm font-semibold text-[#6b7280]">%</span>
         </div>
@@ -304,7 +304,7 @@ function WeightControl({ criterion, value, onChange }: WeightControlProps) {
         max={100}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full accent-[#0b1d3a]"
+        className="w-full accent-[#0c1f3d]"
         aria-label={`${criterion.label} weight`}
       />
     </div>

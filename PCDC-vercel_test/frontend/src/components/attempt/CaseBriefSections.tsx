@@ -76,7 +76,7 @@ interface CardProps {
 export function Card({ eyebrow, children }: CardProps) {
   return (
     <article className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-      <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+      <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
         {eyebrow}
       </p>
       {children}

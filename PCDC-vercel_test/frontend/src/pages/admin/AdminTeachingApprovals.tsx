@@ -10,9 +10,22 @@ import {
   type TeachingApprovalPending,
 } from "../../api/admin"
 import ConfirmDialog from "../../components/ConfirmDialog"
+import { ListToolbar, Pager } from "../../components/common/ListControls"
 import { useAdminScope } from "../../hooks/useAdminScope"
+import { useListControls } from "../../hooks/useListControls"
 import { notifyTeachingApprovalsChanged, useAdminAlertRefresh } from "../../hooks/usePendingTeachingCount"
 import AdminLayout from "../../layouts/AdminLayout"
+
+function matchesApproval(person: TeachingApprovalPending, q: string): boolean {
+  if (person.faculty_name.toLowerCase().includes(q)) return true
+  return person.items.some(
+    (it) =>
+      it.subject.toLowerCase().includes(q) ||
+      it.course_name.toLowerCase().includes(q) ||
+      it.semester_name.toLowerCase().includes(q) ||
+      it.section_name.toLowerCase().includes(q),
+  )
+}
 
 export default function AdminTeachingApprovals() {
   // The approval switch applies to every institute, so only the Central
@@ -45,6 +58,9 @@ export default function AdminTeachingApprovals() {
   // New faculty requests appear without reloading the page (the first load
   // is the effect above).
   useAdminAlertRefresh(reload, false)
+
+  const pendingList = useListControls(pending, matchesApproval)
+  const approvedList = useListControls(approved, matchesApproval)
 
   async function decide(id: number, approve: boolean) {
     if (approve) await approveTeachingSelection(id)
@@ -160,8 +176,19 @@ export default function AdminTeachingApprovals() {
               </p>
             </div>
           ) : (
+            <>
+              <ListToolbar
+                query={pendingList.query}
+                onQueryChange={pendingList.setQuery}
+                pageSize={pendingList.pageSize}
+                onPageSizeChange={pendingList.setPageSize}
+                placeholder="Search faculty, subject, section..."
+              />
+              {pendingList.paged.length === 0 ? (
+                <p className="py-8 text-center text-sm font-medium text-[#667085]">No match found.</p>
+              ) : (
             <div className="divide-y divide-[#eef2f7]">
-              {pending.map((person) => (
+              {pendingList.paged.map((person) => (
                 <div key={person.faculty_id} className="py-4 first:pt-0">
                   <p className="font-semibold text-[#17202a]">{person.faculty_name}</p>
                   <div className="mt-3 grid gap-2">
@@ -200,6 +227,15 @@ export default function AdminTeachingApprovals() {
                 </div>
               ))}
             </div>
+              )}
+              <Pager
+                page={pendingList.page}
+                totalPages={pendingList.totalPages}
+                total={pendingList.total}
+                pageSize={pendingList.pageSize}
+                onPageChange={pendingList.setPage}
+              />
+            </>
           )}
         </section>
 
@@ -219,8 +255,19 @@ export default function AdminTeachingApprovals() {
               </p>
             </div>
           ) : (
+            <>
+              <ListToolbar
+                query={approvedList.query}
+                onQueryChange={approvedList.setQuery}
+                pageSize={approvedList.pageSize}
+                onPageSizeChange={approvedList.setPageSize}
+                placeholder="Search faculty, subject, section..."
+              />
+              {approvedList.paged.length === 0 ? (
+                <p className="py-8 text-center text-sm font-medium text-[#667085]">No match found.</p>
+              ) : (
             <div className="divide-y divide-[#eef2f7]">
-              {approved.map((person) => (
+              {approvedList.paged.map((person) => (
                 <div key={person.faculty_id} className="py-4 first:pt-0">
                   <p className="font-semibold text-[#17202a]">{person.faculty_name}</p>
                   <div className="mt-3 grid gap-2">
@@ -254,6 +301,15 @@ export default function AdminTeachingApprovals() {
                 </div>
               ))}
             </div>
+              )}
+              <Pager
+                page={approvedList.page}
+                totalPages={approvedList.totalPages}
+                total={approvedList.total}
+                pageSize={approvedList.pageSize}
+                onPageChange={approvedList.setPage}
+              />
+            </>
           )}
         </section>
       </div>

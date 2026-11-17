@@ -206,14 +206,14 @@ export default function FacultyCaseLibrary() {
               <button
                 type="button"
                 onClick={() => setShowBulkUpload(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-5 py-3 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-5 py-3 text-sm font-semibold text-[#2563eb] transition hover:bg-[#f6f7fb]"
               >
                 <FileUp size={17} aria-hidden="true" />
                 Bulk Upload
               </button>
               <Link
                 to="/faculty/case-builder"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e]"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6]"
               >
                 <Plus size={17} aria-hidden="true" />
                 New Case Study
@@ -233,7 +233,7 @@ export default function FacultyCaseLibrary() {
             <select
               value={domainFilter}
               onChange={(event) => setDomainFilter(event.target.value)}
-              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               aria-label="Domain"
             >
               {domains.map((domain) => (
@@ -246,7 +246,7 @@ export default function FacultyCaseLibrary() {
             <select
               value={difficultyFilter}
               onChange={(event) => setDifficultyFilter(event.target.value)}
-              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               aria-label="Difficulty"
             >
               <option value="">All Levels</option>
@@ -265,7 +265,7 @@ export default function FacultyCaseLibrary() {
                   onClick={() => setStatusFilter(status.value)}
                   className={`flex-1 rounded px-3 py-2 text-sm font-semibold transition ${
                     statusFilter === status.value
-                      ? "bg-[#0b1d3a] text-white shadow-sm"
+                      ? "bg-[#2563eb] text-white shadow-sm"
                       : "text-[#6b7280] hover:text-[#111827]"
                   }`}
                 >
@@ -274,7 +274,7 @@ export default function FacultyCaseLibrary() {
               ))}
             </div>
 
-            <label className="flex h-11 items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-3 text-[#6b7280] transition focus-within:border-[#c9a227] focus-within:ring-2 focus-within:ring-[#c9a227]/20">
+            <label className="flex h-11 items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-3 text-[#6b7280] transition focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20">
               <Search size={17} aria-hidden="true" />
               <span className="sr-only">Search cases</span>
               <input
@@ -373,7 +373,7 @@ export default function FacultyCaseLibrary() {
                       <div className="w-40">
                         <div className="h-2 w-full overflow-hidden rounded-full bg-[#f2f4f7]">
                           <div
-                            className="h-2 rounded-full bg-[#c9a227]"
+                            className="h-2 rounded-full bg-[#2563eb]"
                             style={{ width: `${completionRate}%` }}
                           />
                         </div>
@@ -396,7 +396,7 @@ export default function FacultyCaseLibrary() {
                           type="button"
                           onClick={() => handleCloseAssignment(assignment.assignment_id)}
                           disabled={closingAssignmentId === assignment.assignment_id}
-                          className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#b42318] hover:text-[#b42318] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-xs font-semibold text-[#2563eb] transition hover:border-[#b42318] hover:text-[#b42318] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <CircleX size={14} aria-hidden="true" />
                           {closingAssignmentId === assignment.assignment_id
@@ -488,7 +488,7 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           <button
             type="button"
             onClick={onAssign}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#c9a227] px-3 py-2 text-xs font-semibold text-[#92702a] transition hover:bg-[#fff7df]"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#2563eb] px-3 py-2 text-xs font-semibold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
             aria-label={`Assign ${caseStudy.title} to a class`}
             title="Assign"
           >
@@ -500,7 +500,7 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           <button
             type="button"
             onClick={onPublish}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#c9a227] bg-[#c9a227] px-3 py-2 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#e0b84e] hover:bg-[#e0b84e]"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#2563eb] bg-[#2563eb] px-3 py-2 text-xs font-semibold text-white transition hover:border-[#3b82f6] hover:bg-[#3b82f6]"
             aria-label={`Publish ${caseStudy.title}`}
             title="Publish"
           >
@@ -512,7 +512,7 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           {isAdmin ? (
             <Link
               to={`/faculty/case-builder/${caseStudy.id}`}
-              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
               aria-label={`Edit ${caseStudy.title}`}
               title="Edit"
             >
@@ -521,7 +521,7 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           ) : (
             <Link
               to={`/faculty/case-builder/${caseStudy.id}`}
-              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+              className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
               aria-label={`View ${caseStudy.title}`}
               title="View"
             >
@@ -530,7 +530,7 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           )}
           <Link
             to={`/faculty/case-attempts/${caseStudy.id}`}
-            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
             aria-label={`View attempts for ${caseStudy.title}`}
             title="View attempts"
           >
@@ -538,7 +538,7 @@ function CaseRow({ caseStudy, onAssign, onPublish, onDelete }: CaseRowProps) {
           </Link>
           <button
             type="button"
-            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+            className="inline-flex size-9 items-center justify-center rounded-md border border-[#e6e8eb] text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
             aria-label={`Archive ${caseStudy.title}`}
             title="Archive"
           >
@@ -589,7 +589,7 @@ function StatPill({ label, value }: StatPillProps) {
   return (
     <div className="rounded-full border border-[#e6e8eb] bg-[#f6f7fb] px-4 py-2 text-sm">
       <span className="font-semibold text-[#111827]">{label}:</span>{" "}
-      <span className="font-semibold text-[#0b1d3a]">{value}</span>
+      <span className="font-semibold text-[#2563eb]">{value}</span>
     </div>
   )
 }

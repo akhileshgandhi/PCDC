@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, Mail, Plus, Search, Send, UserPlus, X } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Plus, Search, Send, UserPlus, X } from "lucide-react"
 import { useEffect, useMemo, useState, type MouseEvent } from "react"
 import { Link } from "react-router-dom"
 
@@ -86,29 +86,33 @@ export default function AdminFaculty() {
     load()
   }, [])
 
+  // Search narrows the pool first — the per-tab counts below are then taken
+  // from that narrowed pool, so they reflect the search term too instead of
+  // always showing the unfiltered total.
+  const searched = useMemo(() => {
+    if (!search) return items
+    const term = search.toLowerCase()
+    return items.filter(
+      (f) =>
+        f.name.toLowerCase().includes(term) ||
+        f.email.toLowerCase().includes(term) ||
+        (f.department ?? "").toLowerCase().includes(term),
+    )
+  }, [items, search])
+
   const counts = useMemo(() => {
     return {
-      all: items.length,
-      awaiting: items.filter((f) => f.state === "awaiting").length,
-      active: items.filter((f) => f.state === "active").length,
-      needs_attention: items.filter((f) => f.state === "needs_attention").length,
+      all: searched.length,
+      awaiting: searched.filter((f) => f.state === "awaiting").length,
+      active: searched.filter((f) => f.state === "active").length,
+      needs_attention: searched.filter((f) => f.state === "needs_attention").length,
     }
-  }, [items])
+  }, [searched])
 
   const visible = useMemo(() => {
-    return items.filter((f) => {
-      if (filter !== "all" && f.state !== filter) return false
-      if (search) {
-        const term = search.toLowerCase()
-        return (
-          f.name.toLowerCase().includes(term) ||
-          f.email.toLowerCase().includes(term) ||
-          (f.department ?? "").toLowerCase().includes(term)
-        )
-      }
-      return true
-    })
-  }, [items, filter, search])
+    if (filter === "all") return searched
+    return searched.filter((f) => f.state === filter)
+  }, [searched, filter])
 
   return (
     <AdminLayout>
@@ -123,16 +127,8 @@ export default function AdminFaculty() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setNotice("Sent mail log isn't configured yet — tell me what it should show.")}
-              className="inline-flex items-center gap-2 rounded-md border border-[#dde4ec] bg-white px-3 py-2.5 text-sm font-semibold text-[#17202a] transition hover:bg-[#f5f7fa]"
-            >
-              <Mail size={15} aria-hidden="true" />
-              Sent mail
-            </button>
-            <button
-              type="button"
               onClick={() => setInviting(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-[#102033] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b3452]"
+              className="inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
             >
               <UserPlus size={16} aria-hidden="true" />
               Invite faculty
@@ -170,7 +166,7 @@ export default function AdminFaculty() {
                   onClick={() => setFilter(f.key)}
                   className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${
                     filter === f.key
-                      ? "bg-[#102033] text-white"
+                      ? "bg-[#2563eb] text-white"
                       : "border border-[#dde4ec] bg-white text-[#17202a] hover:bg-[#f5f7fa]"
                   }`}
                 >
@@ -204,7 +200,7 @@ export default function AdminFaculty() {
                     to={`/admin/user/${f.id}`}
                     className="flex items-center gap-4 px-1 py-4 transition hover:bg-[#f9fafb]"
                   >
-                    <div className="grid size-11 shrink-0 place-items-center rounded-md bg-[#102033] text-sm font-semibold text-white">
+                    <div className="grid size-11 shrink-0 place-items-center rounded-md bg-[#0c1f3d] text-sm font-semibold text-white">
                       {initials(f.name)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -348,25 +344,35 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
   }
 
   const field =
-    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
   const label = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-[#102033]/45" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-[#0c1f3d]/50 backdrop-blur-[2px]">
       <div
-        className={`flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-200 ${
+        className={`flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl bg-white shadow-2xl transition-transform duration-300 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#eef2f7] px-6 py-5">
-          <div>
-            <h2 className="text-lg font-semibold text-[#17202a]">Invite faculty</h2>
-            <p className="mt-1 text-sm text-[#667085]">
-              They'll appear under "Awaiting response" until they first sign in.
-            </p>
+        <div className="flex items-start justify-between gap-4 rounded-tl-2xl border-b border-[#eef2f7] bg-gradient-to-r from-[#eff6ff] to-white px-6 py-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+              <UserPlus size={19} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-lg font-semibold text-[#17202a]">Invite faculty</h2>
+              <p className="mt-1 text-sm text-[#667085]">
+                They'll appear under "Awaiting response" until they first sign in.
+              </p>
+            </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-[#667085] hover:text-[#17202a]">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-[#667085] transition hover:bg-[#eef2f7] hover:text-[#17202a]"
+          >
             <X size={20} aria-hidden="true" />
           </button>
         </div>
@@ -410,14 +416,14 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
                       onClick={() => toggleInstitution(inst.id)}
                       className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm transition ${
                         active
-                          ? "border-[#34c6a3] bg-[#eafaf5] font-semibold text-[#0b6b52]"
+                          ? "border-[#2563eb] bg-[#eaf1fd] font-semibold text-[#1d4ed8]"
                           : "border-[#dde4ec] bg-white text-[#344054] hover:border-[#b7c2d0]"
                       }`}
                     >
                       <span className="truncate">{inst.name}</span>
                       <span
                         className={`grid size-4 shrink-0 place-items-center rounded-full border ${
-                          active ? "border-[#34c6a3] bg-[#34c6a3] text-white" : "border-[#cdd5df]"
+                          active ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-[#cdd5df]"
                         }`}
                       >
                         {active ? <Check size={11} strokeWidth={3} aria-hidden="true" /> : null}
@@ -472,7 +478,7 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
             type="button"
             onClick={submit}
             disabled={saving}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#102033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-60"
           >
             {saving ? "Inviting…" : <><Plus size={16} aria-hidden="true" /> Invite faculty</>}
           </button>
@@ -482,7 +488,7 @@ function InviteFacultyDrawer({ onClose, onInvited }: { onClose: () => void; onIn
   )
 }
 
-function DepartmentPicker({
+export function DepartmentPicker({
   institutionName,
   departments,
   selectedIds,
@@ -507,7 +513,7 @@ function DepartmentPicker({
           {institutionName}
         </span>
         {chosen.length > 0 ? (
-          <span className="rounded-full bg-[#eafaf5] px-2 py-0.5 text-[11px] font-semibold text-[#0b6b52]">
+          <span className="rounded-full bg-[#eaf1fd] px-2 py-0.5 text-[11px] font-semibold text-[#1d4ed8]">
             {chosen.length} selected
           </span>
         ) : null}
@@ -521,7 +527,7 @@ function DepartmentPicker({
             type="button"
             onClick={onToggleOpen}
             className={`flex h-11 w-full items-center justify-between rounded-md border bg-white px-3 text-left text-sm transition ${
-              open ? "border-[#34c6a3] ring-2 ring-[#34c6a3]/20" : "border-[#dde4ec] hover:border-[#b7c2d0]"
+              open ? "border-[#2563eb] ring-2 ring-[#2563eb]/20" : "border-[#dde4ec] hover:border-[#b7c2d0]"
             }`}
           >
             <span className="text-[#98a2b3]">
@@ -545,13 +551,13 @@ function DepartmentPicker({
                     key={d.id}
                     onClick={() => onToggle(d.id)}
                     className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left text-sm transition ${
-                      active ? "bg-[#eafaf5] font-semibold text-[#0b6b52]" : "text-[#344054] hover:bg-[#f6f9fb]"
+                      active ? "bg-[#eaf1fd] font-semibold text-[#1d4ed8]" : "text-[#344054] hover:bg-[#f6f9fb]"
                     }`}
                   >
                     <span>{d.name}</span>
                     <span
                       className={`grid size-4 shrink-0 place-items-center rounded border ${
-                        active ? "border-[#34c6a3] bg-[#34c6a3] text-white" : "border-[#cdd5df]"
+                        active ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-[#cdd5df]"
                       }`}
                     >
                       {active ? <Check size={11} strokeWidth={3} aria-hidden="true" /> : null}

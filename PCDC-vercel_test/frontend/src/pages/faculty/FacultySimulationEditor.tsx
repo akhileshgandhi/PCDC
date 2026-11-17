@@ -400,7 +400,7 @@ export default function FacultySimulationEditor() {
     [tasks],
   )
   const input =
-    "h-10 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm outline-none transition focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20 read-only:bg-[#f9fafb] disabled:bg-[#f9fafb]"
+    "h-10 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 read-only:bg-[#f9fafb] disabled:bg-[#f9fafb]"
 
   if (isLoading) {
     return (
@@ -437,7 +437,7 @@ export default function FacultySimulationEditor() {
                 type="button"
                 onClick={() => void save()}
                 disabled={busy !== ""}
-                className="inline-flex items-center gap-2 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-md border border-[#2563eb] px-4 py-2.5 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white disabled:opacity-60"
               >
                 {busy === "save" ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save draft
               </button>
@@ -446,7 +446,7 @@ export default function FacultySimulationEditor() {
                   type="button"
                   onClick={() => void approve()}
                   disabled={busy !== ""}
-                  className="inline-flex items-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-60"
                 >
                   {busy === "approve" ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Approve
                 </button>
@@ -459,7 +459,7 @@ export default function FacultySimulationEditor() {
                   type="button"
                   onClick={() => void publishOrWithdraw("publish")}
                   disabled={busy !== ""}
-                  className="inline-flex items-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-60"
                 >
                   {busy === "publish" ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} aria-hidden="true" />} Publish
                 </button>
@@ -513,7 +513,7 @@ export default function FacultySimulationEditor() {
                 readOnly={readOnly}
                 value={description}
                 onChange={(e) => { setDescription(e.target.value); touch() }}
-                className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none read-only:bg-[#f9fafb] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none read-only:bg-[#f9fafb] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               />
             </Labeled>
             <Labeled label="Job role">
@@ -551,7 +551,7 @@ export default function FacultySimulationEditor() {
                       aria-pressed={on}
                       onClick={() => { setSkills((cur) => (on ? cur.filter((x) => x !== c.id) : [...cur, c.id])); touch() }}
                       className={`rounded-full border px-3 py-1 text-xs font-semibold transition disabled:cursor-default ${
-                        on ? "border-[#0b1d3a] bg-[#0b1d3a] text-white" : "border-[#e6e8eb] text-[#374151] hover:border-[#c9a227]"
+                        on ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-[#e6e8eb] text-[#374151] hover:border-[#2563eb]"
                       }`}
                     >
                       {c.name}
@@ -579,7 +579,7 @@ export default function FacultySimulationEditor() {
                     onClick={() => void regenerate()}
                     disabled={busy !== ""}
                     title={dirty ? "Saves your changes, then makes new numbers" : "Same columns and tasks, new numbers"}
-                    className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb] disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#2563eb] transition hover:bg-[#f6f7fb] disabled:opacity-50"
                   >
                     {busy === "regenerate" ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} New numbers
                   </button>
@@ -587,7 +587,7 @@ export default function FacultySimulationEditor() {
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#2563eb] transition hover:bg-[#f6f7fb]"
                 >
                   <Upload size={15} /> {dataset.columns.length ? "Replace with CSV" : "Upload CSV"}
                 </button>
@@ -601,7 +601,7 @@ export default function FacultySimulationEditor() {
               <div className="mb-3 flex flex-wrap gap-1.5">
                 {dataset.columns.map((name, i) => (
                   <span key={name} className="rounded border border-[#e6e8eb] bg-[#f6f7fb] px-2 py-0.5 font-mono text-xs text-[#374151]">
-                    <b className="text-[#0b1d3a]">{columnLetters(i)}</b> {name}
+                    <b className="text-[#2563eb]">{columnLetters(i)}</b> {name}
                   </span>
                 ))}
                 <span className="px-1 py-0.5 text-xs text-[#6b7280]">
@@ -626,28 +626,28 @@ export default function FacultySimulationEditor() {
                   onClick={() => setIsAskingAi((open) => !open)}
                   disabled={!dataset.columns.length}
                   title={dataset.columns.length ? undefined : "Upload the data first"}
-                  className="inline-flex items-center gap-2 rounded-md bg-[#c9a227] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Sparkles size={15} /> Generate with AI
                 </button>
                 <button
                   type="button"
                   onClick={() => { setTasks((cur) => [...cur, blankTask()]); touch() }}
-                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#2563eb] transition hover:bg-[#f6f7fb]"
                 >
                   <Plus size={15} /> Add task
                 </button>
                 <button
                   type="button"
                   onClick={() => { setTasks((cur) => [...cur, blankMemo()]); touch() }}
-                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#2563eb] transition hover:bg-[#f6f7fb]"
                 >
                   <FileText size={15} /> Add memo
                 </button>
                 <button
                   type="button"
                   onClick={() => { setTasks((cur) => [...cur, blankDeck()]); touch() }}
-                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#f6f7fb]"
+                  className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-semibold text-[#2563eb] transition hover:bg-[#f6f7fb]"
                 >
                   <Presentation size={15} /> Add slides
                 </button>
@@ -656,7 +656,7 @@ export default function FacultySimulationEditor() {
           }
         >
           <p className="mb-4 rounded-md bg-[#f6f7fb] px-3 py-2 text-xs leading-5 text-[#475467]">
-            <b className="text-[#0b1d3a]">Answer formulas can use only these 25 functions:</b> {APPROVED_FUNCTIONS}.
+            <b className="text-[#2563eb]">Answer formulas can use only these 25 functions:</b> {APPROVED_FUNCTIONS}.
           </p>
           {isAskingAi && !readOnly ? (
             <div className="mb-4 rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4">
@@ -688,7 +688,7 @@ export default function FacultySimulationEditor() {
                 type="button"
                 onClick={() => void generateQuestions()}
                 disabled={busy !== ""}
-                className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#0b1d3a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-60"
+                className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-60"
               >
                 {busy === "questions" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
                 {busy === "questions" ? "Writing questions..." : "Generate questions"}
@@ -702,7 +702,7 @@ export default function FacultySimulationEditor() {
               return (
                 <li key={task.key} className="rounded-lg border border-[#e6e8eb] p-4">
                   <div className="flex items-center gap-3">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#0b1d3a] text-xs font-semibold text-white">{index + 1}</span>
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-xs font-semibold text-white">{index + 1}</span>
                     <input
                       className={`${input} max-w-xs`}
                       list="sim-stages"
@@ -738,7 +738,7 @@ export default function FacultySimulationEditor() {
                               ? "e.g. Build a short deck for the regional head presenting your analysis and recommendation."
                               : "e.g. What is the total revenue from the North region? Show it in rupees."
                         }
-                        className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none read-only:bg-[#f9fafb] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                        className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm outline-none read-only:bg-[#f9fafb] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                       />
                     </Labeled>
                     <Labeled label="Hint (shown only if the student asks)">
@@ -776,7 +776,7 @@ export default function FacultySimulationEditor() {
                           type="button"
                           onClick={() => void runTest(task)}
                           disabled={!dataset.columns.length || test === "loading"}
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#0b1d3a] px-4 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-50"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-50"
                         >
                           {test === "loading" ? <Loader2 size={15} className="animate-spin" /> : <FlaskConical size={15} />} Test
                         </button>
@@ -840,7 +840,7 @@ function MemoFields({
             value={sections.join("\n")}
             onChange={(e) => onChange({ config: { ...task.config, required_sections: e.target.value.split("\n") } })}
             placeholder={"Summary\nFindings\nRecommendation"}
-            className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-normal outline-none read-only:bg-[#f9fafb] focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+            className="w-full rounded-md border border-[#e6e8eb] px-3 py-2 text-sm font-normal outline-none read-only:bg-[#f9fafb] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </Labeled>
         <Labeled label="Minimum words">
@@ -930,7 +930,7 @@ function DeckFields({
             <button
               type="button"
               onClick={() => setPlan([...plan, { title: "", guide: "" }])}
-              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0b1d3a] hover:underline"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#2563eb] hover:underline"
             >
               <Plus size={14} /> Add slide
             </button>
@@ -1003,7 +1003,7 @@ function RubricFields({
           <button
             type="button"
             onClick={() => setCriteria([...criteria, { name: "", max: 5 }])}
-            className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0b1d3a] hover:underline"
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#2563eb] hover:underline"
           >
             <Plus size={14} /> Add criterion
           </button>
@@ -1046,7 +1046,7 @@ function IconButton({ label, onClick, disabled, danger, children }: { label: str
       aria-label={label}
       title={label}
       className={`inline-flex size-8 items-center justify-center rounded-md border border-[#e6e8eb] transition disabled:opacity-40 ${
-        danger ? "text-[#b42318] hover:border-[#b42318] hover:bg-[#fff5f5]" : "text-[#0b1d3a] hover:bg-[#f6f7fb]"
+        danger ? "text-[#b42318] hover:border-[#b42318] hover:bg-[#fff5f5]" : "text-[#2563eb] hover:bg-[#f6f7fb]"
       }`}
     >
       {children}

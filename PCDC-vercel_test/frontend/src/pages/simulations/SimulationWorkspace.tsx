@@ -322,12 +322,12 @@ export default function SimulationWorkspace() {
   if (!isWide) {
     return (
       <Centered>
-        <Monitor className="mx-auto text-[#C9A227]" size={32} aria-hidden="true" />
+        <Monitor className="mx-auto text-[#2563EB]" size={32} aria-hidden="true" />
         <h1 className="mt-3 text-lg font-semibold text-[#111827]">Please use a laptop or desktop</h1>
         <p className="mt-2 text-sm text-[#6B7280]">
           Simulations need a larger screen (at least 1024 px wide). Open this page on a computer in Chrome or Edge.
         </p>
-        <Link to="/student/simulations" className="mt-4 inline-block text-sm font-semibold text-[#92702A]">Back to My Simulations</Link>
+        <Link to="/student/simulations" className="mt-4 inline-block text-sm font-semibold text-[#1D4ED8]">Back to My Simulations</Link>
       </Centered>
     )
   }
@@ -335,7 +335,7 @@ export default function SimulationWorkspace() {
     return (
       <Centered>
         <h1 className="text-lg font-semibold text-[#111827]">{loadError}</h1>
-        <Link to="/student/simulations" className="mt-4 inline-block text-sm font-semibold text-[#92702A]">Back to My Simulations</Link>
+        <Link to="/student/simulations" className="mt-4 inline-block text-sm font-semibold text-[#1D4ED8]">Back to My Simulations</Link>
       </Centered>
     )
   }
@@ -375,7 +375,7 @@ export default function SimulationWorkspace() {
 
   return (
     <div className="flex h-screen flex-col bg-[#F6F7F9]">
-      <header className="flex items-center gap-4 bg-[#0B1D3A] px-5 py-3 text-white">
+      <header className="flex items-center gap-4 bg-[#0C1F3D] px-5 py-3 text-white">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{attempt.simulation.title}</p>
           <p className="truncate text-xs text-white/60">{attempt.simulation.role}</p>
@@ -394,7 +394,7 @@ export default function SimulationWorkspace() {
             type="button"
             onClick={() => setIsConfirmingFinish(true)}
             disabled={isFinishing}
-            className="inline-flex items-center gap-2 rounded-md bg-[#C9A227] px-3 py-1.5 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#E0B84E] disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-md bg-[#2563EB] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[#3B82F6] disabled:opacity-60"
           >
             <CheckCheck size={15} aria-hidden="true" /> {isFinishing ? "Finishing..." : "Finish"}
           </button>
@@ -502,7 +502,7 @@ export default function SimulationWorkspace() {
               {task.stage ? <p className="truncate pl-3 text-xs text-[#6B7280]">{task.stage}</p> : null}
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#EEF2F6]">
-              <div className="h-full rounded-full bg-[#C9A227]" style={{ width: `${tasks.length ? (100 * correct) / tasks.length : 0}%` }} />
+              <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${tasks.length ? (100 * correct) / tasks.length : 0}%` }} />
             </div>
             <p className="mt-1.5 text-xs text-[#6B7280]">
               {correct} correct · {filled} filled · {tasks.length - filled} remaining
@@ -520,7 +520,7 @@ export default function SimulationWorkspace() {
                         aria-expanded={isOpen}
                         className="flex w-full items-center gap-2 px-2.5 py-2 text-left text-sm font-semibold text-[#111827]"
                       >
-                        <span className={`flex size-5 items-center justify-center rounded-full text-[11px] ${section.type === task.type ? "bg-[#0B1D3A] text-white" : "bg-[#EEF2F6] text-[#475467]"}`}>
+                        <span className={`flex size-5 items-center justify-center rounded-full text-[11px] ${section.type === task.type ? "bg-[#2563EB] text-white" : "bg-[#EEF2F6] text-[#475467]"}`}>
                           {number + 1}
                         </span>
                         Section {number + 1} · {section.label}
@@ -567,7 +567,7 @@ export default function SimulationWorkspace() {
                     onClick={() => setIndex(i)}
                     aria-current={i === index ? "step" : undefined}
                     aria-label={`Task ${i + 1}${result === "correct" ? ", correct" : result === "incorrect" ? ", incorrect" : ""}`}
-                    className={`size-8 rounded-full border text-xs font-semibold transition ${tone} ${i === index ? "ring-2 ring-[#0B1D3A] ring-offset-1" : ""}`}
+                    className={`size-8 rounded-full border text-xs font-semibold transition ${tone} ${i === index ? "ring-2 ring-[#2563EB] ring-offset-1" : ""}`}
                   >
                     {i + 1}
                   </button>
@@ -584,7 +584,7 @@ export default function SimulationWorkspace() {
               </p>
               <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#111827]">{task.prompt}</p>
               {task.config.must_use_formula ? (
-                <p className="mt-2 text-xs font-medium text-[#92702A]">Answer with a formula (start with =).</p>
+                <p className="mt-2 text-xs font-medium text-[#1D4ED8]">Answer with a formula (start with =).</p>
               ) : null}
             </div>
 
@@ -639,7 +639,7 @@ export default function SimulationWorkspace() {
                                 setSlideAt((current) => ({ ...current, [task.id]: at }))
                               }}
                               className={`flex w-full gap-2 rounded-md px-3 py-2 text-left text-sm transition disabled:opacity-50 ${
-                                at === currentSlide && showDeck ? "bg-[#FFF7DF] ring-1 ring-[#C9A227]" : "bg-[#F9FAFB] hover:bg-[#F2F4F7]"
+                                at === currentSlide && showDeck ? "bg-[#DBEAFE] ring-1 ring-[#2563EB]" : "bg-[#F9FAFB] hover:bg-[#F2F4F7]"
                               }`}
                             >
                               <Icon size={15} className={`mt-0.5 shrink-0 ${ready ? "text-[#12B76A]" : "text-[#9CA3AF]"}`} aria-hidden="true" />
@@ -665,8 +665,8 @@ export default function SimulationWorkspace() {
             )}
 
             {hints[task.id] ? (
-              <p className="rounded-lg bg-[#FFF7DF] p-3 text-sm text-[#5C4613]">
-                <Lightbulb size={14} className="mr-1.5 inline text-[#C9A227]" aria-hidden="true" />
+              <p className="rounded-lg bg-[#DBEAFE] p-3 text-sm text-[#1D4ED8]">
+                <Lightbulb size={14} className="mr-1.5 inline text-[#2563EB]" aria-hidden="true" />
                 {hints[task.id]}
               </p>
             ) : null}
@@ -685,7 +685,7 @@ export default function SimulationWorkspace() {
               type="button"
               onClick={() => void showHint(task.id)}
               disabled={!task.has_hint || locked || Boolean(hints[task.id])}
-              className="inline-flex items-center justify-center gap-1 rounded-md border border-[#E6EBEB] px-3 py-2 text-sm font-semibold text-[#92702A] transition hover:bg-[#FFF7DF] disabled:opacity-40"
+              className="inline-flex items-center justify-center gap-1 rounded-md border border-[#E6EBEB] px-3 py-2 text-sm font-semibold text-[#1D4ED8] transition hover:bg-[#DBEAFE] disabled:opacity-40"
             >
               <Lightbulb size={15} aria-hidden="true" /> Hint
             </button>
@@ -693,7 +693,7 @@ export default function SimulationWorkspace() {
               type="button"
               onClick={() => setIndex((i) => Math.min(tasks.length - 1, i + 1))}
               disabled={index === tasks.length - 1}
-              className="inline-flex items-center justify-center gap-1 rounded-md bg-[#0B1D3A] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1B3452] disabled:opacity-40"
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-[#2563EB] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#3B82F6] disabled:opacity-40"
             >
               Next <ChevronRight size={16} aria-hidden="true" />
             </button>
@@ -734,7 +734,7 @@ function TaskButton({
       onClick={onClick}
       aria-current={current ? "step" : undefined}
       aria-label={`Task ${number}${state}`}
-      className={`size-8 rounded-full border text-xs font-semibold transition ${tone} ${current ? "ring-2 ring-[#0B1D3A] ring-offset-1" : ""}`}
+      className={`size-8 rounded-full border text-xs font-semibold transition ${tone} ${current ? "ring-2 ring-[#2563EB] ring-offset-1" : ""}`}
     >
       {number}
     </button>

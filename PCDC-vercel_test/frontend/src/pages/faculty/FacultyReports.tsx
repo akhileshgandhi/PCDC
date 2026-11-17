@@ -156,7 +156,7 @@ export default function FacultyReports() {
                 type="button"
                 onClick={handleExportCsv}
                 disabled={!hasData}
-                className="inline-flex h-11 items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-4 text-sm font-semibold text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-2 rounded-md border border-[#e6e8eb] bg-white px-4 text-sm font-semibold text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={16} aria-hidden="true" />
                 Export CSV
@@ -165,7 +165,7 @@ export default function FacultyReports() {
                 type="button"
                 onClick={handlePrint}
                 disabled={!hasData}
-                className="inline-flex h-11 items-center gap-2 rounded-md bg-[#0b1d3a] px-4 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-2 rounded-md bg-[#2563eb] px-4 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Printer size={16} aria-hidden="true" />
                 Print / PDF
@@ -181,7 +181,7 @@ export default function FacultyReports() {
               <select
                 value={sectionFilter}
                 onChange={(event) => setSectionFilter(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                className="h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 <option value="">All Sections</option>
                 {sections.map((s) => (
@@ -198,7 +198,7 @@ export default function FacultyReports() {
               <select
                 value={subjectFilter}
                 onChange={(event) => setSubjectFilter(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+                className="h-11 w-full rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 <option value="">All Subjects</option>
                 {subjects.map((s) => (
@@ -221,7 +221,7 @@ export default function FacultyReports() {
           <button
             type="button"
             onClick={closeCaseReport}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#0b1d3a] transition hover:text-[#c9a227] print:hidden"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#2563eb] transition hover:text-[#2563eb] print:hidden"
           >
             <ArrowLeft size={16} aria-hidden="true" />
             Back to case list
@@ -244,10 +244,10 @@ export default function FacultyReports() {
         ) : (
           <article className="rounded-lg border border-[#e6e8eb] bg-white shadow-sm print:border-0 print:shadow-none">
             <header className="border-b border-[#e6e8eb] px-6 py-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#c9a227]">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#2563eb]">
                 PCDC Case Studio · Faculty Report
               </p>
-              <h2 className="mt-1 text-xl font-bold text-[#0b1d3a]">
+              <h2 className="mt-1 text-xl font-bold text-[#2563eb]">
                 {selectedCase ? selectedCase.title : "Published Case Reports"}
               </h2>
               <p className="mt-1 text-sm text-[#6b7280]">
@@ -294,7 +294,7 @@ export default function FacultyReports() {
                     <Link
                       key="action"
                       to={`/faculty/attempts/${s.attempt_id}`}
-                      className="text-xs font-semibold text-[#0b1d3a] hover:text-[#c9a227] print:hidden"
+                      className="text-xs font-semibold text-[#2563eb] hover:text-[#2563eb] print:hidden"
                     >
                       View report
                     </Link>
@@ -320,7 +320,7 @@ export default function FacultyReports() {
                     key="action"
                     type="button"
                     onClick={() => openCaseReport(c)}
-                    className="text-xs font-semibold text-[#0b1d3a] hover:text-[#c9a227] print:hidden"
+                    className="text-xs font-semibold text-[#2563eb] hover:text-[#2563eb] print:hidden"
                   >
                     View report
                   </button>,

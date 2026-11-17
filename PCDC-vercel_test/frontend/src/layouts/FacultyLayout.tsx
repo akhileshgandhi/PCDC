@@ -19,6 +19,7 @@ import {
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getFacultyNotifications, type FacultyNotification } from "../api/faculty"
+import PageTransition from "../components/common/PageTransition"
 import { useSentBackSimulationCount } from "../hooks/useSentBackSimulationCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
@@ -203,18 +204,18 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
 
   const navLinkClass = (compact = false) =>
     ({ isActive }: { isActive: boolean }) =>
-      `flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-medium transition ${
+      `flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-medium transition ${
         compact ? "pl-11" : ""
       } ${
-        isActive ? "bg-[#c9a227] text-[#0b1d3a] shadow-md" : "text-white/85 hover:bg-[#17315c]"
+        isActive ? "bg-[#2563eb] text-white shadow-md" : "text-white/85 hover:bg-[#16305a]"
       }`
 
   return (
     <div className="min-h-screen bg-[#f6f7fb] text-[#111827]">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#0b1d3a] p-5 text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#0c1f3d] p-6 text-white lg:flex">
         <div className="border-b border-white/10 pb-6">
           <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-md bg-[#c9a227] text-[#0b1d3a]">
+            <div className="grid size-10 place-items-center rounded-lg bg-[#2563eb] text-white">
               <FolderKanban size={21} aria-hidden="true" />
             </div>
             <div>
@@ -238,7 +239,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.label)}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-semibold text-white/90 transition hover:bg-[#17315c]"
+                  className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-semibold text-white/90 transition hover:bg-[#16305a]"
                 >
                   <GroupIcon size={18} aria-hidden="true" />
                   <span className="flex-1">{group.label}</span>
@@ -281,7 +282,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-[#e6e8eb] bg-white">
+        <header className="sticky top-0 z-10 border-b border-[#e6e8eb] bg-white shadow-sm shadow-slate-900/[0.02]">
           <div className="mx-auto flex min-h-20 max-w-[1280px] items-center gap-4 px-4 py-3 sm:px-6">
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold text-[#111827] sm:text-2xl">Faculty Portal</h1>
@@ -293,7 +294,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
             {location.pathname.startsWith("/faculty/students") ? (
               <form
                 onSubmit={handleTopSearch}
-                className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex"
+                className="hidden w-full max-w-xs items-center gap-3 rounded-lg border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex"
               >
                 <button type="submit" aria-label="Search students" className="text-[#6b7280]">
                   <Search size={17} aria-hidden="true" />
@@ -312,7 +313,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
               <button
                 type="button"
                 onClick={toggleNotifications}
-                className="relative grid size-9 place-items-center rounded-md text-[#111827] transition hover:bg-[#f6f7fb]"
+                className="relative grid size-9 place-items-center rounded-lg text-[#111827] transition hover:bg-[#f6f7fb]"
                 aria-label="Notifications"
                 aria-expanded={notifOpen}
               >
@@ -324,7 +325,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
                 ) : null}
               </button>
               {notifOpen ? (
-                <div className="absolute right-0 top-11 z-20 w-80 rounded-md border border-[#e6e8eb] bg-white py-2 shadow-lg">
+                <div className="absolute right-0 top-11 z-20 w-80 rounded-xl border border-[#e6e8eb] bg-white py-2 shadow-xl shadow-slate-900/10">
                   <div className="border-b border-[#eef2f7] px-4 py-2 text-sm font-semibold text-[#111827]">
                     Notifications
                   </div>
@@ -346,8 +347,8 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-3 rounded-md border border-[#e6e8eb] bg-white px-2 py-2">
-              <div className="grid size-10 place-items-center rounded-md bg-[#0b1d3a] text-sm font-semibold text-white">
+            <div className="flex items-center gap-3 rounded-lg border border-[#e6e8eb] bg-white px-2 py-2">
+              <div className="grid size-10 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
                 {initials || <UserCircle size={24} aria-hidden="true" />}
               </div>
               <div className="hidden min-w-32 sm:block">
@@ -358,9 +359,9 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6">
+        <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-4 grid gap-2 lg:hidden">
-            <div className="flex items-center justify-between rounded-md bg-[#0b1d3a] px-4 py-3 text-white">
+            <div className="flex items-center justify-between rounded-lg bg-[#0c1f3d] px-4 py-3 text-white">
               <span className="font-semibold">Faculty Portal</span>
               <ClipboardList size={18} aria-hidden="true" />
             </div>
@@ -371,9 +372,9 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
                   to={item.to}
                   end={"end" in item ? (item as { end?: boolean }).end : undefined}
                   className={({ isActive }) =>
-                    `shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${
+                    `shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
                       isActive
-                        ? "bg-[#0b1d3a] text-white"
+                        ? "bg-[#0c1f3d] text-white"
                         : "border border-[#e6e8eb] bg-white text-[#111827]"
                     }`
                   }
@@ -383,7 +384,7 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
               ))}
             </div>
           </div>
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
     </div>

@@ -20,9 +20,9 @@ export default function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c1f3d]/50 p-4 backdrop-blur-[2px]" onClick={onCancel}>
       <div
-        className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl sm:p-6"
+        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl sm:p-6"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
@@ -31,7 +31,7 @@ export default function ConfirmDialog({
         <div className="flex items-start gap-3">
           <span
             className={`grid size-10 shrink-0 place-items-center rounded-full ${
-              danger ? "bg-[#fff5f5] text-[#b42318]" : "bg-[#eafaf5] text-[#0b6b52]"
+              danger ? "bg-[#fff5f5] text-[#b42318]" : "bg-[#eaf1fd] text-[#1d4ed8]"
             }`}
           >
             <AlertTriangle size={19} aria-hidden="true" />
@@ -55,7 +55,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             className={`rounded-md px-4 py-2 text-sm font-semibold text-white transition ${
-              danger ? "bg-[#b42318] hover:bg-[#912016]" : "bg-[#102033] hover:bg-[#1b3452]"
+              danger ? "bg-[#b42318] hover:bg-[#912016]" : "bg-[#2563eb] hover:bg-[#3b82f6]"
             }`}
           >
             {confirmLabel}

@@ -23,17 +23,21 @@ from services.student.router import student_router
 from services.coach.router import coach_router
 from services.jobsim.router import jobsim_router
 from services.jobsim.worker import start_scorer, start_sweeper
+from services.simulation.worker import start_sweeper as start_case_sweeper
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     stop_sweeper = start_sweeper()
     stop_scorer = start_scorer()
+    stop_case_sweeper = start_case_sweeper()
     yield
     if stop_sweeper:
         stop_sweeper.set()
     if stop_scorer:
         stop_scorer.set()
+    if stop_case_sweeper:
+        stop_case_sweeper.set()
 
 
 app = FastAPI(lifespan=lifespan)

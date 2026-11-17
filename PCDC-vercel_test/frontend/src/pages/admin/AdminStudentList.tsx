@@ -1,7 +1,7 @@
 import { RefreshCw, Search } from "lucide-react"
 import type { FormEvent } from "react"
 import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 
 import {
   getAdminAllBatches,
@@ -17,7 +17,7 @@ import {
   type AdminUser,
 } from "../../api/admin"
 
-const pageSize = 25
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
 interface Filters {
   institution: string
@@ -27,6 +27,7 @@ interface Filters {
   semester: string
   section: string
   status: string
+  withoutSection: boolean
 }
 
 const emptyFilters: Filters = {
@@ -37,6 +38,7 @@ const emptyFilters: Filters = {
   semester: "",
   section: "",
   status: "",
+  withoutSection: false,
 }
 
 /**
@@ -56,11 +58,18 @@ export default function AdminStudentList({
   const [courses, setCourses] = useState<AdminCourse[]>([])
   const [batches, setBatches] = useState<AdminBatchRow[]>([])
 
-  const [filters, setFilters] = useState<Filters>(emptyFilters)
+  // The dashboard's "Students Without a Section" tile links here with
+  // ?section=none so it lands pre-filtered instead of showing every student.
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState<Filters>(() => ({
+    ...emptyFilters,
+    withoutSection: searchParams.get("section") === "none",
+  }))
   const [search, setSearch] = useState("")
   const [students, setStudents] = useState<AdminUser[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
@@ -126,6 +135,7 @@ export default function AdminStudentList({
         batch_id: Number(filters.batch) || undefined,
         semester: Number(filters.semester) || undefined,
         section_id: Number(filters.section) || undefined,
+        without_section: filters.withoutSection || undefined,
         page: nextPage,
         page_size: pageSize,
       })
@@ -143,17 +153,33 @@ export default function AdminStudentList({
   useEffect(() => {
     loadStudents(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, refreshKey])
+  }, [filters, refreshKey, pageSize])
+
+  function changePageSize(value: number) {
+    setPageSize(value)
+  }
 
   // Changing a filter clears the ones to its right, which may no longer apply.
-  const order: Array<keyof Filters> = ["institution", "department", "course", "batch", "semester", "section"]
-  function setFilter(key: keyof Filters, value: string) {
+  // Typed to just the string-valued keys (not all of keyof Filters, which also
+  // includes the boolean withoutSection) — indexing next[k] with a key union
+  // that spans both a string and a boolean property makes `next[k] = ""`
+  // untypeable (TS narrows the write target to the intersection of their
+  // types, i.e. never).
+  type StringFilterKey = "institution" | "department" | "course" | "batch" | "semester" | "section" | "status"
+  const order: Exclude<StringFilterKey, "status">[] = ["institution", "department", "course", "batch", "semester", "section"]
+  function setFilter(key: StringFilterKey, value: string) {
     setFilters((current) => {
       const next = { ...current, [key]: value }
-      const index = order.indexOf(key)
+      // A specific section and "without a section" are mutually exclusive.
+      if (key === "section" && value) next.withoutSection = false
+      const index = (order as readonly string[]).indexOf(key)
       if (index >= 0) order.slice(index + 1).forEach((k) => (next[k] = ""))
       return next
     })
+  }
+
+  function setWithoutSection(value: boolean) {
+    setFilters((current) => ({ ...current, withoutSection: value, section: value ? "" : current.section }))
   }
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
@@ -173,7 +199,7 @@ export default function AdminStudentList({
   const hasFilters = search !== "" || Object.values(filters).some(Boolean)
 
   const select =
-    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb] disabled:text-[#98a2b3]"
+    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:bg-[#f9fafb] disabled:text-[#98a2b3]"
   const gridClass = "lg:grid-cols-[1.5fr_1fr_1.4fr_1fr_0.8fr_0.7fr]"
 
   return (
@@ -191,7 +217,7 @@ export default function AdminStudentList({
       </div>
 
       <form onSubmit={handleSearch} className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="flex h-11 items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-3 text-[#667085] transition focus-within:border-[#34c6a3] focus-within:ring-2 focus-within:ring-[#34c6a3]/20 sm:col-span-2">
+        <label className="flex h-11 items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-3 text-[#667085] transition focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20 sm:col-span-2">
           <Search size={17} aria-hidden="true" />
           <span className="sr-only">Search students</span>
           <input
@@ -267,6 +293,7 @@ export default function AdminStudentList({
           aria-label="Section"
           value={filters.section}
           onChange={(e) => setFilter("section", e.target.value)}
+          disabled={filters.withoutSection}
         >
           <option value="">All sections</option>
           {sectionOptions.map((s) => (
@@ -275,6 +302,14 @@ export default function AdminStudentList({
             </option>
           ))}
         </select>
+        <label className="flex h-11 items-center gap-2 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium text-[#17202a]">
+          <input
+            type="checkbox"
+            checked={filters.withoutSection}
+            onChange={(e) => setWithoutSection(e.target.checked)}
+          />
+          Without a section only
+        </label>
         <select
           className={select}
           aria-label="Status"
@@ -288,7 +323,7 @@ export default function AdminStudentList({
         <div className="flex gap-2">
           <button
             type="submit"
-            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-[#102033] px-4 text-sm font-semibold text-white transition hover:bg-[#1b3452]"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
           >
             <RefreshCw size={16} aria-hidden="true" />
             Apply
@@ -334,7 +369,7 @@ export default function AdminStudentList({
               <div className="min-w-0">
                 <Link
                   to={`/admin/user/${s.id}`}
-                  className="block truncate font-semibold text-[#17202a] transition hover:text-[#176b5a]"
+                  className="block truncate font-semibold text-[#17202a] transition hover:text-[#1d4ed8]"
                 >
                   {s.name}
                 </Link>
@@ -371,7 +406,20 @@ export default function AdminStudentList({
         <span>
           Showing {showingStart}-{showingEnd} of {total}
         </span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-semibold text-[#667085]">
+            Rows per page
+            <select
+              value={pageSize}
+              onChange={(e) => changePageSize(Number(e.target.value))}
+              className="h-9 rounded-md border border-[#dde4ec] bg-white px-2 text-sm font-medium text-[#17202a] outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-2">
           <button
             type="button"
             disabled={page <= 1}
@@ -388,6 +436,7 @@ export default function AdminStudentList({
           >
             Next
           </button>
+          </div>
         </div>
       </div>
     </section>

@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2, X } from "lucide-react"
+import { Layers, Pencil, Plus, Trash2, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 
@@ -40,7 +40,9 @@ import {
   type AdminSubject,
 } from "../../api/admin"
 import ConfirmDialog from "../../components/ConfirmDialog"
+import { ListToolbar, Pager } from "../../components/common/ListControls"
 import { refreshAdminScope, useAdminScope } from "../../hooks/useAdminScope"
+import { useListControls } from "../../hooks/useListControls"
 import AdminLayout from "../../layouts/AdminLayout"
 
 const TABS = [
@@ -139,7 +141,7 @@ export default function AdminAcademicSetup() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-[#102033] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b3452]"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
             >
               <Plus size={16} aria-hidden="true" />
               {ADD_LABEL[activeTab]}
@@ -158,10 +160,10 @@ export default function AdminAcademicSetup() {
                 key={t.key}
                 type="button"
                 onClick={() => navigate(`/admin/academic/${t.key}`)}
-                className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition ${
+                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
                   isActive
-                    ? "border-[#102033] bg-[#102033] text-white"
-                    : "border-[#dde4ec] bg-white text-[#17202a] hover:border-[#102033]"
+                    ? "border-[#2563eb] bg-[#2563eb] text-white"
+                    : "border-[#dde4ec] bg-white text-[#17202a] hover:border-[#2563eb]"
                 }`}
               >
                 {t.label}
@@ -185,7 +187,7 @@ export default function AdminAcademicSetup() {
             <select
               value={institutionFilter}
               onChange={(e) => setInstitutionFilter(e.target.value)}
-              className="h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             >
               <option value="">All institutes</option>
               {institutions.map((i) => (
@@ -234,7 +236,7 @@ export default function AdminAcademicSetup() {
             <SubjectsTab
               onChanged={handleChanged}
               institutionFilter={institutionFilter}
-              deptToInstitution={deptToInstitution}
+              courseToInstitution={courseToInstitution}
             />
           ) : null}
         </div>
@@ -344,7 +346,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 rounded-md border border-[#dde4ec] px-4 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3]"
+        className="mt-3 rounded-md border border-[#dde4ec] px-4 py-2 text-sm font-semibold text-[#17202a] transition hover:border-[#2563eb]"
       >
         Retry
       </button>
@@ -369,23 +371,28 @@ function Drawer({
     setShown(true)
   }, [])
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-[#102033]/45" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-[#0c1f3d]/50 backdrop-blur-[2px]">
       <div
-        className={`flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-200 ${
+        className={`flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl bg-white shadow-2xl transition-transform duration-300 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#eef2f7] px-6 py-5">
-          <div>
-            <h2 className="text-lg font-semibold text-[#17202a]">{title}</h2>
-            {subtitle ? <p className="mt-1 text-sm leading-5 text-[#667085]">{subtitle}</p> : null}
+        <div className="flex items-start justify-between gap-4 rounded-tl-2xl border-b border-[#eef2f7] bg-gradient-to-r from-[#eff6ff] to-white px-6 py-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+              <Layers size={19} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-lg font-semibold text-[#17202a]">{title}</h2>
+              {subtitle ? <p className="mt-1 text-sm leading-5 text-[#667085]">{subtitle}</p> : null}
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="shrink-0 text-[#667085] transition hover:text-[#17202a]"
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-[#667085] transition hover:bg-[#eef2f7] hover:text-[#17202a]"
           >
             <X size={20} aria-hidden="true" />
           </button>
@@ -422,7 +429,7 @@ function DrawerSubmit({
       type="button"
       onClick={onClick}
       disabled={saving}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#102033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-60"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6] disabled:opacity-60"
     >
       {saving ? "Saving…" : (<>{icon}{label}</>)}
     </button>
@@ -430,7 +437,7 @@ function DrawerSubmit({
 }
 
 const fieldClass =
-  "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+  "h-11 w-full rounded-lg border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
 const labelClass = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
 
 /* ------------------------------- Institutions ------------------------------- */
@@ -464,6 +471,11 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
     onChanged()
   }
 
+  const list = useListControls(
+    items,
+    (inst, q) => inst.name.toLowerCase().includes(q) || inst.code.toLowerCase().includes(q),
+  )
+
   return (
     <Card title="Institutions" description="The colleges under the trust. Programs belong to an institution.">
       {loading ? (
@@ -479,6 +491,17 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
           }
         />
       ) : (
+        <>
+          <ListToolbar
+            query={list.query}
+            onQueryChange={list.setQuery}
+            pageSize={list.pageSize}
+            onPageSizeChange={list.setPageSize}
+            placeholder="Search institutions..."
+          />
+          {list.paged.length === 0 ? (
+            <Empty text="No institutions match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
@@ -492,7 +515,7 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {items.map((inst) => (
+              {list.paged.map((inst) => (
                 <tr key={inst.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{inst.name}</td>
                   <td className="px-5 py-4">
@@ -519,7 +542,10 @@ function InstitutionsTab({ onChanged }: { onChanged: () => void }) {
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {editing ? (
         <InstitutionForm
@@ -663,6 +689,11 @@ function DepartmentsTab({
     ? items.filter((d) => String(d.institution_id) === institutionFilter)
     : items
 
+  const list = useListControls(
+    visible,
+    (dep, q) => dep.name.toLowerCase().includes(q) || dep.code.toLowerCase().includes(q),
+  )
+
   return (
     <Card title="Programs" description="The top level of the academic structure. Every specialization belongs to one.">
       {loading ? (
@@ -672,6 +703,11 @@ function DepartmentsTab({
       ) : visible.length === 0 ? (
         <Empty text={institutionFilter ? "No programs for this institute." : "No programs yet. Add one to start organising specializations."} />
       ) : (
+        <>
+          <ListToolbar query={list.query} onQueryChange={list.setQuery} pageSize={list.pageSize} onPageSizeChange={list.setPageSize} placeholder="Search programs..." />
+          {list.paged.length === 0 ? (
+            <Empty text="No programs match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
@@ -685,7 +721,7 @@ function DepartmentsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {visible.map((dep) => (
+              {list.paged.map((dep) => (
                 <tr key={dep.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{dep.name}</td>
                   <td className="px-5 py-4">
@@ -706,7 +742,10 @@ function DepartmentsTab({
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {editing ? (
         <DepartmentForm
@@ -768,6 +807,7 @@ function DepartmentForm({
       if (initial) {
         await updateAdminDepartment(initial.id, {
           name: name.trim(),
+          code: code.trim().toUpperCase(),
           status: status as "active" | "inactive",
           institution_id: Number(institutionId),
         })
@@ -813,7 +853,7 @@ function DepartmentForm({
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="EXEC"
-            disabled={Boolean(initial)}
+            maxLength={50}
           />
           <span className="text-xs font-normal text-[#667085]">Short, unique. e.g. EXEC</span>
         </label>
@@ -843,11 +883,11 @@ function DepartmentForm({
 function SubjectsTab({
   onChanged,
   institutionFilter,
-  deptToInstitution,
+  courseToInstitution,
 }: {
   onChanged: () => void
   institutionFilter: string
-  deptToInstitution: Record<number, number>
+  courseToInstitution: Record<number, number>
 }) {
   const [items, setItems] = useState<AdminSubject[]>([])
   const [loading, setLoading] = useState(true)
@@ -855,9 +895,12 @@ function SubjectsTab({
   const [editing, setEditing] = useState<AdminSubject | null>(null)
   const [deleting, setDeleting] = useState<AdminSubject | null>(null)
 
+  // Subjects are defined per specialization (course_id), not per program —
+  // department_id on the row is never set by the Add/Edit form, so filtering
+  // on it (as Specializations/Programs do) always came up empty.
   const visible = institutionFilter
     ? items.filter(
-        (s) => s.department_id != null && String(deptToInstitution[s.department_id]) === institutionFilter,
+        (s) => s.course_id != null && String(courseToInstitution[s.course_id]) === institutionFilter,
       )
     : items
 
@@ -881,6 +924,14 @@ function SubjectsTab({
     onChanged()
   }
 
+  const list = useListControls(
+    visible,
+    (subject, q) =>
+      subject.name.toLowerCase().includes(q) ||
+      (subject.code ?? "").toLowerCase().includes(q) ||
+      (subject.course_name ?? "").toLowerCase().includes(q),
+  )
+
   return (
     <Card title="Subjects" description="Defined per specialization and semester, so the same name can exist in different specializations.">
       {loading ? (
@@ -890,6 +941,11 @@ function SubjectsTab({
       ) : visible.length === 0 ? (
         <Empty text={institutionFilter ? "No subjects for this institute." : "No subjects yet. Add one to build the catalog."} />
       ) : (
+        <>
+          <ListToolbar query={list.query} onQueryChange={list.setQuery} pageSize={list.pageSize} onPageSizeChange={list.setPageSize} placeholder="Search subjects..." />
+          {list.paged.length === 0 ? (
+            <Empty text="No subjects match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
@@ -903,12 +959,12 @@ function SubjectsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {visible.map((subject) => (
+              {list.paged.map((subject) => (
                 <tr key={subject.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{subject.name}</td>
                   <td className="px-5 py-4 text-[#475467]">{subject.course_name ?? "—"}</td>
                   <td className="px-5 py-4 text-[#475467]">{subject.semester_name ?? "—"}</td>
-                  <td className="px-5 py-4 text-[#0f766e]">{subject.code ?? "—"}</td>
+                  <td className="px-5 py-4 text-[#1d4ed8]">{subject.code ?? "—"}</td>
                   <td className="px-5 py-4"><StatusBadge status={subject.status} /></td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-1.5">
@@ -920,7 +976,10 @@ function SubjectsTab({
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {editing ? (
         <SubjectForm
@@ -1104,6 +1163,11 @@ function CoursesTab({
     onChanged()
   }
 
+  const list = useListControls(
+    visible,
+    (course, q) => course.name.toLowerCase().includes(q) || course.code.toLowerCase().includes(q),
+  )
+
   return (
     <Card title="Specializations" description="Specializations within a program. Manage batches, semesters and sections from a specialization.">
       {loading ? (
@@ -1113,6 +1177,11 @@ function CoursesTab({
       ) : visible.length === 0 ? (
         <Empty text={institutionFilter ? "No specializations for this institute." : "No specializations yet."} />
       ) : (
+        <>
+          <ListToolbar query={list.query} onQueryChange={list.setQuery} pageSize={list.pageSize} onPageSizeChange={list.setPageSize} placeholder="Search specializations..." />
+          {list.paged.length === 0 ? (
+            <Empty text="No specializations match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
@@ -1127,7 +1196,7 @@ function CoursesTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {visible.map((course) => (
+              {list.paged.map((course) => (
                 <tr key={course.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{course.name}</td>
                   <td className="px-5 py-4">
@@ -1139,10 +1208,7 @@ function CoursesTab({
                   <td className="px-5 py-4"><StatusBadge status={course.status} /></td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-3">
-                      <Link to="/admin/courses" className="text-sm font-semibold text-[#0b5fff] hover:underline">
-                        Manage
-                      </Link>
-                      <IconButton label="Edit code" onClick={() => setEditingCode(course)}><Pencil size={15} /></IconButton>
+                      <IconButton label="Edit specialization" onClick={() => setEditingCode(course)}><Pencil size={15} /></IconButton>
                       <IconButton label="Delete" danger onClick={() => setDeleting(course)}><Trash2 size={15} /></IconButton>
                     </div>
                   </td>
@@ -1150,10 +1216,13 @@ function CoursesTab({
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {editingCode ? (
-        <CourseCodeForm
+        <CourseEditForm
           course={editingCode}
           onClose={() => setEditingCode(null)}
           onSaved={() => {
@@ -1174,9 +1243,10 @@ function CoursesTab({
   )
 }
 
-// Edit only the code of an existing specialization. The server allows admins
-// only, and an institute admin only for specializations of their institutes.
-function CourseCodeForm({
+// Edit an existing specialization's name, code, program, status, semesters,
+// and duration. The server allows admins only, and an institute admin only
+// for specializations of their institutes.
+function CourseEditForm({
   course,
   onClose,
   onSaved,
@@ -1185,35 +1255,96 @@ function CourseCodeForm({
   onClose: () => void
   onSaved: () => void
 }) {
+  const [name, setName] = useState(course.name)
   const [code, setCode] = useState(course.code)
+  const [departmentId, setDepartmentId] = useState(course.department_id ? String(course.department_id) : "")
+  const [departments, setDepartments] = useState<AdminDepartment[]>([])
+  const [status, setStatus] = useState<"active" | "inactive">(course.status)
+  const [totalSemesters, setTotalSemesters] = useState(String(course.total_semesters))
+  const [durationYears, setDurationYears] = useState(String(course.duration_years))
+  const [semestersTouched, setSemestersTouched] = useState(false)
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
+  }, [])
+
+  function handleSemestersChange(value: string) {
+    setSemestersTouched(true)
+    setTotalSemesters(value)
+  }
+
+  // Same 2-semesters-per-year convention as creating a specialization — keep
+  // semesters in sync with duration until semesters is edited directly.
+  function handleDurationChange(value: string) {
+    setDurationYears(value)
+    const years = Number(value)
+    if (years > 0 && !semestersTouched) setTotalSemesters(String(years * 2))
+  }
+
+  const expectedSemesters = Number(durationYears) > 0 ? Number(durationYears) * 2 : null
+  const semestersMismatch =
+    expectedSemesters !== null && Number(totalSemesters) !== expectedSemesters
+
   async function submit() {
-    const next = code.trim().toUpperCase()
-    if (!next) {
-      setError("Code is required.")
+    const nextName = name.trim()
+    const nextCode = code.trim().toUpperCase()
+    if (!nextName || !nextCode) {
+      setError("Specialization name and code are required.")
       return
     }
-    if (next === course.code) {
-      onClose()
+    if (!totalSemesters || Number(totalSemesters) < 1) {
+      setError("Total semesters must be at least 1.")
+      return
+    }
+    if (!durationYears || Number(durationYears) < 1) {
+      setError("Duration must be at least 1 year.")
+      return
+    }
+    if (semestersMismatch) {
+      setError(
+        `${durationYears} year(s) should have ${expectedSemesters} semesters (2 per year), not ${totalSemesters}.`,
+      )
       return
     }
     setSaving(true)
     setError("")
     try {
-      await updateAdminCourse(course.id, { code: next })
+      await updateAdminCourse(course.id, {
+        name: nextName,
+        code: nextCode,
+        status,
+        department_id: departmentId ? Number(departmentId) : undefined,
+        total_semesters: Number(totalSemesters),
+        duration_years: Number(durationYears),
+      })
       onSaved()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Could not update the code.")
+      setError(err?.response?.data?.detail || "Could not update the specialization.")
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Drawer title="Edit specialization code" subtitle={`${course.name}${course.department_name ? ` · ${course.department_name}` : ""}`} onClose={onClose}>
+    <Drawer title="Edit specialization" subtitle={course.name} onClose={onClose}>
       <div className="grid gap-4">
+        <label className={labelClass}>
+          Program
+          <select className={fieldClass} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+            <option value="">No program</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}{d.institution_name ? ` — ${d.institution_name}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={labelClass}>
+          <ReqLabel>Specialization name</ReqLabel>
+          <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
         <label className={labelClass}>
           <ReqLabel>Code</ReqLabel>
           <input
@@ -1225,8 +1356,41 @@ function CourseCodeForm({
           />
           <span className="text-xs font-normal text-[#667085]">Short and unique across all specializations. Up to 20 characters.</span>
         </label>
+        <label className={labelClass}>
+          Status
+          <select className={fieldClass} value={status} onChange={(e) => setStatus(e.target.value as "active" | "inactive")}>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <label className={labelClass}>
+            <ReqLabel>Total Semesters</ReqLabel>
+            <input
+              type="number"
+              min={1}
+              className={fieldClass}
+              value={totalSemesters}
+              onChange={(e) => handleSemestersChange(e.target.value)}
+            />
+          </label>
+          <label className={labelClass}>
+            <ReqLabel>Duration (years)</ReqLabel>
+            <input
+              type="number"
+              min={1}
+              className={fieldClass}
+              value={durationYears}
+              onChange={(e) => handleDurationChange(e.target.value)}
+            />
+          </label>
+        </div>
+        <span className="-mt-2 text-xs font-normal text-[#667085]">
+          2 semesters per year. Lowering this is blocked if a semester being removed already has
+          class sections on it.
+        </span>
         {error ? <p className="rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p> : null}
-        <DrawerSubmit label="Save code" icon={<Pencil size={16} aria-hidden="true" />} saving={saving} onClick={submit} />
+        <DrawerSubmit label="Save changes" icon={<Pencil size={16} aria-hidden="true" />} saving={saving} onClick={submit} />
       </div>
     </Drawer>
   )
@@ -1398,9 +1562,18 @@ function BatchesTab({
     setDeleting(null)
     onChanged()
   }
+  const list = useListControls(
+    visible,
+    (b, q) => b.name.toLowerCase().includes(q) || b.course_name.toLowerCase().includes(q),
+  )
   return (
     <Card title="Batches" description="Student cohorts within a specialization. Add batches from a specialization's page.">
       {loading ? <Loading /> : loadError ? <ErrorState onRetry={load} /> : visible.length === 0 ? <Empty text={institutionFilter ? "No batches for this institute." : "No batches yet."} /> : (
+        <>
+          <ListToolbar query={list.query} onQueryChange={list.setQuery} pageSize={list.pageSize} onPageSizeChange={list.setPageSize} placeholder="Search batches..." />
+          {list.paged.length === 0 ? (
+            <Empty text="No batches match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
@@ -1414,7 +1587,7 @@ function BatchesTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {visible.map((b) => (
+              {list.paged.map((b) => (
                 <tr key={b.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{b.name}</td>
                   <td className="px-5 py-4 text-[#475467]">{b.course_name}</td>
@@ -1431,7 +1604,10 @@ function BatchesTab({
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {editing ? (
         <EditBatchDialog
@@ -1673,12 +1849,21 @@ function SemestersTab({
     setDeleting(null)
     onChanged()
   }
+  const list = useListControls(
+    visible,
+    (s, q) => s.name.toLowerCase().includes(q) || s.course_name.toLowerCase().includes(q),
+  )
   return (
     <Card
       title="Semesters"
       description="Created automatically with each specialization. Sections and subjects both hang off a semester."
     >
       {loading ? <Loading /> : loadError ? <ErrorState onRetry={load} /> : visible.length === 0 ? <Empty text={institutionFilter ? "No semesters for this institute." : "No semesters yet."} /> : (
+        <>
+          <ListToolbar query={list.query} onQueryChange={list.setQuery} pageSize={list.pageSize} onPageSizeChange={list.setPageSize} placeholder="Search semesters..." />
+          {list.paged.length === 0 ? (
+            <Empty text="No semesters match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
@@ -1692,10 +1877,10 @@ function SemestersTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {visible.map((s) => (
+              {list.paged.map((s) => (
                 <tr key={s.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{s.name}</td>
-                  <td className="px-5 py-4 font-medium text-[#0f766e]">
+                  <td className="px-5 py-4 font-medium text-[#1d4ed8]">
                     {s.course_name} ({s.course_code})
                   </td>
                   <td className="px-5 py-4 text-[#475467]">{s.section_count}</td>
@@ -1710,7 +1895,10 @@ function SemestersTab({
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {deleting ? (
         <ConfirmDialog
@@ -1757,9 +1945,18 @@ function SectionsTab({
     setDeleting(null)
     onChanged()
   }
+  const list = useListControls(
+    visible,
+    (s, q) => s.name.toLowerCase().includes(q) || s.course_name.toLowerCase().includes(q) || s.batch_name.toLowerCase().includes(q),
+  )
   return (
     <Card title="Sections" description="Class sections. Assign faculty and enroll students from the Sections manager.">
       {loading ? <Loading /> : loadError ? <ErrorState onRetry={load} /> : visible.length === 0 ? <Empty text={institutionFilter ? "No sections for this institute." : "No sections yet."} /> : (
+        <>
+          <ListToolbar query={list.query} onQueryChange={list.setQuery} pageSize={list.pageSize} onPageSizeChange={list.setPageSize} placeholder="Search sections..." />
+          {list.paged.length === 0 ? (
+            <Empty text="No sections match that search." />
+          ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
@@ -1773,16 +1970,19 @@ function SectionsTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {visible.map((s) => (
+              {list.paged.map((s) => (
                 <tr key={s.id}>
                   <td className="px-5 py-4 font-semibold text-[#17202a]">{s.name}</td>
-                  <td className="px-5 py-4 text-[#0f766e]">{s.course_name}</td>
+                  <td className="px-5 py-4 text-[#1d4ed8]">{s.course_name}</td>
                   <td className="px-5 py-4 text-[#475467]">{s.semester_name}</td>
                   <td className="px-5 py-4 text-[#475467]">{s.batch_name}</td>
                   <td className="px-5 py-4"><StatusBadge status={s.status} /></td>
                   <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-3">
-                      <Link to="/admin/sections" className="text-sm font-semibold text-[#0b5fff] hover:underline">
+                      <Link
+                        to={`/admin/sections?courseId=${s.course_id}&batchId=${s.batch_id}`}
+                        className="text-sm font-semibold text-[#0b5fff] hover:underline"
+                      >
                         Manage
                       </Link>
                       <IconButton label="Delete" danger onClick={() => setDeleting(s)}><Trash2 size={15} /></IconButton>
@@ -1792,7 +1992,10 @@ function SectionsTab({
               ))}
             </tbody>
           </table>
+          <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
         </div>
+          )}
+        </>
       )}
       {deleting ? (
         <ConfirmDialog

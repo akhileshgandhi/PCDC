@@ -108,7 +108,7 @@ export default function MySimulations() {
                   ))}
                 </div>
               </div>
-              <label className="flex h-11 w-full items-center gap-3 rounded-lg border border-[#E6EBEB] bg-white px-3 text-[#6B7280] transition focus-within:border-[#C9A227] focus-within:ring-2 focus-within:ring-[#C9A227]/20 xl:max-w-xs">
+              <label className="flex h-11 w-full items-center gap-3 rounded-lg border border-[#E6EBEB] bg-white px-3 text-[#6B7280] transition focus-within:border-[#2563EB] focus-within:ring-2 focus-within:ring-[#2563EB]/20 xl:max-w-xs">
                 <Search size={17} aria-hidden="true" />
                 <span className="sr-only">Search simulations</span>
                 <input
@@ -133,7 +133,7 @@ export default function MySimulations() {
           </section>
         ) : groups.length === 0 ? (
           <section className="rounded-xl border border-dashed border-[#E6EBEB] bg-white px-5 py-16 text-center shadow-sm">
-            <BriefcaseBusiness className="mx-auto text-[#C9A227]" size={28} aria-hidden="true" />
+            <BriefcaseBusiness className="mx-auto text-[#2563EB]" size={28} aria-hidden="true" />
             <h2 className="mt-3 text-lg font-semibold text-[#111827]">
               {items.length ? "No simulations match your search." : "No simulations assigned yet."}
             </h2>
@@ -175,13 +175,13 @@ function SimulationCard({ sim }: { sim: AssignedSimulation }) {
         ? `/student/simulations/${sim.id}`
         : `/student/simulations/${sim.id}/results`
   return (
-    <article className="flex flex-col rounded-lg border border-[#E6EBEB] bg-white transition hover:border-[#C9A227] hover:shadow-sm">
-      <div className="rounded-t-lg bg-[#0B1D3A] px-4 py-4 text-white">
+    <article className="flex flex-col rounded-lg border border-[#E6EBEB] bg-white transition hover:border-[#2563EB] hover:shadow-sm">
+      <div className="rounded-t-lg bg-[#0C1F3D] px-4 py-4 text-white">
         <div className="flex items-center justify-between gap-2">
           <span className="rounded bg-white/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
             {sim.level || "Simulation"}
           </span>
-          <Table2 size={18} className="text-[#C9A227]" aria-hidden="true" />
+          <Table2 size={18} className="text-[#2563EB]" aria-hidden="true" />
         </div>
         <h3 className="mt-3 text-lg font-semibold leading-snug [text-wrap:balance]">{sim.title}</h3>
       </div>
@@ -204,12 +204,12 @@ function SimulationCard({ sim }: { sim: AssignedSimulation }) {
             <span className="text-[#6B7280]">{sim.progress_pct}%</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-[#EEF2F6]" role="progressbar" aria-valuenow={sim.progress_pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${sim.title} progress`}>
-            <div className="h-full rounded-full bg-[#C9A227]" style={{ width: `${sim.progress_pct}%` }} />
+            <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${sim.progress_pct}%` }} />
           </div>
         </div>
         <Link
           to={target}
-          className="inline-flex items-center justify-center rounded-lg bg-[#0B1D3A] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1B3452]"
+          className="inline-flex items-center justify-center rounded-lg bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3B82F6]"
         >
           {actionText(sim.status)}
         </Link>
@@ -226,8 +226,8 @@ function RoleChip({ label, count, active, onClick }: { label: string; count: num
       aria-pressed={active}
       className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold transition ${
         active
-          ? "border-[#0B1D3A] bg-[#0B1D3A] text-white"
-          : "border-[#E6EBEB] bg-white text-[#374151] hover:border-[#C9A227]"
+          ? "border-[#2563EB] bg-[#2563EB] text-white"
+          : "border-[#E6EBEB] bg-white text-[#374151] hover:border-[#2563EB]"
       }`}
     >
       {label} <span className={active ? "text-white/70" : "text-[#9CA3AF]"}>{count}</span>
@@ -239,7 +239,7 @@ function StatPill({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-full border border-[#E6EBEB] bg-[#F6F7F9] px-4 py-2 text-sm">
       <span className="font-semibold text-[#111827]">{label}:</span>{" "}
-      <span className="font-semibold text-[#0B1D3A]">{value}</span>
+      <span className="font-semibold text-[#0C1F3D]">{value}</span>
     </div>
   )
 }

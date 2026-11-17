@@ -54,7 +54,7 @@ export default function SimulationDetail() {
         ) : (
           <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
             <div className="min-w-0 space-y-5">
-              <section className="rounded-xl bg-[#0B1D3A] p-6 text-white shadow-sm">
+              <section className="rounded-xl bg-[#0C1F3D] p-6 text-white shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   {detail.level ? (
                     <span className="rounded bg-white/15 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide">{detail.level}</span>
@@ -73,7 +73,7 @@ export default function SimulationDetail() {
                 {detail.skills.length ? (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {detail.skills.map((skill) => (
-                      <span key={skill} className="rounded-full bg-[#FFF7DF] px-3 py-1 text-xs font-semibold text-[#92702A]">{skill}</span>
+                      <span key={skill} className="rounded-full bg-[#DBEAFE] px-3 py-1 text-xs font-semibold text-[#1D4ED8]">{skill}</span>
                     ))}
                   </div>
                 ) : null}
@@ -84,7 +84,7 @@ export default function SimulationDetail() {
                 <ol className="mt-4 space-y-4">
                   {detail.stages.map((stage, index) => (
                     <li key={stage.name} className="flex gap-4">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#0B1D3A] text-sm font-semibold text-white">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#0C1F3D] text-sm font-semibold text-white">
                         {index + 1}
                       </span>
                       <div>
@@ -136,7 +136,7 @@ export default function SimulationDetail() {
                       <span>{detail.progress_pct}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-[#EEF2F6]">
-                      <div className="h-full rounded-full bg-[#C9A227]" style={{ width: `${detail.progress_pct}%` }} />
+                      <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${detail.progress_pct}%` }} />
                     </div>
                   </div>
                 ) : null}
@@ -144,7 +144,7 @@ export default function SimulationDetail() {
                   type="button"
                   disabled={detail.task_count === 0}
                   onClick={() => navigate(`/student/simulations/${detail.id}/${isFinished ? "results" : "workspace"}`)}
-                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#C9A227] px-4 py-3 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#E0B84E] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#3B82F6] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {actionText(detail.status)} <ArrowRight size={16} aria-hidden="true" />
                 </button>
@@ -176,7 +176,7 @@ export default function SimulationDetail() {
 function DetailRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="mt-0.5 text-[#C9A227]" aria-hidden="true">{icon}</span>
+      <span className="mt-0.5 text-[#2563EB]" aria-hidden="true">{icon}</span>
       <dt className="w-20 shrink-0 text-[#6B7280]">{label}</dt>
       <dd className="min-w-0 font-semibold text-[#111827]">{value}</dd>
     </div>

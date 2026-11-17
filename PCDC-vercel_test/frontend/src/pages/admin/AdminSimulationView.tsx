@@ -90,7 +90,7 @@ export default function AdminSimulationView() {
               {sim.tasks.map((task, index) => (
                 <div key={task.id ?? index} className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[#c9a227]">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#1d4ed8]">
                       Task {index + 1} · {task.type}
                       {task.stage ? ` · ${task.stage}` : ""}
                     </span>

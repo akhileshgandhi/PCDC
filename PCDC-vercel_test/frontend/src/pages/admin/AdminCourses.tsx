@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import type { ChangeEvent, FormEvent, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 
 import {
   advanceBatchSemester,
@@ -43,6 +44,7 @@ import ConfirmDialog from "../../components/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 
 export default function AdminCourses() {
+  const [searchParams] = useSearchParams()
   const [courses, setCourses] = useState<AdminCourse[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
@@ -50,7 +52,13 @@ export default function AdminCourses() {
   const [showAddCourse, setShowAddCourse] = useState(false)
   const [editingCourse, setEditingCourse] = useState<AdminCourse | null>(null)
   const [deletingCourse, setDeletingCourse] = useState<AdminCourse | null>(null)
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
+  // Arriving via a "Manage" link from elsewhere (e.g. Academic Setup) with
+  // ?courseId=<id> jumps straight to that specialization's management view,
+  // instead of landing on the plain list and making the admin pick it again.
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(() => {
+    const fromUrl = Number(searchParams.get("courseId"))
+    return Number.isInteger(fromUrl) && fromUrl > 0 ? fromUrl : null
+  })
 
   async function confirmDeleteCourse() {
     if (!deletingCourse) return
@@ -101,7 +109,7 @@ export default function AdminCourses() {
             <button
               type="button"
               onClick={() => setShowAddCourse(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-[#5dd7bb]"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6]"
             >
               <Plus size={17} aria-hidden="true" />
               Add Specialization
@@ -110,7 +118,7 @@ export default function AdminCourses() {
         </section>
 
         {notice ? (
-          <div className="rounded-lg border border-[#bdebdc] bg-[#f0fcf8] px-4 py-3 text-sm font-medium text-[#176b5a]">
+          <div className="rounded-lg border border-[#a6f4c5] bg-[#ecfdf3] px-4 py-3 text-sm font-medium text-[#067647]">
             {notice}
           </div>
         ) : null}
@@ -137,8 +145,8 @@ export default function AdminCourses() {
             {courses.map((course) => (
               <div
                 key={course.id}
-                className={`rounded-lg border bg-white p-5 shadow-sm transition hover:border-[#34c6a3] ${
-                  selectedCourseId === course.id ? "border-[#34c6a3] ring-2 ring-[#34c6a3]/20" : "border-[#dde4ec]"
+                className={`rounded-lg border bg-white p-5 shadow-sm transition hover:border-[#2563eb] ${
+                  selectedCourseId === course.id ? "border-[#2563eb] ring-2 ring-[#2563eb]/20" : "border-[#dde4ec]"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -157,7 +165,7 @@ export default function AdminCourses() {
                     <button
                       type="button"
                       onClick={() => setEditingCourse(course)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-[#dde4ec] px-2.5 py-1.5 text-xs font-semibold text-[#17202a] transition hover:border-[#34c6a3] hover:text-[#176b5a]"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#dde4ec] px-2.5 py-1.5 text-xs font-semibold text-[#17202a] transition hover:border-[#2563eb] hover:text-[#1d4ed8]"
                       title="Edit specialization"
                       aria-label={`Edit ${course.name}`}
                     >
@@ -363,7 +371,7 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
                 <button
                   type="button"
                   onClick={() => setAdvancingBatch(batch)}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#176b5a] hover:bg-[#e8f8f4]"
+                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#1d4ed8] hover:bg-[#dbeafe]"
                   title="Advance semester"
                 >
                   ↑
@@ -373,7 +381,7 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
             <button
               type="button"
               onClick={() => setShowAddBatch(true)}
-              className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#34c6a3] px-3 py-1.5 text-xs font-semibold text-[#176b5a] hover:bg-[#e8f8f4]"
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#2563eb] px-3 py-1.5 text-xs font-semibold text-[#1d4ed8] hover:bg-[#dbeafe]"
             >
               <Plus size={12} /> Add Batch
             </button>
@@ -405,7 +413,7 @@ function CourseDetail({ course, onClose, onNotice, onRefresh }: CourseDetailProp
                       e.stopPropagation()
                       setShowAddSection(true)
                     }}
-                    className="inline-flex items-center gap-1 rounded-md border border-[#dde4ec] px-2 py-1 text-xs font-semibold text-[#176b5a] hover:border-[#34c6a3]"
+                    className="inline-flex items-center gap-1 rounded-md border border-[#dde4ec] px-2 py-1 text-xs font-semibold text-[#1d4ed8] hover:border-[#2563eb]"
                   >
                     <Plus size={12} /> Section
                   </button>
@@ -624,7 +632,7 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                   <button
                     type="button"
                     onClick={() => setShowFacultyForm(!showFacultyForm)}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033]"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#1d4ed8] hover:text-[#0c1f3d]"
                   >
                     <Plus size={12} /> Assign Faculty
                   </button>
@@ -654,7 +662,7 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                     <select
                       value={facultyId}
                       onChange={(e) => setFacultyId(e.target.value)}
-                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#34c6a3]"
+                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#2563eb]"
                     >
                       <option value="">Select faculty</option>
                       {facultyOptions.map((f) => (
@@ -665,12 +673,12 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder="Subject"
-                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#34c6a3]"
+                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#2563eb]"
                     />
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="h-9 rounded-md bg-[#34c6a3] px-3 text-xs font-semibold text-[#102033] disabled:opacity-60"
+                      className="h-9 rounded-md bg-[#2563eb] px-3 text-xs font-semibold text-white disabled:opacity-60"
                     >
                       Assign
                     </button>
@@ -703,21 +711,21 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                       type="button"
                       onClick={() => fileRef.current?.click()}
                       disabled={isImporting}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033] disabled:opacity-60"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#1d4ed8] hover:text-[#0c1f3d] disabled:opacity-60"
                     >
                       <Upload size={12} /> {isImporting ? "Importing..." : "Import CSV"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowStudentForm(!showStudentForm)}
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#176b5a] hover:text-[#102033]"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#1d4ed8] hover:text-[#0c1f3d]"
                     >
                       <Plus size={12} /> Add Student
                     </button>
                   </div>
                 </div>
                 {importResult ? (
-                  <p className="mt-1 text-xs font-medium text-[#176b5a]">{importResult}</p>
+                  <p className="mt-1 text-xs font-medium text-[#1d4ed8]">{importResult}</p>
                 ) : null}
                 {detail.students.length > 0 ? (
                   <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-[#dde4ec]">
@@ -757,7 +765,7 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                     <select
                       value={studentId}
                       onChange={(e) => setStudentId(e.target.value)}
-                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#34c6a3]"
+                      className="h-9 rounded-md border border-[#dde4ec] px-2 text-xs outline-none focus:border-[#2563eb]"
                     >
                       <option value="">Select student</option>
                       {studentOptions.map((s) => (
@@ -767,7 +775,7 @@ function SectionCard({ section, detail, isExpanded, onToggle, onChanged, onNotic
                     <button
                       type="submit"
                       disabled={isSaving}
-                      className="h-9 rounded-md bg-[#34c6a3] px-3 text-xs font-semibold text-[#102033] disabled:opacity-60"
+                      className="h-9 rounded-md bg-[#2563eb] px-3 text-xs font-semibold text-white disabled:opacity-60"
                     >
                       Enroll
                     </button>
@@ -873,7 +881,7 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
             required
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <DialogField label="Specialization Code">
@@ -881,7 +889,7 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
             required
             value={code}
             onChange={(event) => setCode(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -892,7 +900,7 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
               min={1}
               value={totalSemesters}
               onChange={(event) => handleSemestersChange(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </DialogField>
           <DialogField label="Duration (years)">
@@ -902,7 +910,7 @@ function AddCourseDialog({ onClose, onCreated }: AddCourseDialogProps) {
               min={1}
               value={durationYears}
               onChange={(event) => handleDurationChange(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </DialogField>
         </div>
@@ -926,9 +934,13 @@ interface EditCourseDialogProps {
 
 function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
   const [name, setName] = useState(course.name)
+  const [code, setCode] = useState(course.code)
   const [status, setStatus] = useState<"active" | "inactive">(course.status)
   const [departmentId, setDepartmentId] = useState(course.department_id ? String(course.department_id) : "")
   const [departments, setDepartments] = useState<AdminDepartment[]>([])
+  const [totalSemesters, setTotalSemesters] = useState(String(course.total_semesters))
+  const [durationYears, setDurationYears] = useState(String(course.duration_years))
+  const [semestersTouched, setSemestersTouched] = useState(false)
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
 
@@ -936,10 +948,38 @@ function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
     getAdminDepartments().then((d) => setDepartments(d.items)).catch(() => undefined)
   }, [])
 
+  function handleSemestersChange(value: string) {
+    setSemestersTouched(true)
+    setTotalSemesters(value)
+  }
+
+  // Same 2-semesters-per-year convention as creating a specialization — keep
+  // semesters in sync with duration until semesters is edited directly.
+  function handleDurationChange(value: string) {
+    setDurationYears(value)
+    const years = Number(value)
+    if (years > 0 && !semestersTouched) setTotalSemesters(String(years * 2))
+  }
+
+  const expectedSemesters = Number(durationYears) > 0 ? Number(durationYears) * 2 : null
+  const semestersMismatch =
+    expectedSemesters !== null && Number(totalSemesters) !== expectedSemesters
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!name.trim()) {
       setError("Specialization name is required.")
+      return
+    }
+    const nextCode = code.trim().toUpperCase()
+    if (!nextCode) {
+      setError("Specialization code is required.")
+      return
+    }
+    if (semestersMismatch) {
+      setError(
+        `${durationYears} year(s) should have ${expectedSemesters} semesters (2 per year), not ${totalSemesters}.`,
+      )
       return
     }
     setIsSaving(true)
@@ -947,8 +987,11 @@ function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
     try {
       await updateAdminCourse(course.id, {
         name: name.trim(),
+        code: nextCode,
         status,
         department_id: departmentId ? Number(departmentId) : undefined,
+        total_semesters: Number(totalSemesters),
+        duration_years: Number(durationYears),
       })
       onSaved()
     } catch (err: any) {
@@ -966,21 +1009,23 @@ function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
             required
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <DialogField label="Specialization Code">
           <input
-            disabled
-            value={course.code}
-            className="h-11 w-full rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm text-[#667085] outline-none"
+            required
+            value={code}
+            maxLength={20}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <DialogField label="Program">
           <select
             value={departmentId}
             onChange={(event) => setDepartmentId(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           >
             <option value="">No program</option>
             {departments.map((d) => (
@@ -994,7 +1039,7 @@ function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
           <select
             value={status}
             onChange={(event) => setStatus(event.target.value as "active" | "inactive")}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           >
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -1003,21 +1048,28 @@ function EditCourseDialog({ course, onClose, onSaved }: EditCourseDialogProps) {
         <div className="grid grid-cols-2 gap-4">
           <DialogField label="Total Semesters">
             <input
-              disabled
-              value={course.total_semesters}
-              className="h-11 w-full rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm text-[#667085] outline-none"
+              required
+              type="number"
+              min={1}
+              value={totalSemesters}
+              onChange={(event) => handleSemestersChange(event.target.value)}
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </DialogField>
           <DialogField label="Duration (years)">
             <input
-              disabled
-              value={course.duration_years}
-              className="h-11 w-full rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm text-[#667085] outline-none"
+              required
+              type="number"
+              min={1}
+              value={durationYears}
+              onChange={(event) => handleDurationChange(event.target.value)}
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </DialogField>
         </div>
         <p className="-mt-2 text-xs text-[#667085]">
-          Semesters and duration can't be changed once a specialization has been created.
+          2 semesters per year. Lowering this is blocked if a semester being removed already has
+          class sections on it.
         </p>
         {error ? <DialogError message={error} /> : null}
         <DialogActions onClose={onClose} isSaving={isSaving} submitLabel="Save Changes" />
@@ -1081,7 +1133,7 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="e.g. MBA 2024-26"
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -1093,7 +1145,7 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
               max={2100}
               value={startYear}
               onChange={(event) => setStartYear(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </DialogField>
           <DialogField label="End Year">
@@ -1104,7 +1156,7 @@ function AddBatchDialog({ courseId, onClose, onCreated }: AddBatchDialogProps) {
               max={2100}
               value={endYear}
               onChange={(event) => setEndYear(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </DialogField>
         </div>
@@ -1165,7 +1217,7 @@ function AddSectionDialog({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="e.g. MBA-II-A"
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <DialogField label="Semester">
@@ -1173,7 +1225,7 @@ function AddSectionDialog({
             required
             value={semesterId}
             onChange={(event) => setSemesterId(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           >
             {semesters.map((semester) => (
               <option key={semester.id} value={semester.id}>
@@ -1187,7 +1239,7 @@ function AddSectionDialog({
             required
             value={batchId}
             onChange={(event) => setBatchId(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           >
             {batches.map((batch) => (
               <option key={batch.id} value={batch.id}>
@@ -1201,7 +1253,7 @@ function AddSectionDialog({
             value={academicYear}
             onChange={(event) => setAcademicYear(event.target.value)}
             placeholder="e.g. 2025-26"
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         {error ? <DialogError message={error} /> : null}
@@ -1220,7 +1272,7 @@ interface ModalProps {
 
 function Modal({ title, onClose, children, wide }: ModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c1f3d]/45 p-4">
       <div className={`w-full ${wide ? "max-w-2xl" : "max-w-lg"}`}>
         <div className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6">
           <div className="flex items-start justify-between gap-4">
@@ -1281,7 +1333,7 @@ function DialogActions({ onClose, isSaving, submitLabel }: DialogActionsProps) {
       <button
         type="submit"
         disabled={isSaving}
-        className="rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+        className="rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSaving ? "Saving..." : submitLabel}
       </button>
@@ -1298,7 +1350,7 @@ function StatPill({ label, value }: StatPillProps) {
   return (
     <div className="rounded-full border border-[#dde4ec] bg-[#f5f7fa] px-3 py-1.5 text-xs">
       <span className="font-semibold text-[#17202a]">{label}:</span>{" "}
-      <span className="font-semibold text-[#176b5a]">{value}</span>
+      <span className="font-semibold text-[#1d4ed8]">{value}</span>
     </div>
   )
 }

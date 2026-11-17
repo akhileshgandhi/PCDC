@@ -26,7 +26,7 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
   }
 
   return (
-    <span className="rounded-full bg-[#C9A227] px-3 py-1 text-xs font-semibold text-[#111827]">
+    <span className="rounded-full bg-[#2563eb] px-3 py-1 text-xs font-semibold text-white">
       In Progress
     </span>
   )

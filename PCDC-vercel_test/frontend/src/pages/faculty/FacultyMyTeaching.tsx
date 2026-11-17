@@ -332,7 +332,7 @@ export default function FacultyMyTeaching() {
                 setInstFilter(e.target.value)
                 setDeptFilter("all")
               }}
-              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             >
               <option value="all">All institutions</option>
               {institutions.map((i) => (
@@ -342,7 +342,7 @@ export default function FacultyMyTeaching() {
             <select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}
-              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#c9a227] focus:ring-2 focus:ring-[#c9a227]/20"
+              className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             >
               <option value="all">All programs</option>
               {departments.map((d) => (
@@ -353,7 +353,7 @@ export default function FacultyMyTeaching() {
               type="button"
               onClick={toggleAllShown}
               disabled={addableShownKeys.length === 0}
-              className="shrink-0 rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white disabled:opacity-50"
+              className="shrink-0 rounded-md border border-[#2563eb] px-4 py-2.5 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white disabled:opacity-50"
             >
               {allShownChecked ? "Clear selection" : `Select all ${addableShownKeys.length} new`}
             </button>
@@ -387,7 +387,7 @@ export default function FacultyMyTeaching() {
                         <button
                           type="button"
                           onClick={() => toggleSection(b)}
-                          className="shrink-0 text-sm font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+                          className="shrink-0 text-sm font-semibold text-[#0c1f3d] transition hover:text-[#2563eb]"
                         >
                           {allOn ? "Clear selection" : "Select all"}
                         </button>
@@ -456,7 +456,7 @@ export default function FacultyMyTeaching() {
                 type="button"
                 onClick={save}
                 disabled={saving}
-                className="rounded-md bg-[#0b1d3a] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#17315c] disabled:opacity-60"
+                className="rounded-md bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Save selections"}
               </button>
@@ -476,7 +476,7 @@ function splitKey(key: string): [number, string] {
 function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
   return (
     <article className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4">
-      <span className="grid size-7 place-items-center rounded-full bg-[#0b1d3a] text-xs font-bold text-white">
+      <span className="grid size-7 place-items-center rounded-full bg-[#2563eb] text-xs font-bold text-white">
         {n}
       </span>
       <h3 className="mt-3 text-sm font-semibold text-[#111827]">{title}</h3>

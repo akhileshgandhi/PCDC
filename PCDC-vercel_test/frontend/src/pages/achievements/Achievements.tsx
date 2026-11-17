@@ -22,9 +22,9 @@ import DashboardLayout from "../../layouts/DashboardLayout"
 
 const badgeStyle: Record<string, { icon: LucideIcon; color: string }> = {
   first_case: { icon: Star, color: "#7C3AED" },
-  high_scorer: { icon: Award, color: "#C9A227" },
+  high_scorer: { icon: Award, color: "#4F46E5" },
   consistent: { icon: Medal, color: "#16A34A" },
-  capability_master: { icon: Brain, color: "#0B1D3A" },
+  capability_master: { icon: Brain, color: "#0C1F3D" },
   level_up: { icon: TrendingUp, color: "#059669" },
   difficulty_climber: { icon: Flame, color: "#DC2626" },
   domain_explorer: { icon: Compass, color: "#2563EB" },
@@ -32,7 +32,7 @@ const badgeStyle: Record<string, { icon: LucideIcon; color: string }> = {
 }
 
 function styleFor(key: string) {
-  return badgeStyle[key] ?? { icon: Trophy, color: "#0B1D3A" }
+  return badgeStyle[key] ?? { icon: Trophy, color: "#0C1F3D" }
 }
 
 export default function Achievements() {
@@ -129,7 +129,7 @@ export default function Achievements() {
                     className="rounded-lg border border-[#e6e8eb] bg-white p-4 shadow-sm"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="grid size-10 place-items-center rounded-md bg-[#081d3a] text-white">
+                      <div className="grid size-10 place-items-center rounded-md bg-[#0c1f3d] text-white">
                         <Icon size={18} aria-hidden="true" />
                       </div>
                       <div>

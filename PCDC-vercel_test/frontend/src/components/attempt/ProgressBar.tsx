@@ -17,11 +17,11 @@ export default function ProgressBar({ currentScreen, title, timer }: ProgressBar
       <div className="mx-auto max-w-[1180px] px-4 py-4 sm:px-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#0B1D3A] text-sm font-semibold text-white">
+            <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
               P
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold uppercase tracking-wide text-[#C9A227]">
+              <p className="truncate text-sm font-semibold uppercase tracking-wide text-[#2563eb]">
                 PCDC Student Portal
               </p>
               <h1 className="truncate text-lg font-semibold text-[#111827]">
@@ -31,7 +31,7 @@ export default function ProgressBar({ currentScreen, title, timer }: ProgressBar
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm font-semibold">
-            <span className="rounded-full bg-[#F6F7F9] px-3 py-1 text-[#0B1D3A]">
+            <span className="rounded-full bg-[#F6F7F9] px-3 py-1 text-[#0c1f3d]">
             Stage {currentScreen} of 4: {currentStage}
             </span>
             {timer ? (
@@ -43,7 +43,7 @@ export default function ProgressBar({ currentScreen, title, timer }: ProgressBar
         <div className="mt-5">
           <div className="relative h-2 rounded-full bg-[#E6EBEB]">
             <div
-              className="h-2 rounded-full bg-[#C9A227] transition-all"
+              className="h-2 rounded-full bg-[#2563eb] transition-all"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -58,7 +58,7 @@ export default function ProgressBar({ currentScreen, title, timer }: ProgressBar
                   <div
                     className={`mx-auto grid size-8 place-items-center rounded-full border text-xs font-semibold ${
                       isCurrent || isComplete
-                        ? "border-[#C9A227] bg-[#C9A227] text-white"
+                        ? "border-[#2563eb] bg-[#2563eb] text-white"
                         : "border-[#D1D5DB] bg-white text-[#6B7280]"
                     }`}
                   >

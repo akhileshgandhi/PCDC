@@ -52,14 +52,14 @@ export default function FacultyAttempts({ mode }: FacultyAttemptsProps) {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#2563eb] transition hover:text-[#2563eb]"
         >
           <ArrowLeft size={16} aria-hidden="true" />
           Back
         </button>
 
         <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#c9a227]">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2563eb]">
             {mode === "case" ? "Case Attempts" : "Student Attempts"}
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-[#17202a]">{data?.title ?? "…"}</h1>
@@ -127,7 +127,7 @@ export default function FacultyAttempts({ mode }: FacultyAttemptsProps) {
                     {item.total_score !== null ? (
                       <Link
                         to={`/faculty/attempts/${item.attempt_id}`}
-                        className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-xs font-semibold text-[#0b1d3a] transition hover:border-[#c9a227] hover:bg-[#fff7df]"
+                        className="inline-flex items-center gap-2 rounded-md border border-[#e6e8eb] px-3 py-2 text-xs font-semibold text-[#2563eb] transition hover:border-[#2563eb] hover:bg-[#dbeafe]"
                       >
                         <FileText size={14} aria-hidden="true" />
                         View report

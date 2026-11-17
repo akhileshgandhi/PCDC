@@ -55,7 +55,7 @@ function actionForStatus(caseStudy: CaseStudy) {
     return {
       label: "Continue Attempt",
       to: `/student/case-studies/${caseStudy.id}/attempt`,
-      className: "border-[#0B1D3A] text-[#0B1D3A] hover:bg-[#0B1D3A] hover:text-white",
+      className: "border-[#2563eb] text-[#2563eb] hover:bg-[#2563eb] hover:text-white",
       showArrow: true,
     }
   }
@@ -63,7 +63,7 @@ function actionForStatus(caseStudy: CaseStudy) {
   return {
     label: "Start Attempt",
     to: `/student/case-studies/${caseStudy.id}`,
-    className: "border-[#C9A227] bg-[#C9A227] text-white hover:bg-[#B08D20]",
+    className: "border-[#2563eb] bg-[#2563eb] text-white hover:bg-[#3b82f6]",
     showArrow: true,
   }
 }
@@ -86,12 +86,12 @@ export default function CaseCard({ caseStudy }: CaseCardProps) {
         <DifficultyBadge level={caseStudy.difficulty} />
         <StatusBadge status={caseStudy.status} />
         {caseStudy.assignment_source === "mentor" ? (
-          <span className="rounded-full bg-[#E9F7F1] px-3 py-1 text-xs font-semibold text-[#0F766E]">
+          <span className="rounded-full bg-[#ecfeff] px-3 py-1 text-xs font-semibold text-[#0e7490]">
             Assigned by Mentor
           </span>
         ) : null}
         {caseStudy.assignment_source === "faculty" ? (
-          <span className="rounded-full bg-[#FFF7DF] px-3 py-1 text-xs font-semibold text-[#92702A]">
+          <span className="rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-[#4338ca]">
             Assigned by Faculty
           </span>
         ) : null}

@@ -42,20 +42,20 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
   }
 
   const field =
-    "mt-2 flex rounded-md border border-[#dde4ec] transition focus-within:border-[#34c6a3] focus-within:ring-2 focus-within:ring-[#34c6a3]/20"
+    "mt-2 flex rounded-lg border border-[#dde4ec] transition focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20"
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-lg bg-white p-5 shadow-2xl sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c1f3d]/50 p-4 backdrop-blur-[2px]" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
         {done ? (
           <div className="py-2 text-center">
-            <CheckCircle2 className="mx-auto text-[#34c6a3]" size={32} aria-hidden="true" />
+            <CheckCircle2 className="mx-auto text-[#2563eb]" size={32} aria-hidden="true" />
             <h2 className="mt-3 text-lg font-semibold text-[#17202a]">Password updated</h2>
             <p className="mt-1 text-sm text-[#667085]">Your new password is active now.</p>
             <button
               type="button"
               onClick={onClose}
-              className="mt-5 w-full rounded-md bg-[#34c6a3] px-4 py-2.5 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-[#5dd7bb]"
+              className="mt-5 w-full rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6]"
             >
               Done
             </button>
@@ -64,7 +64,7 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
           <form onSubmit={handleSubmit}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
-                <KeyRound size={20} className="mt-0.5 shrink-0 text-[#34c6a3]" aria-hidden="true" />
+                <KeyRound size={20} className="mt-0.5 shrink-0 text-[#2563eb]" aria-hidden="true" />
                 <div>
                   <h2 className="text-lg font-semibold text-[#17202a]">Change password</h2>
                   <p className="mt-0.5 text-sm text-[#667085]">Applies to your own account.</p>
@@ -137,14 +137,14 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md border border-[#dde4ec] px-4 py-2.5 text-sm font-semibold text-[#374151] hover:bg-[#f5f7fa]"
+                className="rounded-lg border border-[#dde4ec] px-4 py-2.5 text-sm font-semibold text-[#374151] hover:bg-[#f5f7fa]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-2.5 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-[#5dd7bb] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? (
                   <LoaderCircle className="animate-spin" size={17} aria-hidden="true" />

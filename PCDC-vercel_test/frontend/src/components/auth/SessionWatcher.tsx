@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react"
 import { useEffect, useState } from "react"
 
+import api from "../../api/axios"
 import {
   IDLE_WARNING_MS,
   clearToken,
@@ -13,6 +14,11 @@ import {
 
 const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "wheel", "scroll", "touchstart"] as const
 const CHECK_INTERVAL_MS = 1000
+// How often to re-confirm this session is still good with the server (e.g.
+// an admin deactivated this account, or revoked a role) — independent of
+// whether the user happens to trigger any other API call on their own. A
+// 401 here is handled by the shared axios interceptor, which signs out.
+const STATUS_POLL_MS = 5_000
 const PORTAL_PATH = /^\/(student|faculty|admin)(\/|$)/
 
 // Ends the session after IDLE_TIMEOUT_MS (10 min) with no activity, or when
@@ -48,10 +54,23 @@ export default function SessionWatcher() {
       )
     }
     const interval = window.setInterval(check, CHECK_INTERVAL_MS)
+
+    const pollStatus = () => {
+      if (!PORTAL_PATH.test(window.location.pathname) || !getToken()) return
+      api.get("/auth/me").catch(() => {
+        // A network hiccup shouldn't sign anyone out — only a real 401
+        // (handled by the axios interceptor) does that.
+      })
+    }
+    const statusInterval = window.setInterval(pollStatus, STATUS_POLL_MS)
+
     // Coming back to a tab that sat in the background (where timers are
     // throttled): check right away instead of waiting for the next tick.
     const onVisible = () => {
-      if (document.visibilityState === "visible") check()
+      if (document.visibilityState === "visible") {
+        check()
+        pollStatus()
+      }
     }
     document.addEventListener("visibilitychange", onVisible)
 
@@ -60,6 +79,7 @@ export default function SessionWatcher() {
         window.removeEventListener(name, onActivity, { capture: true }),
       )
       window.clearInterval(interval)
+      window.clearInterval(statusInterval)
       document.removeEventListener("visibilitychange", onVisible)
     }
   }, [])

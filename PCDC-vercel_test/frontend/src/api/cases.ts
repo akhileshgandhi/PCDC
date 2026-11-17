@@ -26,6 +26,7 @@ export interface CaseStudyResponse {
   }>
   assignment_source?: "mentor" | "faculty" | "admin" | null
   due_date?: string | null
+  instructions?: string | null
 }
 
 export interface CaseStudyFilters {
@@ -128,9 +129,15 @@ export interface CaseAttemptState {
   marks_total: number | null
 }
 
+export interface CaseAssignmentInfo {
+  due_date: string | null
+  instructions: string | null
+}
+
 export interface CaseDetail {
   case: CaseDetailContent
   attempt: CaseAttemptState
+  assignment: CaseAssignmentInfo
 }
 
 export async function getCaseDetail(caseId: number | string) {
@@ -230,6 +237,8 @@ export interface AttemptDetail {
   conversations: AttemptConversation[]
   evaluation: AttemptEvaluation | null
   question_answers: AttemptQuestionAnswer[]
+  due_date: string | null
+  instructions: string | null
 }
 
 export async function getAttemptDetail(attemptId: number) {

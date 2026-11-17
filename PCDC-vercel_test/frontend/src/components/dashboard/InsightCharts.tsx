@@ -1,9 +1,9 @@
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -11,11 +11,12 @@ import {
 } from "recharts"
 
 // Charts for the role dashboards. Colours: two validated categorical slots
-// for series (blue, orange) and fixed status colours for assignment states;
-// every colour is paired with a text label, never used alone.
+// for series (blue, cyan — both from the app's blue theme) and fixed status
+// colours for assignment states; every colour is paired with a text label,
+// never used alone.
 
-export const SERIES_1 = "#2a78d6"
-export const SERIES_2 = "#eb6834"
+export const SERIES_1 = "#2563eb"
+export const SERIES_2 = "#06b6d4"
 const GRID = "#eef2f7"
 const AXIS_TEXT = "#98a2b3"
 const INK = "#17202a"
@@ -118,6 +119,32 @@ interface TrendSeries {
   color: string
 }
 
+interface DotProps {
+  cx?: number
+  cy?: number
+  index?: number
+  payload?: { value?: number | null }
+}
+
+/** A plain dot everywhere, except the latest point on the line, which pulses
+ * gently — a small "this is live, still moving" cue on an otherwise static
+ * trend line. */
+function liveDot(color: string, lastIndex: number) {
+  return function LiveDot({ cx, cy, index, payload }: DotProps) {
+    if (cx === undefined || cy === undefined) return null
+    if (payload && (payload.value === null || payload.value === undefined)) return null
+    if (index !== lastIndex) {
+      return <circle cx={cx} cy={cy} r={3} strokeWidth={2} fill="#ffffff" stroke={color} />
+    }
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={6} fill={color} opacity={0.35} className="origin-center animate-ping" />
+        <circle cx={cx} cy={cy} r={4} strokeWidth={2} fill={color} stroke="#ffffff" />
+      </g>
+    )
+  }
+}
+
 /** Weekly counts (same unit, one axis). Legend only when there are 2+ series. */
 export function WeeklyTrendChart<T extends { week_start: string }>({
   data,
@@ -143,8 +170,16 @@ export function WeeklyTrendChart<T extends { week_start: string }>({
       ) : null}
       <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-            <CartesianGrid stroke={GRID} vertical={false} />
+          <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
+            <defs>
+              {series.map((s) => (
+                <linearGradient key={s.key} id={`trendFill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={s.color} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={s.color} stopOpacity={0.02} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid stroke={GRID} vertical={false} strokeDasharray="4 4" />
             <XAxis dataKey="week" tick={{ fill: AXIS_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis allowDecimals={false} tick={{ fill: AXIS_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip
@@ -152,18 +187,21 @@ export function WeeklyTrendChart<T extends { week_start: string }>({
               content={<ChartTooltip labelPrefix="Week of " />}
             />
             {series.map((s) => (
-              <Line
+              <Area
                 key={s.key}
-                type="linear"
+                type="monotone"
                 dataKey={s.key}
                 name={s.label}
                 stroke={s.color}
-                strokeWidth={2}
-                dot={{ r: 3, strokeWidth: 2, fill: "#ffffff" }}
+                strokeWidth={2.5}
+                fill={`url(#trendFill-${s.key})`}
+                dot={liveDot(s.color, rows.length - 1)}
                 activeDot={{ r: 5, strokeWidth: 2, stroke: "#ffffff" }}
+                animationDuration={1100}
+                animationEasing="ease-out"
               />
             ))}
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -257,8 +295,14 @@ export function ScoreTrendChart({
   return (
     <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-          <CartesianGrid stroke={GRID} vertical={false} />
+        <AreaChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
+          <defs>
+            <linearGradient id="scoreTrendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={SERIES_1} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={SERIES_1} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={GRID} vertical={false} strokeDasharray="4 4" />
           <XAxis dataKey="n" tick={{ fill: AXIS_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} />
           <YAxis domain={[0, 100]} tick={{ fill: AXIS_TEXT, fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
           <Tooltip
@@ -274,17 +318,20 @@ export function ScoreTrendChart({
               )
             }}
           />
-          <Line
-            type="linear"
+          <Area
+            type="monotone"
             dataKey="score"
             name="Score"
             stroke={SERIES_1}
-            strokeWidth={2}
-            dot={{ r: 4, strokeWidth: 2, fill: "#ffffff" }}
+            strokeWidth={2.5}
+            fill="url(#scoreTrendFill)"
+            dot={liveDot(SERIES_1, rows.length - 1)}
             activeDot={{ r: 6, strokeWidth: 2, stroke: "#ffffff" }}
             connectNulls
+            animationDuration={1100}
+            animationEasing="ease-out"
           />
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </div>
   )

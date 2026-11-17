@@ -18,13 +18,13 @@ export default function AdminModulePlaceholder({
         <section className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm sm:p-6">
           <Link
             to="/admin/dashboard"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#176b5a] transition hover:text-[#102033]"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-[#1d4ed8] transition hover:text-[#0c1f3d]"
           >
             <ArrowLeft size={16} aria-hidden="true" />
             Dashboard
           </Link>
           <div className="mt-8 flex max-w-3xl items-start gap-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-md bg-[#e8f8f4] text-[#176b5a]">
+            <span className="grid size-11 shrink-0 place-items-center rounded-md bg-[#dbeafe] text-[#1d4ed8]">
               <Construction size={22} aria-hidden="true" />
             </span>
             <div>

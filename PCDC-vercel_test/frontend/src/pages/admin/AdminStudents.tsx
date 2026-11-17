@@ -1,6 +1,7 @@
 import { isAxiosError } from "axios"
 import { AlertTriangle, Download, GraduationCap, KeyRound, Upload, UserPlus } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 
 import {
   adminAddStudent,
@@ -14,6 +15,13 @@ import AdminStudentList from "./AdminStudentList"
 import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "./StudentPlacementFields"
 
 export default function AdminStudents() {
+  // The dashboard's "Import Users" quick action links here with
+  // ?action=import — it used to point at the Users page, which has no
+  // import feature at all. Scroll the real "Or import many" panel into view
+  // so it's not just a silent landing.
+  const [searchParams] = useSearchParams()
+  const importRef = useRef<HTMLDivElement>(null)
+
   const [sections, setSections] = useState<AdminSectionListItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -41,6 +49,13 @@ export default function AdminStudents() {
   useEffect(() => {
     loadSections().finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!loading && searchParams.get("action") === "import") {
+      importRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
 
   const selectedSection = useMemo(
     () => sections.find((s) => String(s.id) === sectionId),
@@ -132,7 +147,7 @@ export default function AdminStudents() {
   }
 
   const field =
-    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+    "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
   const label = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
 
   return (
@@ -219,14 +234,14 @@ export default function AdminStudents() {
                   type="button"
                   onClick={submit}
                   disabled={saving}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#102033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-60"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:opacity-60"
                 >
                   {saving ? "Adding…" : <><UserPlus size={16} aria-hidden="true" /> Add student</>}
                 </button>
               </div>
 
               {/* Bulk import */}
-              <div className="mt-6 border-t border-[#eef2f7] pt-5">
+              <div ref={importRef} className="mt-6 border-t border-[#eef2f7] pt-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-[#17202a]">Or import many</h3>
@@ -257,7 +272,7 @@ export default function AdminStudents() {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={!sectionId || importing}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#102033] px-4 py-2.5 text-sm font-semibold text-[#102033] transition hover:bg-[#102033] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#2563eb] px-4 py-2.5 text-sm font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Upload size={15} aria-hidden="true" />
                   {importing ? "Importing…" : "Import CSV"}
@@ -300,7 +315,7 @@ export default function AdminStudents() {
                   {added.map((s, i) => (
                     <div key={i} className="rounded-md border border-[#eef2f7] bg-[#f9fafb] p-3">
                       <div className="flex items-center gap-2">
-                        <KeyRound size={15} className="text-[#34c6a3]" aria-hidden="true" />
+                        <KeyRound size={15} className="text-[#2563eb]" aria-hidden="true" />
                         <p className="text-sm font-semibold text-[#17202a]">{s.name}</p>
                         <span className="text-xs text-[#98a2b3]">· {s.scholar_number}</span>
                       </div>

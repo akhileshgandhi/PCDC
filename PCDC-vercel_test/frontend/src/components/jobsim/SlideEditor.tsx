@@ -132,11 +132,11 @@ export default function SlideEditor({ task, slides, current, disabled, isSubmitt
               <span className="w-4 shrink-0 pt-0.5 text-right text-[11px] font-semibold text-[#6B7280]">{i + 1}</span>
               <span
                 className={`relative block aspect-video w-full overflow-hidden rounded border bg-white p-1.5 transition ${
-                  i === index ? "border-[#C9A227] ring-2 ring-[#C9A227]/40" : "border-[#E6EBEB] hover:border-[#C9A227]"
+                  i === index ? "border-[#2563eb] ring-2 ring-[#2563eb]/40" : "border-[#E6EBEB] hover:border-[#2563eb]"
                 }`}
               >
-                <span className="absolute inset-y-0 left-0 w-1 bg-[#0B1D3A]" aria-hidden="true" />
-                <span className="block truncate pl-1.5 text-[9px] font-semibold text-[#0B1D3A]">{s.title || "Untitled"}</span>
+                <span className="absolute inset-y-0 left-0 w-1 bg-[#0c1f3d]" aria-hidden="true" />
+                <span className="block truncate pl-1.5 text-[9px] font-semibold text-[#0c1f3d]">{s.title || "Untitled"}</span>
                 {s.points.filter((p) => p.trim()).slice(0, 3).map((p, j) => (
                   <span key={j} className="block truncate pl-1.5 text-[7px] leading-3 text-[#6B7280]">• {p}</span>
                 ))}
@@ -169,13 +169,13 @@ export default function SlideEditor({ task, slides, current, disabled, isSubmitt
 
         <div className="min-h-0 flex-1 overflow-auto bg-[#EEF2F6] p-6">
           {guide ? (
-            <p className="mx-auto mb-3 max-w-3xl rounded-md bg-[#FFF7DF] px-3 py-2 text-xs text-[#5C4613]">
+            <p className="mx-auto mb-3 max-w-3xl rounded-md bg-[#dbeafe] px-3 py-2 text-xs text-[#1d4ed8]">
               <b>On this slide:</b> {guide}
             </p>
           ) : null}
           <div className="relative mx-auto aspect-video max-w-3xl overflow-hidden rounded-md bg-white shadow-md">
-            <div className="absolute inset-y-0 left-0 w-2 bg-[#0B1D3A]" aria-hidden="true" />
-            <div className="absolute right-6 top-0 h-10 w-3 bg-[#C9A227]" aria-hidden="true" />
+            <div className="absolute inset-y-0 left-0 w-2 bg-[#0c1f3d]" aria-hidden="true" />
+            <div className="absolute right-6 top-0 h-10 w-3 bg-[#2563eb]" aria-hidden="true" />
             {isCover ? null : (
               <span className="absolute bottom-4 right-6" aria-hidden="true">
                 <PrestigeLogo size="sm" />
@@ -195,14 +195,14 @@ export default function SlideEditor({ task, slides, current, disabled, isSubmitt
                   onChange={(e) => update({ ...slide, title: e.target.value })}
                   placeholder="Click to add title"
                   aria-label={`Slide ${index + 1} title`}
-                  className="w-full border-b border-transparent bg-transparent pb-1 text-[#0B1D3A] outline-none placeholder:text-[#9CA3AF] focus:border-[#C9A227]"
+                  className="w-full border-b border-transparent bg-transparent pb-1 text-[#0c1f3d] outline-none placeholder:text-[#9CA3AF] focus:border-[#2563eb]"
                 />
               </div>
-              {isCover ? <div className="mt-2 h-1 w-24 rounded-full bg-[#C9A227]" aria-hidden="true" /> : null}
+              {isCover ? <div className="mt-2 h-1 w-24 rounded-full bg-[#2563eb]" aria-hidden="true" /> : null}
               <ul className={`mt-4 space-y-2 overflow-auto ${isCover ? "text-lg" : "text-base"}`}>
                 {slide.points.map((point, i) => (
                   <li key={i} className="flex items-center gap-2">
-                    <span className="size-1.5 shrink-0 rounded-full bg-[#C9A227]" aria-hidden="true" />
+                    <span className="size-1.5 shrink-0 rounded-full bg-[#2563eb]" aria-hidden="true" />
                     <input
                       ref={(el) => {
                         pointRefs.current[i] = el
@@ -226,7 +226,7 @@ export default function SlideEditor({ task, slides, current, disabled, isSubmitt
                     update({ ...slide, points: [...slide.points, ""] })
                     focusPoint.current = slide.points.length
                   }}
-                  className="mt-2 self-start text-xs font-semibold text-[#92702A] hover:underline"
+                  className="mt-2 self-start text-xs font-semibold text-[#1d4ed8] hover:underline"
                 >
                   + Add point
                 </button>
@@ -251,7 +251,7 @@ export default function SlideEditor({ task, slides, current, disabled, isSubmitt
               onClick={onSubmit}
               disabled={problems.length > 0}
               title={problems.length ? problems.slice(0, 3).join(". ") : undefined}
-              className="inline-flex items-center gap-2 rounded-md bg-[#0B1D3A] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1B3452] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-md bg-[#0c1f3d] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send size={15} aria-hidden="true" /> Submit slides
             </button>
@@ -292,7 +292,7 @@ function ToolButton({
       aria-label={label}
       title={label}
       className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm font-semibold transition disabled:opacity-40 ${
-        danger ? "text-[#B42318] hover:bg-[#FFF5F5]" : "text-[#0B1D3A] hover:bg-[#F6F7F9]"
+        danger ? "text-[#B42318] hover:bg-[#FFF5F5]" : "text-[#0c1f3d] hover:bg-[#F6F7F9]"
       }`}
     >
       {children}

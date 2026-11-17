@@ -1,6 +1,7 @@
 import { AlertTriangle, Plus, Upload, Users as UsersIcon } from "lucide-react"
 import type { ChangeEvent, FormEvent, ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 
 import {
   assignAdminSectionFaculty,
@@ -25,13 +26,21 @@ import {
   type AdminSemester,
   type AdminUser,
 } from "../../api/admin"
+import { ListToolbar, Pager } from "../../components/common/ListControls"
+import { useListControls } from "../../hooks/useListControls"
 import AdminLayout from "../../layouts/AdminLayout"
 
 export default function AdminSections() {
+  // Arriving via a "Manage" link from Academic Setup with ?courseId=&batchId=
+  // narrows straight to that section's own batch instead of dumping the
+  // admin into every section ever created — the admin still picks Manage
+  // Faculty or Manage Students themselves from there.
+  const [searchParams] = useSearchParams()
+
   const [sections, setSections] = useState<AdminSectionListItem[]>([])
   const [courses, setCourses] = useState<AdminCourse[]>([])
-  const [courseId, setCourseId] = useState("")
-  const [batchId, setBatchId] = useState("")
+  const [courseId, setCourseId] = useState(searchParams.get("courseId") ?? "")
+  const [batchId, setBatchId] = useState(searchParams.get("batchId") ?? "")
   const [status, setStatus] = useState("")
   const [batches, setBatches] = useState<AdminBatch[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -59,22 +68,42 @@ export default function AdminSections() {
   }
 
   useEffect(() => {
-    getAdminCourses().then((data) => setCourses(data.items))
+    getAdminCourses()
+      .then((data) => setCourses(data.items))
+      .catch(() =>
+        setError("Unable to load specializations — \"New Section\" needs at least one to work."),
+      )
   }, [])
 
+  // Skips the batch reset on the very first run — a ?courseId=&batchId=
+  // pair arriving from a "Manage" link must survive this effect's first
+  // pass, not get wiped before the batch list even loads.
+  const isFirstCourseEffect = useRef(true)
   useEffect(() => {
-    setBatchId("")
+    if (!isFirstCourseEffect.current) setBatchId("")
+    isFirstCourseEffect.current = false
     if (!courseId) {
       setBatches([])
       return
     }
-    getAdminCourseBatches(Number(courseId)).then((data) => setBatches(data.items))
+    getAdminCourseBatches(Number(courseId))
+      .then((data) => setBatches(data.items))
+      .catch(() => setError("Could not load batches for this specialization."))
   }, [courseId])
 
   useEffect(() => {
     loadSections()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, batchId, status])
+
+  const list = useListControls(
+    sections,
+    (s, q) =>
+      s.name.toLowerCase().includes(q) ||
+      s.course_name.toLowerCase().includes(q) ||
+      s.semester_name.toLowerCase().includes(q) ||
+      s.batch_name.toLowerCase().includes(q),
+  )
 
   return (
     <AdminLayout>
@@ -90,8 +119,7 @@ export default function AdminSections() {
             <button
               type="button"
               onClick={() => setShowAddSection(true)}
-              disabled={courses.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] shadow-sm transition hover:bg-[#5dd7bb] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6]"
             >
               <Plus size={17} aria-hidden="true" />
               New Section
@@ -102,7 +130,7 @@ export default function AdminSections() {
             <select
               value={courseId}
               onChange={(event) => setCourseId(event.target.value)}
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               aria-label="Filter by specialization"
             >
               <option value="">All Specializations</option>
@@ -116,7 +144,7 @@ export default function AdminSections() {
               value={batchId}
               onChange={(event) => setBatchId(event.target.value)}
               disabled={!courseId}
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label="Filter by batch"
             >
               <option value="">All Batches</option>
@@ -129,7 +157,7 @@ export default function AdminSections() {
             <select
               value={status}
               onChange={(event) => setStatus(event.target.value)}
-              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-medium outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               aria-label="Filter by status"
             >
               <option value="">All Status</option>
@@ -140,7 +168,7 @@ export default function AdminSections() {
         </section>
 
         {notice ? (
-          <div className="rounded-lg border border-[#bdebdc] bg-[#f0fcf8] px-4 py-3 text-sm font-medium text-[#176b5a]">
+          <div className="rounded-lg border border-[#a6f4c5] bg-[#ecfdf3] px-4 py-3 text-sm font-medium text-[#067647]">
             {notice}
           </div>
         ) : null}
@@ -162,22 +190,37 @@ export default function AdminSections() {
             </p>
           </section>
         ) : (
-          <div className="space-y-3">
-            {sections.map((section) => (
-              <SectionCard
-                key={section.id}
-                section={section}
-                onManageFaculty={() => setManageFacultySectionId(section.id)}
-                onManageStudents={() => setManageStudentsSectionId(section.id)}
-              />
-            ))}
-          </div>
+          <section className="rounded-lg border border-[#dde4ec] bg-white p-5 shadow-sm">
+            <ListToolbar
+              query={list.query}
+              onQueryChange={list.setQuery}
+              pageSize={list.pageSize}
+              onPageSizeChange={list.setPageSize}
+              placeholder="Search sections..."
+            />
+            {list.paged.length === 0 ? (
+              <p className="py-8 text-center text-sm font-medium text-[#667085]">No sections match that search.</p>
+            ) : (
+              <div className="space-y-3">
+                {list.paged.map((section) => (
+                  <SectionCard
+                    key={section.id}
+                    section={section}
+                    onManageFaculty={() => setManageFacultySectionId(section.id)}
+                    onManageStudents={() => setManageStudentsSectionId(section.id)}
+                  />
+                ))}
+              </div>
+            )}
+            <Pager page={list.page} totalPages={list.totalPages} total={list.total} pageSize={list.pageSize} onPageChange={list.setPage} />
+          </section>
         )}
       </div>
 
       {showAddSection ? (
         <NewSectionDialog
           courses={courses}
+          defaultCourseId={courseId}
           onClose={() => setShowAddSection(false)}
           onCreated={async () => {
             setShowAddSection(false)
@@ -248,14 +291,14 @@ function SectionCard({ section, onManageFaculty, onManageStudents }: SectionCard
           <button
             type="button"
             onClick={onManageFaculty}
-            className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#102033] transition hover:border-[#34c6a3]"
+            className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#0c1f3d] transition hover:border-[#2563eb]"
           >
             Manage Faculty
           </button>
           <button
             type="button"
             onClick={onManageStudents}
-            className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#102033] transition hover:border-[#34c6a3]"
+            className="rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#0c1f3d] transition hover:border-[#2563eb]"
           >
             Manage Students
           </button>
@@ -267,12 +310,20 @@ function SectionCard({ section, onManageFaculty, onManageStudents }: SectionCard
 
 interface NewSectionDialogProps {
   courses: AdminCourse[]
+  defaultCourseId?: string
   onClose: () => void
   onCreated: () => void
 }
 
-function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps) {
-  const [courseId, setCourseId] = useState(courses[0] ? String(courses[0].id) : "")
+function NewSectionDialog({ courses, defaultCourseId, onClose, onCreated }: NewSectionDialogProps) {
+  // Arriving with a specialization already decided by the page's own filter
+  // (e.g. via a "Manage" link) locks it in — no dropdown, nothing to
+  // reselect. Only when no filter is active does it fall back to a normal
+  // dropdown defaulting to the first specialization.
+  const fixedCourse = courses.find((course) => String(course.id) === defaultCourseId) ?? null
+  const [courseId, setCourseId] = useState(
+    fixedCourse ? String(fixedCourse.id) : courses[0] ? String(courses[0].id) : "",
+  )
   const [batches, setBatches] = useState<AdminBatch[]>([])
   const [semesters, setSemesters] = useState<AdminSemester[]>([])
   const [batchId, setBatchId] = useState("")
@@ -293,14 +344,14 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
       setSemesters([])
       return
     }
-    Promise.all([getAdminCourseBatches(Number(courseId)), getAdminCourseSemesters(Number(courseId))]).then(
-      ([batchData, semesterData]) => {
+    Promise.all([getAdminCourseBatches(Number(courseId)), getAdminCourseSemesters(Number(courseId))])
+      .then(([batchData, semesterData]) => {
         setBatches(batchData.items)
         setSemesters(semesterData.items)
         setBatchId(batchData.items[0] ? String(batchData.items[0].id) : "")
         setSemesterId(semesterData.items[0] ? String(semesterData.items[0].id) : "")
-      },
-    )
+      })
+      .catch(() => setError("Could not load batches/semesters for this specialization."))
   }, [courseId])
 
   async function reloadBatches(selectId?: number) {
@@ -371,22 +422,39 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
     }
   }
 
+  if (courses.length === 0) {
+    return (
+      <Modal title="Create New Section" onClose={onClose}>
+        <p className="rounded-md border border-[#f5d9a8] bg-[#fff8ec] px-3 py-2 text-sm font-medium text-[#8a5a00]">
+          No specializations found yet. A section always belongs to one — add a specialization
+          under Academic Setup first, then come back here.
+        </p>
+      </Modal>
+    )
+  }
+
   return (
     <Modal title="Create New Section" onClose={onClose}>
       <form onSubmit={handleSubmit} className="grid gap-4">
         <DialogField label="Specialization">
-          <select
-            required
-            value={courseId}
-            onChange={(event) => setCourseId(event.target.value)}
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-          >
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.name}
-              </option>
-            ))}
-          </select>
+          {fixedCourse ? (
+            <p className="flex h-11 w-full items-center rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm font-semibold text-[#17202a]">
+              {fixedCourse.name}
+            </p>
+          ) : (
+            <select
+              required
+              value={courseId}
+              onChange={(event) => setCourseId(event.target.value)}
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
+            >
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
+              ))}
+            </select>
+          )}
         </DialogField>
         <div className="grid gap-4 sm:grid-cols-2">
           <DialogField label="Batch">
@@ -401,7 +469,7 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
                       value={batchName}
                       onChange={(event) => setBatchName(event.target.value)}
                       placeholder="Batch name (e.g. 2025-2027)"
-                      className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                      className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                     />
                     <div className="grid grid-cols-2 gap-2">
                       <input
@@ -409,21 +477,21 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
                         value={startYear}
                         onChange={(event) => setStartYear(event.target.value)}
                         placeholder="Start year"
-                        className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                        className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                       />
                       <input
                         type="number"
                         value={endYear}
                         onChange={(event) => setEndYear(event.target.value)}
                         placeholder="End year"
-                        className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                        className="h-10 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
                       />
                     </div>
                     <button
                       type="button"
                       onClick={handleCreateBatch}
                       disabled={creatingBatch}
-                      className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-3 py-2 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Plus size={14} aria-hidden="true" />
                       {creatingBatch ? "Creating..." : "Create Batch"}
@@ -433,7 +501,7 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
                   <button
                     type="button"
                     onClick={() => setShowBatchForm(true)}
-                    className="inline-flex w-fit items-center gap-1 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#102033] transition hover:border-[#34c6a3]"
+                    className="inline-flex w-fit items-center gap-1 rounded-md border border-[#dde4ec] px-3 py-2 text-sm font-semibold text-[#0c1f3d] transition hover:border-[#2563eb]"
                   >
                     <Plus size={14} aria-hidden="true" />
                     Create Batch
@@ -445,7 +513,7 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
                 required
                 value={batchId}
                 onChange={(event) => setBatchId(event.target.value)}
-                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 {batches.map((batch) => (
                   <option key={batch.id} value={batch.id}>
@@ -461,7 +529,7 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
               value={semesterId}
               onChange={(event) => setSemesterId(event.target.value)}
               disabled={semesters.length === 0}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {semesters.map((semester) => (
                 <option key={semester.id} value={semester.id}>
@@ -477,7 +545,7 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="e.g. MBA-II-A"
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         <DialogField label="Academic Year (optional)">
@@ -485,7 +553,7 @@ function NewSectionDialog({ courses, onClose, onCreated }: NewSectionDialogProps
             value={academicYear}
             onChange={(event) => setAcademicYear(event.target.value)}
             placeholder="e.g. 2025-26"
-            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+            className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
           />
         </DialogField>
         {error ? <DialogError message={error} /> : null}
@@ -505,19 +573,42 @@ function ManageFacultyDialog({ sectionId, onClose, onChanged }: ManageFacultyDia
   const [section, setSection] = useState<AdminSectionDetail | null>(null)
   const [facultyOptions, setFacultyOptions] = useState<AdminUser[]>([])
   const [facultyId, setFacultyId] = useState("")
+  const [facultySearch, setFacultySearch] = useState("")
+  const [facultyMenuOpen, setFacultyMenuOpen] = useState(false)
+  const facultyPickerRef = useRef<HTMLDivElement>(null)
   const [subject, setSubject] = useState("")
   const [error, setError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [removingId, setRemovingId] = useState<number | null>(null)
 
+  const filteredFaculty = facultyOptions.filter((faculty) =>
+    faculty.name.toLowerCase().includes(facultySearch.trim().toLowerCase()),
+  )
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (facultyPickerRef.current && !facultyPickerRef.current.contains(event.target as Node)) {
+        setFacultyMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [])
+
   async function loadSection() {
-    const data = await getAdminSection(sectionId)
-    setSection(data)
+    try {
+      const data = await getAdminSection(sectionId)
+      setSection(data)
+    } catch {
+      setError("Could not load this section. Try closing and reopening it.")
+    }
   }
 
   useEffect(() => {
     loadSection()
-    getAdminUsers({ role: "faculty", page_size: 100 }).then((data) => setFacultyOptions(data.items))
+    getAdminUsers({ role: "faculty", page_size: 100 })
+      .then((data) => setFacultyOptions(data.items))
+      .catch(() => setError("Could not load the faculty list."))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectionId])
 
@@ -529,6 +620,7 @@ function ManageFacultyDialog({ sectionId, onClose, onChanged }: ManageFacultyDia
     try {
       await assignAdminSectionFaculty(sectionId, { faculty_id: Number(facultyId), subject: subject.trim() })
       setFacultyId("")
+      setFacultySearch("")
       setSubject("")
       await loadSection()
       await onChanged()
@@ -556,7 +648,11 @@ function ManageFacultyDialog({ sectionId, onClose, onChanged }: ManageFacultyDia
   return (
     <Modal title={section ? `Faculty for: ${section.name} · ${section.semester_name}` : "Faculty"} onClose={onClose}>
       {!section ? (
-        <p className="text-sm text-[#667085]">Loading...</p>
+        error ? (
+          <DialogError message={error} />
+        ) : (
+          <p className="text-sm text-[#667085]">Loading...</p>
+        )
       ) : (
         <div className="grid gap-4">
           <div className="space-y-2">
@@ -586,28 +682,56 @@ function ManageFacultyDialog({ sectionId, onClose, onChanged }: ManageFacultyDia
           </div>
           <form onSubmit={handleAssign} className="grid gap-3 border-t border-[#dde4ec] pt-4">
             <p className="text-sm font-semibold text-[#17202a]">Add faculty</p>
-            <select
-              value={facultyId}
-              onChange={(event) => setFacultyId(event.target.value)}
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
-            >
-              <option value="">Search faculty...</option>
-              {facultyOptions.map((faculty) => (
-                <option key={faculty.id} value={faculty.id}>
-                  {faculty.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative" ref={facultyPickerRef}>
+              <input
+                value={facultySearch}
+                onChange={(event) => {
+                  setFacultySearch(event.target.value)
+                  setFacultyId("")
+                  setFacultyMenuOpen(true)
+                }}
+                onFocus={() => setFacultyMenuOpen(true)}
+                placeholder="Search faculty..."
+                autoComplete="off"
+                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
+              />
+              {facultyMenuOpen ? (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-md border border-[#dde4ec] bg-white shadow-lg">
+                  {filteredFaculty.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-[#667085]">
+                      {facultyOptions.length === 0 ? "No faculty found." : "No faculty matches that search."}
+                    </p>
+                  ) : (
+                    filteredFaculty.map((faculty) => (
+                      <button
+                        key={faculty.id}
+                        type="button"
+                        onClick={() => {
+                          setFacultyId(String(faculty.id))
+                          setFacultySearch(faculty.name)
+                          setFacultyMenuOpen(false)
+                        }}
+                        className={`block w-full px-3 py-2 text-left text-sm transition hover:bg-[#f5f7fa] ${
+                          String(faculty.id) === facultyId ? "bg-[#eaf1fd] font-semibold text-[#1d4ed8]" : "text-[#17202a]"
+                        }`}
+                      >
+                        {faculty.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
             <input
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
               placeholder="Subject they teach in this section"
-              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+              className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-2 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Plus size={15} aria-hidden="true" />
               {isSaving ? "Adding..." : "Add to Section"}
@@ -630,6 +754,9 @@ function ManageStudentsDialog({ sectionId, onClose, onChanged }: ManageStudentsD
   const [section, setSection] = useState<AdminSectionDetail | null>(null)
   const [studentOptions, setStudentOptions] = useState<AdminEligibleStudent[]>([])
   const [studentId, setStudentId] = useState("")
+  const [studentSearch, setStudentSearch] = useState("")
+  const [studentMenuOpen, setStudentMenuOpen] = useState(false)
+  const studentPickerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [isSaving, setIsSaving] = useState(false)
@@ -637,14 +764,45 @@ function ManageStudentsDialog({ sectionId, onClose, onChanged }: ManageStudentsD
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const filteredStudents = studentOptions.filter((student) => {
+    const term = studentSearch.trim().toLowerCase()
+    return student.name.toLowerCase().includes(term) || student.email.toLowerCase().includes(term)
+  })
+
+  // The enrolled-students list (not the "add student" picker above) gets its
+  // own search + pagination — a large section's roster was one long scroll.
+  const enrolledList = useListControls(
+    section?.students ?? [],
+    (student, q) => student.name.toLowerCase().includes(q) || student.email.toLowerCase().includes(q),
+    10,
+  )
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (studentPickerRef.current && !studentPickerRef.current.contains(event.target as Node)) {
+        setStudentMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [])
+
   async function loadSection() {
-    const data = await getAdminSection(sectionId)
-    setSection(data)
+    try {
+      const data = await getAdminSection(sectionId)
+      setSection(data)
+    } catch {
+      setError("Could not load this section. Try closing and reopening it.")
+    }
   }
 
   async function loadEligibleStudents() {
-    const data = await getAdminSectionEligibleStudents(sectionId)
-    setStudentOptions(data.items)
+    try {
+      const data = await getAdminSectionEligibleStudents(sectionId)
+      setStudentOptions(data.items)
+    } catch {
+      setError("Could not load eligible students.")
+    }
   }
 
   useEffect(() => {
@@ -661,6 +819,7 @@ function ManageStudentsDialog({ sectionId, onClose, onChanged }: ManageStudentsD
     try {
       await enrollAdminSectionStudents(sectionId, [Number(studentId)])
       setStudentId("")
+      setStudentSearch("")
       await loadSection()
       await loadEligibleStudents()
       await onChanged()
@@ -717,31 +876,61 @@ function ManageStudentsDialog({ sectionId, onClose, onChanged }: ManageStudentsD
       wide
     >
       {!section ? (
-        <p className="text-sm text-[#667085]">Loading...</p>
+        error ? (
+          <DialogError message={error} />
+        ) : (
+          <p className="text-sm text-[#667085]">Loading...</p>
+        )
       ) : (
         <div className="grid gap-4">
           <form onSubmit={handleEnroll} className="flex flex-wrap items-center gap-3">
-            <select
-              value={studentId}
-              onChange={(event) => setStudentId(event.target.value)}
-              disabled={studentOptions.length === 0}
-              className="h-11 flex-1 rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <option value="">
-                {studentOptions.length === 0
-                  ? "No eligible students for this specialization/batch"
-                  : "Search and add student..."}
-              </option>
-              {studentOptions.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.name} ({student.email})
-                </option>
-              ))}
-            </select>
+            <div className="relative flex-1" ref={studentPickerRef}>
+              <input
+                value={studentSearch}
+                onChange={(event) => {
+                  setStudentSearch(event.target.value)
+                  setStudentId("")
+                  setStudentMenuOpen(true)
+                }}
+                onFocus={() => setStudentMenuOpen(true)}
+                disabled={studentOptions.length === 0}
+                placeholder={
+                  studentOptions.length === 0
+                    ? "No eligible students for this specialization/batch"
+                    : "Search and add student..."
+                }
+                autoComplete="off"
+                className="h-11 w-full rounded-md border border-[#dde4ec] px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              {studentMenuOpen && studentOptions.length > 0 ? (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-md border border-[#dde4ec] bg-white shadow-lg">
+                  {filteredStudents.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-[#667085]">No student matches that search.</p>
+                  ) : (
+                    filteredStudents.map((student) => (
+                      <button
+                        key={student.id}
+                        type="button"
+                        onClick={() => {
+                          setStudentId(String(student.id))
+                          setStudentSearch(`${student.name} (${student.email})`)
+                          setStudentMenuOpen(false)
+                        }}
+                        className={`block w-full px-3 py-2 text-left text-sm transition hover:bg-[#f5f7fa] ${
+                          String(student.id) === studentId ? "bg-[#eaf1fd] font-semibold text-[#1d4ed8]" : "text-[#17202a]"
+                        }`}
+                      >
+                        {student.name} <span className="text-[#667085]">({student.email})</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
             <button
               type="submit"
               disabled={isSaving || !studentId}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Plus size={15} aria-hidden="true" />
               {isSaving ? "Adding..." : "Add"}
@@ -757,7 +946,7 @@ function ManageStudentsDialog({ sectionId, onClose, onChanged }: ManageStudentsD
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] px-4 py-3 text-sm font-semibold text-[#17202a] transition hover:border-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Upload size={15} aria-hidden="true" />
               {isUploading ? "Importing..." : "Bulk Enroll CSV"}
@@ -765,37 +954,57 @@ function ManageStudentsDialog({ sectionId, onClose, onChanged }: ManageStudentsD
           </form>
 
           {notice ? (
-            <div className="rounded-md border border-[#bdebdc] bg-[#f0fcf8] px-3 py-2 text-sm font-medium text-[#176b5a]">
+            <div className="rounded-md border border-[#a6f4c5] bg-[#ecfdf3] px-3 py-2 text-sm font-medium text-[#067647]">
               {notice}
             </div>
           ) : null}
           {error ? <DialogError message={error} /> : null}
 
-          <div className="max-h-72 space-y-2 overflow-y-auto">
-            {section.students.length === 0 ? (
-              <p className="text-sm text-[#667085]">No students enrolled yet.</p>
-            ) : (
-              section.students.map((student) => (
-                <div
-                  key={student.student_id}
-                  className="flex items-center justify-between rounded-md border border-[#dde4ec] px-3 py-2 text-sm"
-                >
-                  <span>
-                    <span className="font-semibold text-[#17202a]">{student.name}</span>{" "}
-                    <span className="text-[#667085]">· {student.email}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(student.student_id)}
-                    disabled={removingId === student.student_id}
-                    className="text-sm font-semibold text-[#b42318] disabled:opacity-60"
-                  >
-                    {removingId === student.student_id ? "Removing..." : "Remove"}
-                  </button>
+          {section.students.length === 0 ? (
+            <p className="text-sm text-[#667085]">No students enrolled yet.</p>
+          ) : (
+            <div>
+              <ListToolbar
+                query={enrolledList.query}
+                onQueryChange={enrolledList.setQuery}
+                pageSize={enrolledList.pageSize}
+                onPageSizeChange={enrolledList.setPageSize}
+                placeholder="Search enrolled students..."
+              />
+              {enrolledList.paged.length === 0 ? (
+                <p className="text-sm text-[#667085]">No enrolled student matches that search.</p>
+              ) : (
+                <div className="space-y-2">
+                  {enrolledList.paged.map((student) => (
+                    <div
+                      key={student.student_id}
+                      className="flex items-center justify-between rounded-md border border-[#dde4ec] px-3 py-2 text-sm"
+                    >
+                      <span>
+                        <span className="font-semibold text-[#17202a]">{student.name}</span>{" "}
+                        <span className="text-[#667085]">· {student.email}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(student.student_id)}
+                        disabled={removingId === student.student_id}
+                        className="text-sm font-semibold text-[#b42318] disabled:opacity-60"
+                      >
+                        {removingId === student.student_id ? "Removing..." : "Remove"}
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))
-            )}
-          </div>
+              )}
+              <Pager
+                page={enrolledList.page}
+                totalPages={enrolledList.totalPages}
+                total={enrolledList.total}
+                pageSize={enrolledList.pageSize}
+                onPageChange={enrolledList.setPage}
+              />
+            </div>
+          )}
         </div>
       )}
     </Modal>
@@ -811,7 +1020,7 @@ interface ModalProps {
 
 function Modal({ title, onClose, children, wide }: ModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c1f3d]/45 p-4">
       <div className={`w-full ${wide ? "max-w-2xl" : "max-w-lg"}`}>
         <div className="w-full rounded-lg bg-white p-5 shadow-xl sm:p-6">
           <div className="flex items-start justify-between gap-4">
@@ -872,7 +1081,7 @@ function DialogActions({ onClose, isSaving, submitLabel }: DialogActionsProps) {
       <button
         type="submit"
         disabled={isSaving}
-        className="rounded-md bg-[#34c6a3] px-4 py-3 text-sm font-semibold text-[#102033] disabled:cursor-not-allowed disabled:opacity-60"
+        className="rounded-md bg-[#2563eb] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSaving ? "Saving..." : submitLabel}
       </button>

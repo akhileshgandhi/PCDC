@@ -89,7 +89,7 @@ export default function CareerPathway() {
                       </div>
                       <div className="mt-3 h-2 rounded-full bg-[#e6e8eb]">
                         <div
-                          className="h-2 rounded-full bg-[#c9a227]"
+                          className="h-2 rounded-full bg-[#2563eb]"
                           style={{ width: `${focus.score}%` }}
                         />
                       </div>
@@ -112,7 +112,7 @@ export default function CareerPathway() {
                       key={activity.case_id}
                       className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm"
                     >
-                      <div className="grid size-11 place-items-center rounded-md bg-[#081d3a] text-white">
+                      <div className="grid size-11 place-items-center rounded-md bg-[#0c1f3d] text-white">
                         <ClipboardList size={20} aria-hidden="true" />
                       </div>
                       <h3 className="mt-4 font-semibold text-[#111827]">{activity.title}</h3>
@@ -128,7 +128,7 @@ export default function CareerPathway() {
                       ) : null}
                       <Link
                         to={`/student/case-studies/${activity.case_id}`}
-                        className="mt-4 inline-flex rounded-md bg-[#c9a227] px-4 py-2 text-sm font-semibold text-[#081d3a]"
+                        className="mt-4 inline-flex rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white"
                       >
                         Start
                       </Link>
@@ -138,7 +138,7 @@ export default function CareerPathway() {
               ) : (
                 <p className="mt-4 rounded-lg border border-[#e6e8eb] bg-white p-6 text-center text-sm text-[#6b7280]">
                   No pending cases right now. Check{" "}
-                  <Link to="/student/case-studies" className="font-semibold text-[#0b1d3a] underline">
+                  <Link to="/student/case-studies" className="font-semibold text-[#0c1f3d] underline">
                     My Case Studies
                   </Link>{" "}
                   for what&apos;s available.

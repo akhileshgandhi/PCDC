@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import ProtectedRoute from "./components/auth/ProtectedRoute"
 import SessionWatcher from "./components/auth/SessionWatcher"
+import MouseGlow from "./components/common/MouseGlow"
 import ToastHost from "./components/Toast"
 import { AuthProvider } from "./context/AuthContext"
 import Achievements from "./pages/achievements/Achievements"
@@ -44,6 +45,7 @@ export default function App() {
       <BrowserRouter>
         <SessionWatcher />
         <ToastHost />
+        <MouseGlow />
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<Login />} />

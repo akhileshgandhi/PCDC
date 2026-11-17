@@ -63,7 +63,7 @@ export default function ChangePassword() {
     <AuthLayout>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="flex items-start gap-3 rounded-md bg-slate-50 px-3 py-3">
-          <KeyRound size={20} className="mt-0.5 shrink-0 text-[#c9a227]" aria-hidden="true" />
+          <KeyRound size={20} className="mt-0.5 shrink-0 text-[#2563eb]" aria-hidden="true" />
           <div className="text-sm">
             <p className="font-semibold text-slate-900">Set a new password</p>
             <p className="mt-0.5 text-slate-600">

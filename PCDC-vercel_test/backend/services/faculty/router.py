@@ -26,6 +26,7 @@ from services.admin.teaching_alerts import notify_pending_teaching
 from services.dashboard_insights import faculty_dashboard_insights
 from services.auth.service import get_current_user, hash_password
 from services.bank.service import archive_deleted_case, release_used_entries, upsert_ai_bank_entry
+from services.simulation.service import finalize_expired_case_attempts
 from shared.cache import cache_delete_prefix, cache_get, cache_set
 from shared.database import SessionLocal, get_db
 from shared.email import case_assigned_email, request_base_url, send_email
@@ -2896,6 +2897,10 @@ def faculty_case_attempts(
     ).fetchone()
     if not owned:
         raise HTTPException(status_code=404, detail="Case study not found")
+    # Close out any attempt on this case whose timer ran out unattended —
+    # otherwise it keeps reading as "in progress" here until the student
+    # reopens it, which is what actually flips its status today.
+    finalize_expired_case_attempts(db)
     rows = db.execute(
         text(_ATTEMPT_LIST_SQL.format(filter="csa.case_study_id = :cid", order="u.name ASC")),
         {"cid": case_id},
@@ -2922,6 +2927,8 @@ def faculty_student_attempts(
     ).fetchone()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+    # Same close-out as above, scoped to this student.
+    finalize_expired_case_attempts(db, student_user_id)
     rows = db.execute(
         text(
             _ATTEMPT_LIST_SQL.format(
@@ -2954,6 +2961,10 @@ def faculty_report_cases(
     than case_section_assignments alone, so individually-assigned cases are
     counted too."""
     require_faculty(current_user)
+    # Same close-out as the attempt-list endpoints above — this aggregates
+    # assigned_cases.status, which only flips off 'active' once an expired
+    # attempt is closed out.
+    finalize_expired_case_attempts(db)
     where_clauses = ["fs.faculty_id = :fid", "fs.status = 'active'"]
     params: Dict[str, Any] = {"fid": current_user["id"]}
     if section_id:
@@ -4080,7 +4091,8 @@ def admin_assignable_sections(db: Session, current_user: Dict[str, Any]) -> Dict
     rows = db.execute(
         text(f"""
             SELECT cs.id, cs.name, cs.academic_year, se.semester_number, se.name AS semester_name,
-                   b.name AS batch_name, c.name AS course_name, i.name AS institution_name,
+                   b.name AS batch_name, c.name AS course_name, c.code AS course_code,
+                   i.name AS institution_name,
                    (SELECT string_agg(DISTINCT fs.subject, ', ')
                     FROM faculty_sections fs WHERE fs.section_id = cs.id) AS subjects,
                    COUNT(DISTINCT ss.student_id) FILTER (WHERE ss.status = 'active') AS student_count
@@ -4092,7 +4104,7 @@ def admin_assignable_sections(db: Session, current_user: Dict[str, Any]) -> Dict
             LEFT JOIN institutions i ON i.id = d.institution_id
             LEFT JOIN student_sections ss ON ss.section_id = cs.id
             WHERE {scope_sql}
-            GROUP BY cs.id, se.semester_number, se.name, b.name, c.name, i.name
+            GROUP BY cs.id, se.semester_number, se.name, b.name, c.name, c.code, i.name
             ORDER BY i.name, c.name, se.semester_number, cs.name
         """),
         params,
@@ -4107,6 +4119,7 @@ def admin_assignable_sections(db: Session, current_user: Dict[str, Any]) -> Dict
                 "semester_name": row.semester_name,
                 "batch_name": row.batch_name,
                 "course_name": row.course_name,
+                "course_code": row.course_code,
                 "institution_name": row.institution_name,
                 "subjects": row.subjects,
                 "student_count": int(row.student_count),
@@ -4128,7 +4141,7 @@ def faculty_sections(
     rows = db.execute(
         text("""
             SELECT cs.id, cs.name, cs.academic_year, se.semester_number, se.name AS semester_name,
-                   b.name AS batch_name, c.name AS course_name,
+                   b.name AS batch_name, c.name AS course_name, c.code AS course_code,
                    string_agg(DISTINCT fs.subject, ', ') AS subjects,
                    COUNT(DISTINCT ss.student_id) FILTER (WHERE ss.status = 'active') AS student_count
             FROM faculty_sections fs
@@ -4138,7 +4151,7 @@ def faculty_sections(
             JOIN courses c ON c.id = cs.course_id
             LEFT JOIN student_sections ss ON ss.section_id = cs.id
             WHERE fs.faculty_id = :faculty_id
-            GROUP BY cs.id, se.semester_number, se.name, b.name, c.name
+            GROUP BY cs.id, se.semester_number, se.name, b.name, c.name, c.code
             ORDER BY se.semester_number, cs.name
         """),
         {"faculty_id": current_user["id"]},
@@ -4153,6 +4166,7 @@ def faculty_sections(
                 "semester_name": row.semester_name,
                 "batch_name": row.batch_name,
                 "course_name": row.course_name,
+                "course_code": row.course_code,
                 "subjects": row.subjects,
                 "student_count": int(row.student_count),
             }
@@ -4197,7 +4211,9 @@ def faculty_students_roster(
         text(f"""
             SELECT DISTINCT s.id AS student_id, u.id AS user_id, u.name,
                    COALESCE(u.email, u.college_id, '') AS email,
+                   u.college_id AS scholar_number,
                    cs.id AS section_id, cs.name AS section_name,
+                   c.code AS course_code, b.name AS batch_name,
                    avg_scores.average_score,
                    last_activity.last_activity_at,
                    COALESCE(assignment_counts.assigned_count, 0) AS assigned_count,
@@ -4206,6 +4222,8 @@ def faculty_students_roster(
             JOIN student_sections ss ON ss.section_id = cs.id AND ss.status = 'active'
             JOIN students s ON s.id = ss.student_id
             JOIN users u ON u.id = s.user_id
+            JOIN courses c ON c.id = cs.course_id
+            JOIN batches b ON b.id = cs.batch_id
             LEFT JOIN LATERAL (
                 SELECT AVG(ev.total_score) AS average_score
                 FROM case_study_attempts csa
@@ -4235,8 +4253,11 @@ def faculty_students_roster(
                 "user_id": row.user_id,
                 "name": row.name,
                 "email": row.email,
+                "scholar_number": row.scholar_number,
                 "section_id": row.section_id,
                 "section_name": row.section_name,
+                "course_code": row.course_code,
+                "batch_name": row.batch_name,
                 "average_score": round(float(row.average_score), 1) if row.average_score is not None else 0,
                 "last_activity_at": str(row.last_activity_at) if row.last_activity_at else None,
                 "assigned_count": int(row.assigned_count),
@@ -4829,11 +4850,11 @@ def assign_case_to_sections(
                 text("""
                     INSERT INTO assigned_cases (
                         student_id, case_study_id, assigned_by, status,
-                        assignment_source, section_assignment_id, due_date
+                        assignment_source, section_assignment_id, due_date, instructions
                     )
                     VALUES (
                         :student_id, :case_id, :assigned_by, 'pending',
-                        'faculty', :section_assignment_id, :due_date
+                        'faculty', :section_assignment_id, :due_date, :instructions
                     )
                 """),
                 {
@@ -4842,6 +4863,7 @@ def assign_case_to_sections(
                     "assigned_by": current_user["id"],
                     "section_assignment_id": assignment_id,
                     "due_date": data.due_date,
+                    "instructions": data.instructions,
                 },
             )
             _notify_case_assigned(
@@ -4938,10 +4960,10 @@ def assign_case_to_students(
             text("""
                 INSERT INTO assigned_cases (
                     student_id, case_study_id, assigned_by, status,
-                    assignment_source, due_date
+                    assignment_source, due_date, instructions
                 )
                 VALUES (
-                    :student_id, :case_id, :assigned_by, 'pending', 'faculty', :due_date
+                    :student_id, :case_id, :assigned_by, 'pending', 'faculty', :due_date, :instructions
                 )
             """),
             {
@@ -4949,6 +4971,7 @@ def assign_case_to_students(
                 "case_id": case_id,
                 "assigned_by": current_user["id"],
                 "due_date": data.due_date,
+                "instructions": data.instructions,
             },
         )
         _notify_case_assigned(

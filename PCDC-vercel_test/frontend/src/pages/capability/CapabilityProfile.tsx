@@ -130,7 +130,7 @@ export default function CapabilityProfile() {
             </p>
             <Link
               to="/student/case-studies"
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-[#C9A227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#B08D20]"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-md bg-[#2563EB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3B82F6]"
             >
               Browse Case Studies
               <ArrowRight size={16} aria-hidden="true" />
@@ -161,7 +161,7 @@ export default function CapabilityProfile() {
                         {summary?.overall_capability_score ?? 0}
                       </p>
                       {summary?.current_level != null ? (
-                        <p className="mt-2 text-sm font-semibold text-[#0B1D3A]">
+                        <p className="mt-2 text-sm font-semibold text-[#0C1F3D]">
                           Level {summary.current_level}
                           {summary.level_label ? ` - ${summary.level_label}` : ""}
                         </p>
@@ -210,7 +210,7 @@ export default function CapabilityProfile() {
                       className="rounded-xl border border-[#E6EBEB] bg-white p-5 shadow-sm"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#FFF7DF] text-[#92702A]">
+                        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#DBEAFE] text-[#1D4ED8]">
                           <Target size={19} aria-hidden="true" />
                         </div>
                         <div>
@@ -219,7 +219,7 @@ export default function CapabilityProfile() {
                             {[item.domain, item.level].filter(Boolean).join(" · ")}
                           </p>
                           {item.develops.length > 0 ? (
-                            <p className="mt-2 text-sm font-semibold text-[#0B1D3A]">
+                            <p className="mt-2 text-sm font-semibold text-[#0C1F3D]">
                               Develops: {item.develops.join(", ")}
                             </p>
                           ) : null}
@@ -227,7 +227,7 @@ export default function CapabilityProfile() {
                       </div>
                       <Link
                         to={`/student/case-studies/${item.case_id}`}
-                        className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#92702A] transition hover:text-[#0B1D3A]"
+                        className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#1D4ED8] transition hover:text-[#0C1F3D]"
                       >
                         View Case
                         <ArrowRight size={16} aria-hidden="true" />

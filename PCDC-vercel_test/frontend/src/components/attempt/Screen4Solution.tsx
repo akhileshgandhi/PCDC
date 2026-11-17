@@ -49,10 +49,10 @@ export default function Screen4Solution({
 
   return (
     <section className="mx-auto max-w-[720px] rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2563eb]">
         Your Final Recommendation
       </p>
-      <h2 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">Submit Your Solution</h2>
+      <h2 className="mt-3 text-3xl font-semibold text-[#0c1f3d]">Submit Your Solution</h2>
       <p className="mt-3 text-sm leading-6 text-[#6B7280]">
         Structure your solution using the sections below. Be specific and justify your
         recommendations.
@@ -69,7 +69,7 @@ export default function Screen4Solution({
               onChange={(event) => onSolutionChange(field.key, event.target.value)}
               rows={4}
               placeholder={field.placeholder}
-              className="mt-2 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+              className="mt-2 w-full rounded-xl border border-[#E6EBEB] px-4 py-3 text-sm leading-6 text-[#111827] outline-none transition placeholder:text-[#9CA3AF] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
             />
           </label>
         ))}
@@ -81,7 +81,7 @@ export default function Screen4Solution({
         disabled={!isReady}
         className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition ${
           isReady
-            ? "bg-[#C9A227] text-white hover:bg-[#B08D20]"
+            ? "bg-[#2563eb] text-white hover:bg-[#3b82f6]"
             : "cursor-not-allowed bg-[#D1D5DB] text-white"
         }`}
       >

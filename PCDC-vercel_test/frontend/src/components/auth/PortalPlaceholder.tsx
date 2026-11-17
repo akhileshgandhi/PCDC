@@ -20,10 +20,10 @@ export default function PortalPlaceholder({ role }: PortalPlaceholderProps) {
   return (
     <main className="grid min-h-screen place-items-center bg-[#F6F7F9] px-4 text-[#111827]">
       <section className="w-full max-w-lg rounded-xl border border-[#E6EBEB] bg-white p-8 text-center shadow-sm">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#C9A227]">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#2563EB]">
           {role} Portal
         </p>
-        <h1 className="mt-3 text-3xl font-semibold text-[#0B1D3A]">
+        <h1 className="mt-3 text-3xl font-semibold text-[#0C1F3D]">
           {role} Portal - Coming Soon
         </h1>
         <p className="mt-4 text-sm leading-6 text-[#6B7280]">
@@ -32,7 +32,7 @@ export default function PortalPlaceholder({ role }: PortalPlaceholderProps) {
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg border border-[#0B1D3A] px-5 py-3 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#0B1D3A] hover:text-white"
+          className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg border border-[#0C1F3D] px-5 py-3 text-sm font-semibold text-[#0C1F3D] transition hover:bg-[#0C1F3D] hover:text-white"
         >
           <LogOut size={16} aria-hidden="true" />
           Log Out

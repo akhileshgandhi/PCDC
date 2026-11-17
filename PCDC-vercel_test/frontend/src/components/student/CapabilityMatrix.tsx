@@ -130,14 +130,14 @@ export default function CapabilityMatrix({
               aria-expanded={isActive}
               className={`rounded-lg border p-5 text-center shadow-sm transition ${
                 isActive
-                  ? "border-[#c9a227] bg-[#fff7df]"
-                  : "border-[#e6e8eb] bg-white hover:border-[#c9a227]"
+                  ? "border-[#2563eb] bg-[#eff6ff]"
+                  : "border-[#e6e8eb] bg-white hover:border-[#2563eb]"
               }`}
             >
               <h3 className="text-sm font-medium text-[#111827]">{category.label}</h3>
               {category.score !== null ? (
                 <>
-                  <p className="mt-3 text-3xl font-bold text-[#081d3a]">{category.score}</p>
+                  <p className="mt-3 text-3xl font-bold text-[#0c1f3d]">{category.score}</p>
                   <p className="mt-1 text-xs text-[#6b7280]">avg score</p>
                 </>
               ) : (
@@ -153,7 +153,7 @@ export default function CapabilityMatrix({
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-base font-semibold text-[#111827]">{activeData.label}</h3>
             {activeData.score !== null ? (
-              <span className="text-lg font-bold text-[#081d3a]">{activeData.score}</span>
+              <span className="text-lg font-bold text-[#0c1f3d]">{activeData.score}</span>
             ) : null}
           </div>
           {activeData.items ? (
@@ -173,7 +173,7 @@ export default function CapabilityMatrix({
                   </span>
                   <div className="h-2 flex-1 rounded-full bg-[#e6e8eb]">
                     <div
-                      className="h-2 rounded-full bg-[#c9a227]"
+                      className="h-2 rounded-full bg-[#2563eb]"
                       style={{ width: `${Math.min(100, Math.max(0, item.score))}%` }}
                     />
                   </div>

@@ -57,7 +57,7 @@ export default function Profile() {
 
         <div className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="grid size-14 shrink-0 place-items-center rounded-lg bg-[#081d3a] text-lg font-semibold text-white">
+            <div className="grid size-14 shrink-0 place-items-center rounded-lg bg-[#0c1f3d] text-lg font-semibold text-white">
               {isLoading ? "--" : initials(profile?.full_name ?? null)}
             </div>
             <div>
@@ -73,7 +73,7 @@ export default function Profile() {
         </div>
 
         <div className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#92702a]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#1d4ed8]">
             Personal Information
           </h3>
           <div className="mt-2 divide-y divide-[#e6e8eb]">
@@ -83,7 +83,7 @@ export default function Profile() {
         </div>
 
         <div className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#92702a]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#1d4ed8]">
             Academic Information
           </h3>
           <div className="mt-2 divide-y divide-[#e6e8eb]">
@@ -97,7 +97,7 @@ export default function Profile() {
 
 
         <div className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#92702a]">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[#1d4ed8]">
             Career
           </h3>
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -109,7 +109,7 @@ export default function Profile() {
             </div>
             <Link
               to="/student/career-pathway"
-              className="inline-flex items-center gap-1 text-sm font-semibold text-[#92702a]"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-[#1d4ed8]"
             >
               Change Pathway →
             </Link>

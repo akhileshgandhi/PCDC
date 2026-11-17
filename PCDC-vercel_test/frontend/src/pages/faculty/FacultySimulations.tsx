@@ -71,7 +71,7 @@ export default function FacultySimulations() {
             </div>
             <Link
               to="/faculty/simulations/new"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-[#0b1d3a] shadow-sm transition hover:bg-[#e0b84e]"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6]"
             >
               <Plus size={17} aria-hidden="true" /> Create Simulation
             </Link>
@@ -80,7 +80,7 @@ export default function FacultySimulations() {
             {(Object.keys(AUTHOR_STATUS) as SimulationAuthorStatus[]).map((status) => (
               <span key={status} className="rounded-full border border-[#e6e8eb] bg-[#f6f7fb] px-4 py-2 text-sm">
                 <span className="font-semibold text-[#111827]">{AUTHOR_STATUS[status].label}:</span>{" "}
-                <span className="font-semibold text-[#0b1d3a]">{counts[status]}</span>
+                <span className="font-semibold text-[#2563eb]">{counts[status]}</span>
               </span>
             ))}
           </div>
@@ -104,7 +104,7 @@ export default function FacultySimulations() {
             <p className="py-8 text-center text-sm text-[#6b7280]">Loading simulations...</p>
           ) : items.length === 0 ? (
             <div className="py-12 text-center">
-              <Table2 className="mx-auto text-[#c9a227]" size={28} aria-hidden="true" />
+              <Table2 className="mx-auto text-[#2563eb]" size={28} aria-hidden="true" />
               <h2 className="mt-3 text-lg font-semibold text-[#111827]">No simulations yet</h2>
               <p className="mt-1 text-sm text-[#6b7280]">Create your first spreadsheet simulation with AI in about a minute.</p>
             </div>
@@ -127,7 +127,7 @@ export default function FacultySimulations() {
                   {items.map((item) => (
                     <tr key={item.id}>
                       <td className="py-3 pr-4">
-                        <Link to={`/faculty/simulations/${item.id}`} className="font-semibold text-[#0b1d3a] hover:underline">
+                        <Link to={`/faculty/simulations/${item.id}`} className="font-semibold text-[#2563eb] hover:underline">
                           {item.title}
                         </Link>
                         <p className="text-xs text-[#6b7280]">
@@ -161,7 +161,7 @@ export default function FacultySimulations() {
                         {item.attempt_count > 0 ? (
                           <Link
                             to={`/faculty/simulations/${item.id}/results`}
-                            className="inline-flex items-center rounded-md border border-[#0b1d3a] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+                            className="inline-flex items-center rounded-md border border-[#2563eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
                           >
                             Results
                           </Link>
@@ -170,7 +170,7 @@ export default function FacultySimulations() {
                           <button
                             type="button"
                             onClick={() => setAssigning(item)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-[#0b1d3a] px-3 py-1.5 text-xs font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-[#2563eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:bg-[#2563eb] hover:text-white"
                           >
                             <Send size={13} aria-hidden="true" /> Assign
                           </button>

@@ -104,7 +104,7 @@ export default function FacultyAttemptReport() {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0b1d3a] transition hover:text-[#c9a227]"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0c1f3d] transition hover:text-[#2563eb]"
         >
           <ArrowLeft size={16} aria-hidden="true" />
           Back
@@ -121,7 +121,7 @@ export default function FacultyAttemptReport() {
         ) : (
           <>
             <section className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm sm:p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#c9a227]">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2563eb]">
                 Attempt Report
               </p>
               <h1 className="mt-2 text-2xl font-semibold text-[#17202a]">{data.student_name}</h1>
@@ -186,7 +186,7 @@ export default function FacultyAttemptReport() {
                   <div>
                     {data.marks ? (
                       <>
-                        <p className="text-4xl font-extrabold text-[#0b1d3a]">
+                        <p className="text-4xl font-extrabold text-[#2563eb]">
                           {data.marks.total_awarded}
                           <span className="text-base font-semibold text-[#6b7280]">
                             {" "}
@@ -198,14 +198,14 @@ export default function FacultyAttemptReport() {
                         </p>
                       </>
                     ) : (
-                      <p className="text-4xl font-extrabold text-[#0b1d3a]">
+                      <p className="text-4xl font-extrabold text-[#2563eb]">
                         {evaluation.total_score}
                         <span className="text-base font-semibold text-[#6b7280]">/100</span>
                       </p>
                     )}
                   </div>
                   <div className="flex-1 min-w-[200px]">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#c9a227]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#2563eb]">
                       Report Card
                     </p>
                     <p className="mt-2 text-sm leading-6 text-[#374151]">
@@ -252,7 +252,7 @@ export default function FacultyAttemptReport() {
                         className="rounded-lg border border-[#e6e8eb] bg-[#f9fafb] p-4"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold uppercase text-[#c9a227]">
+                          <span className="text-xs font-semibold uppercase text-[#2563eb]">
                             Question {question.question_number}
                           </span>
                           <span className="text-sm font-semibold text-[#17202a]">
@@ -293,7 +293,7 @@ export default function FacultyAttemptReport() {
                   <ul className="mt-3 space-y-2 text-sm text-[#374151]">
                     {toBulletItems(evaluation.improvement_areas).map((item, index) => (
                       <li key={index} className="flex gap-2">
-                        <span className="text-[#c9a227]">→</span>
+                        <span className="text-[#2563eb]">→</span>
                         <span>{item}</span>
                       </li>
                     ))}

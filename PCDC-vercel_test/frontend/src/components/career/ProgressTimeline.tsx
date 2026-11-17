@@ -32,7 +32,7 @@ export default function ProgressTimeline({ milestones }: ProgressTimelineProps) 
           <h2 className="text-lg font-semibold text-[#111827]">Progress Timeline</h2>
           <p className="text-sm text-[#6b7280]">Five readiness milestones toward the pathway goal.</p>
         </div>
-        <span className="rounded-md bg-[#f6f7fb] px-3 py-2 text-xs font-semibold text-[#081d3a]">
+        <span className="rounded-md bg-[#f6f7fb] px-3 py-2 text-xs font-semibold text-[#0c1f3d]">
           {active.status}
         </span>
       </div>
@@ -50,8 +50,8 @@ export default function ProgressTimeline({ milestones }: ProgressTimelineProps) 
               onClick={() => setActiveMilestone(index)}
               className={`relative rounded-lg border p-4 text-left transition ${
                 isActive
-                  ? "border-[#c9a227] bg-[#fff9e8] shadow-sm"
-                  : "border-[#e6e8eb] bg-white hover:border-[#c9a227]/60"
+                  ? "border-[#2563eb] bg-[#eff6ff] shadow-sm"
+                  : "border-[#e6e8eb] bg-white hover:border-[#2563eb]/60"
               }`}
             >
               <div
@@ -72,7 +72,7 @@ export default function ProgressTimeline({ milestones }: ProgressTimelineProps) 
             <h3 className="font-semibold text-[#111827]">{active.name}</h3>
             <p className="mt-1 text-sm text-[#6b7280]">Required capability score: {active.score}</p>
           </div>
-          <span className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#081d3a]">
+          <span className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-[#0c1f3d]">
             {active.caseStudies} case studies completed
           </span>
         </div>

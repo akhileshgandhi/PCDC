@@ -44,7 +44,7 @@ export default function CoachCard({ coach, isActive, onSelect }: CoachCardProps)
   return (
     <article
       className={`rounded-xl border bg-white p-5 shadow-sm transition ${
-        isActive ? "border-[#C9A227] ring-2 ring-[#C9A227]/20" : "border-[#E6EBEB]"
+        isActive ? "border-[#2563eb] ring-2 ring-[#2563eb]/20" : "border-[#E6EBEB]"
       }`}
     >
       {/* Aish's face with this coach's icon as a badge — same Aish, six hats. */}
@@ -58,7 +58,7 @@ export default function CoachCard({ coach, isActive, onSelect }: CoachCardProps)
         </span>
       </div>
 
-      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-[#92702A]">
+      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-[#1d4ed8]">
         {AISH_NAME}
       </p>
       <h2 className="mt-0.5 text-lg font-semibold text-[#111827]">{coach.name}</h2>
@@ -81,8 +81,8 @@ export default function CoachCard({ coach, isActive, onSelect }: CoachCardProps)
         onClick={() => onSelect(coach)}
         className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition ${
           isActive
-            ? "bg-[#C9A227] text-white"
-            : "border border-[#0B1D3A] text-[#0B1D3A] hover:bg-[#0B1D3A] hover:text-white"
+            ? "bg-[#2563eb] text-white"
+            : "border border-[#0c1f3d] text-[#0c1f3d] hover:bg-[#0c1f3d] hover:text-white"
         }`}
       >
         {isActive ? "Active" : "Start Session"}

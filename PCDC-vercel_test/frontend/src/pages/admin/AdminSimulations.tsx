@@ -63,8 +63,8 @@ export default function AdminSimulations() {
                 onClick={() => setTab(t.value)}
                 className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                   tab === t.value
-                    ? "border-[#0b1d3a] bg-[#0b1d3a] text-white"
-                    : "border-[#e6e8eb] bg-[#f6f7fb] text-[#111827] hover:border-[#c9a227]"
+                    ? "border-[#0c1f3d] bg-[#0c1f3d] text-white"
+                    : "border-[#e6e8eb] bg-[#f6f7fb] text-[#111827] hover:border-[#2563eb]"
                 }`}
               >
                 {t.label} <span className="ml-1 tabular-nums opacity-80">{counts[t.value] ?? 0}</span>
@@ -82,7 +82,7 @@ export default function AdminSimulations() {
             <p className="py-8 text-center text-sm text-[#6b7280]">Loading simulations...</p>
           ) : visible.length === 0 ? (
             <div className="py-12 text-center">
-              <Table2 className="mx-auto text-[#c9a227]" size={28} aria-hidden="true" />
+              <Table2 className="mx-auto text-[#2563eb]" size={28} aria-hidden="true" />
               <p className="mt-3 text-sm text-[#6b7280]">{current.empty}</p>
             </div>
           ) : (
@@ -105,7 +105,7 @@ export default function AdminSimulations() {
                   {visible.map((item) => (
                     <tr key={item.id}>
                       <td className="py-3 pr-4">
-                        <Link to={`/admin/simulations/${item.id}`} className="font-semibold text-[#0b1d3a] hover:underline">
+                        <Link to={`/admin/simulations/${item.id}`} className="font-semibold text-[#0c1f3d] hover:underline">
                           {item.title}
                         </Link>
                         <p className="text-xs text-[#6b7280]">

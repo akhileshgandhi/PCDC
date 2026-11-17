@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from services.auth.service import get_current_user
 from services.dashboard_insights import student_dashboard_insights
+from services.simulation.service import finalize_expired_case_attempts
 from services.student import capability_engine
 from shared.cache import cache_get, cache_set
 from shared.database import get_db
@@ -140,6 +141,12 @@ def student_dashboard_summary(
 ) -> Dict[str, Any]:
     require_student(current_user)
     user_id = current_user["id"]
+    # Close out anything that timed out unattended — otherwise a case whose
+    # timer ran out keeps counting as "in progress" here until the student
+    # happens to reopen it, which is what actually flips its status today.
+    # Before the cache check: expiring something here invalidates this same
+    # cache key, so a stale "in progress" count isn't served from cache either.
+    finalize_expired_case_attempts(db, user_id)
     cache_key = f"student_dashboard_summary:{user_id}"
     cached = cache_get(cache_key)
     if cached is not None:

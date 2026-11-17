@@ -21,7 +21,7 @@ export default function ExpandableText({ label, text, className }: ExpandableTex
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B1D3A] transition hover:text-[#C9A227]"
+          className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0C1F3D] transition hover:text-[#2563EB]"
         >
           <Maximize2 size={13} aria-hidden="true" />
           View full
@@ -34,7 +34,7 @@ export default function ExpandableText({ label, text, className }: ExpandableTex
             // inline — avoids this `fixed` overlay getting trapped by an
             // ancestor's stacking/containing context wherever this is used.
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-[#102033]/45 p-4"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-[#0c1f3d]/50 backdrop-blur-[2px] p-4"
               onClick={() => setIsOpen(false)}
             >
               <div
@@ -45,7 +45,7 @@ export default function ExpandableText({ label, text, className }: ExpandableTex
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-center justify-between border-b border-[#E6EBEB] px-6 py-4">
-                  <h2 id="expandable-text-title" className="text-base font-semibold text-[#0B1D3A]">
+                  <h2 id="expandable-text-title" className="text-base font-semibold text-[#0C1F3D]">
                     {label}
                   </h2>
                   <button

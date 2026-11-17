@@ -33,6 +33,8 @@ import {
 } from "../../api/student"
 import { getAssignedSimulations } from "../../api/jobsim"
 import { AISH_NAME, AishIntro } from "../../components/aish/Aish"
+import CountUp from "../../components/common/CountUp"
+import Reveal from "../../components/common/Reveal"
 import StudentInsights from "../../components/dashboard/StudentInsights"
 import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
@@ -206,15 +208,16 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-5">
+      <div className="space-y-6">
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {error}
           </div>
         )}
-        <section className="grid gap-5 xl:grid-cols-[1fr_340px]">
-          <div className="rounded-lg bg-[#081d3a] p-6 text-white shadow-md sm:p-8">
-            <div className="inline-flex rounded-full bg-[#c9a227] px-3 py-1 text-xs font-semibold text-white">
+        <section className="grid gap-6 xl:grid-cols-[1fr_340px]">
+          <Reveal index={0}>
+          <div className="rounded-2xl bg-[#0c1f3d] p-8 text-white shadow-lg shadow-slate-900/10 sm:p-10">
+            <div className="inline-flex rounded-full bg-[#2563eb] px-3 py-1 text-xs font-semibold text-white">
               Current Status: Active
             </div>
             <h2 className="mt-7 text-3xl font-semibold leading-tight sm:text-4xl">
@@ -230,8 +233,8 @@ export default function Dashboard() {
               {summary.hero_message}
             </p>
             {summary.upcoming_session ? (
-              <div className="mt-4 inline-flex items-center gap-2 rounded-md bg-white/10 px-4 py-2.5 text-sm font-medium text-white/90">
-                <CalendarClock size={16} aria-hidden="true" className="shrink-0 text-[#c9a227]" />
+              <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 text-sm font-medium text-white/90">
+                <CalendarClock size={16} aria-hidden="true" className="shrink-0 text-[#2563eb]" />
                 Next {titleCase(summary.upcoming_session.session_type)} with{" "}
                 {summary.upcoming_session.mentor_name}: {formatSessionTime(summary.upcoming_session.scheduled_at)}
               </div>
@@ -243,7 +246,7 @@ export default function Dashboard() {
                     ? `/student/case-studies/${summary.active_case.case_id}/attempt`
                     : "/student/case-studies"
                 }
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e0b84e]"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6]"
               >
                 {summary.active_case
                   ? summary.active_case.started
@@ -254,18 +257,20 @@ export default function Dashboard() {
               </Link>
               <Link
                 to="/student/capability-profile"
-                className="inline-flex items-center justify-center rounded-md border border-[#c9a227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                className="inline-flex items-center justify-center rounded-lg border border-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 View Capability Profile
               </Link>
             </div>
           </div>
+          </Reveal>
 
-          <div className="rounded-lg border border-[#e6e8eb] bg-white p-6 shadow-sm">
-            <div className="mx-auto grid size-36 place-items-center rounded-full border-[10px] border-[#e6e8eb] border-t-[#92702a]">
+          <Reveal index={1}>
+          <div className="rounded-2xl border border-[#e6e8eb] bg-white p-6 shadow-md shadow-blue-500/[0.06] transition hover:shadow-lg hover:shadow-blue-500/20">
+            <div className="mx-auto grid size-36 place-items-center rounded-full border-[10px] border-[#e6e8eb] border-t-[#2563eb]">
               <div className="text-center">
                 <div className="text-3xl font-semibold">
-                  {isLoading ? "--" : summary.overall_capability_score}
+                  <CountUp value={summary.overall_capability_score} isLoading={isLoading} />
                 </div>
                 <div className="text-xs font-semibold text-[#111827]">Overall Score</div>
               </div>
@@ -277,20 +282,22 @@ export default function Dashboard() {
                   : `Level ${summary.current_level}`}
               </h3>
               {summary.level_label ? (
-                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#92702a]">
+                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-[#1d4ed8]">
                   {summary.level_label}
                 </p>
               ) : null}
             </div>
           </div>
+          </Reveal>
         </section>
 
         <StudentInsights />
 
         <section>
           <h2 className="mb-4 text-2xl font-semibold">Active Engagements</h2>
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            <Card title="Active Case Study" className="border-sky-100 bg-sky-50">
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            <Reveal index={0}>
+            <Card title="Active Case Study" className="border-blue-100 bg-blue-50">
               <p className="mb-4 text-sm font-medium text-[#6b7280]">
                 Apply strategic thinking to real business challenges.
               </p>
@@ -299,8 +306,8 @@ export default function Dashboard() {
                   <p className="text-sm font-medium text-[#6b7280]">Loading...</p>
                 ) : summary.active_case_count > 0 ? (
                   <>
-                    <div className="text-4xl font-semibold text-[#081d3a]">
-                      {summary.active_case_count}
+                    <div className="text-4xl font-semibold text-[#0c1f3d]">
+                      <CountUp value={summary.active_case_count} />
                     </div>
                     <p className="mt-1 text-sm font-medium text-[#6b7280]">
                       Active Case {summary.active_case_count === 1 ? "Study" : "Studies"}
@@ -312,13 +319,15 @@ export default function Dashboard() {
               </div>
               <Link
                 to="/student/case-studies"
-                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#0c1f3d] px-4 py-3 text-sm font-semibold text-[#0c1f3d] transition hover:bg-[#0c1f3d] hover:text-white"
               >
                 Browse Case Studies
               </Link>
             </Card>
+            </Reveal>
 
-            <Card title="Simulations" className="border-teal-100 bg-teal-50">
+            <Reveal index={1}>
+            <Card title="Simulations" className="border-cyan-100 bg-cyan-50">
               <p className="mb-4 text-sm font-medium text-[#6b7280]">
                 Practice high-stakes decisions in realistic simulated scenarios.
               </p>
@@ -330,11 +339,11 @@ export default function Dashboard() {
                 ) : (
                   <>
                     <div>
-                      <div className="text-4xl font-semibold text-[#081d3a]">{simulationCounts.toDo}</div>
+                      <div className="text-4xl font-semibold text-[#0c1f3d]"><CountUp value={simulationCounts.toDo} /></div>
                       <p className="mt-1 text-sm font-medium text-[#6b7280]">To do</p>
                     </div>
                     <div>
-                      <div className="text-4xl font-semibold text-[#081d3a]">{simulationCounts.completed}</div>
+                      <div className="text-4xl font-semibold text-[#0c1f3d]"><CountUp value={simulationCounts.completed} /></div>
                       <p className="mt-1 text-sm font-medium text-[#6b7280]">Completed</p>
                     </div>
                   </>
@@ -342,32 +351,37 @@ export default function Dashboard() {
               </div>
               <Link
                 to="/student/simulations"
-                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#081d3a] px-4 py-3 text-sm font-semibold text-[#081d3a] transition hover:bg-[#081d3a] hover:text-white"
+                className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#0c1f3d] px-4 py-3 text-sm font-semibold text-[#0c1f3d] transition hover:bg-[#0c1f3d] hover:text-white"
               >
                 Browse Simulations
               </Link>
             </Card>
+            </Reveal>
 
-            <Card title="Academic Fundamentals" className="border-rose-100 bg-rose-50" comingSoon>
+            <Reveal index={2}>
+            <Card title="Academic Fundamentals" className="border-indigo-100 bg-indigo-50" comingSoon>
               <p className="flex-1 text-sm font-medium text-[#6b7280]">
                 Strengthen your grasp of core business concepts.
               </p>
               <ComingSoonButton label="Browse Concepts" />
             </Card>
+            </Reveal>
 
-            <Card title="Career Compass" className="border-orange-100 bg-orange-50" comingSoon>
+            <Reveal index={3}>
+            <Card title="Career Compass" className="border-sky-100 bg-sky-50" comingSoon>
               <div className="flex-1 py-2 text-center">
-                <Compass size={28} aria-hidden="true" className="mx-auto text-[#92702a]" />
+                <Compass size={28} aria-hidden="true" className="mx-auto text-[#1d4ed8]" />
                 <p className="mt-3 text-sm font-medium text-[#6b7280]">
                   Explore roles and pathways aligned to your strengths.
                 </p>
               </div>
               <ComingSoonButton label="Explore Career Compass" />
             </Card>
+            </Reveal>
           </div>
         </section>
 
-        <section id="capability-matrix" className="scroll-mt-24 rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
+        <section id="capability-matrix" className="scroll-mt-24 rounded-2xl border border-[#e6e8eb] bg-white p-6 shadow-md shadow-blue-500/[0.06]">
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-2xl font-semibold">Capability Matrix</h2>
@@ -377,7 +391,7 @@ export default function Dashboard() {
             </div>
             <Link
               to="/student/capability-profile"
-              className="hidden items-center gap-2 text-sm font-semibold text-[#92702a] sm:inline-flex"
+              className="hidden items-center gap-2 text-sm font-semibold text-[#1d4ed8] sm:inline-flex"
             >
               Details
               <ChevronRight size={16} aria-hidden="true" />
@@ -391,7 +405,7 @@ export default function Dashboard() {
           />
         </section>
 
-        <section className="grid gap-5">
+        <section className="grid gap-6">
           <Card title={`${AISH_NAME} Coaches`}>
             <AishIntro size="sm" className="mb-2">
               I'm your coach in six areas. Pick one to start a session.
@@ -406,7 +420,7 @@ export default function Dashboard() {
                     key={coach.name}
                     className="flex w-full items-center gap-3 py-3 text-left"
                   >
-                    <span className="grid size-9 place-items-center rounded-full bg-[#e8eef7] text-[#081d3a]">
+                    <span className="grid size-9 place-items-center rounded-full bg-[#dbeafe] text-[#0c1f3d]">
                       <Icon size={17} aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -433,7 +447,8 @@ export default function Dashboard() {
 
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-3">
+        <section className="grid gap-6 xl:grid-cols-3">
+          <Reveal index={0}>
           <Card title="Recent Evaluations">
             {recentEvaluations.length > 0 ? (
               <div className="divide-y divide-[#e6e8eb]">
@@ -458,7 +473,9 @@ export default function Dashboard() {
               </p>
             )}
           </Card>
+          </Reveal>
 
+          <Reveal index={1}>
           <Card title="Achievements">
             {achievements ? (
               <>
@@ -473,9 +490,9 @@ export default function Dashboard() {
                         <div
                           key={badge.key}
                           title={badge.description}
-                          className="flex flex-col items-center gap-1.5 rounded-lg border border-[#f4e4c1] bg-[#fffaf0] p-3 text-center"
+                          className="flex flex-col items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-center transition hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-md hover:shadow-blue-500/20"
                         >
-                          <div className="grid size-9 place-items-center rounded-full bg-[#f4e4c1] text-[#92702a]">
+                          <div className="grid size-9 place-items-center rounded-full bg-[#bfdbfe] text-[#1d4ed8]">
                             <Trophy size={16} aria-hidden="true" />
                           </div>
                           <span className="text-xs font-semibold leading-tight text-[#111827]">
@@ -502,7 +519,7 @@ export default function Dashboard() {
                   <p className="mt-1 text-xs text-[#6b7280]">{achievements.next_milestone.label}</p>
                   <div className="mt-4 h-2 rounded-full bg-[#e6e8eb]">
                     <div
-                      className="h-2 rounded-full bg-[#081d3a] transition-all"
+                      className="h-2 rounded-full bg-[#0c1f3d] transition-all"
                       style={{
                         width: `${Math.min(
                           100,
@@ -528,7 +545,9 @@ export default function Dashboard() {
               <ChevronRight size={16} aria-hidden="true" />
             </Link>
           </Card>
+          </Reveal>
 
+          <Reveal index={2}>
           <Card title="Career Pathway">
             {careerPathway ? (
               <>
@@ -549,7 +568,7 @@ export default function Dashboard() {
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-[#e6e8eb]">
                     <div
-                      className="h-2 rounded-full bg-[#c9a227] transition-all"
+                      className="h-2 rounded-full bg-[#2563eb] transition-all"
                       style={{
                         width: `${
                           careerPathway.progress.total
@@ -568,7 +587,7 @@ export default function Dashboard() {
                       {careerPathway.focus_areas.map((focus) => (
                         <div
                           key={focus.capability}
-                          className="flex items-center justify-between rounded-md bg-[#f6f7fb] px-3 py-2 text-sm"
+                          className="flex items-center justify-between rounded-lg bg-[#f6f7fb] px-3 py-2 text-sm"
                         >
                           <span className="truncate">{focus.capability}</span>
                           <span className="text-xs font-semibold text-[#6b7280]">
@@ -589,7 +608,7 @@ export default function Dashboard() {
                       {careerPathway.recommended_cases.map((item) => (
                         <div
                           key={item.title}
-                          className="flex items-center justify-between rounded-md bg-[#f6f7fb] px-3 py-2 text-sm"
+                          className="flex items-center justify-between rounded-lg bg-[#f6f7fb] px-3 py-2 text-sm"
                         >
                           <span className="truncate">{item.title}</span>
                           <span className="ml-2 shrink-0 text-xs font-semibold text-[#6b7280]">
@@ -614,6 +633,7 @@ export default function Dashboard() {
               <ChevronRight size={16} aria-hidden="true" />
             </Link>
           </Card>
+          </Reveal>
         </section>
       </div>
     </DashboardLayout>
@@ -629,7 +649,7 @@ interface CardProps {
 
 function Card({ title, children, className, comingSoon }: CardProps) {
   return (
-    <article className={`flex h-full flex-col rounded-lg border p-5 shadow-sm ${className ?? "border-[#e6e8eb] bg-white"}`}>
+    <article className={`flex h-full flex-col rounded-2xl border p-6 shadow-md shadow-blue-500/[0.06] transition hover:-translate-y-0.5 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20 ${className ?? "border-[#e6e8eb] bg-white"}`}>
       <div className="mb-4 flex items-center gap-2">
         <h2 className="text-lg font-semibold">{title}</h2>
         {comingSoon ? (
@@ -652,7 +672,7 @@ function ComingSoonButton({ label }: { label: string }) {
       type="button"
       disabled
       title="This module isn't available yet."
-      className="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-md border border-[#d0d5dd] px-4 py-3 text-sm font-semibold text-[#98a2b3]"
+      className="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[#d0d5dd] px-4 py-3 text-sm font-semibold text-[#98a2b3]"
     >
       {label} — Coming soon
     </button>

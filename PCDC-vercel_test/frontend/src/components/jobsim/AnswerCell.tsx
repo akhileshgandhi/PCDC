@@ -115,7 +115,7 @@ export default function AnswerCell({
             if (event.key === "Enter") void evaluate()
           }}
           placeholder="=SUM(C2:C100) or a value"
-          className="w-full rounded-md border-2 border-[#C9A227] bg-[#FFF8E6] px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-[#C9A227]/30 disabled:opacity-60"
+          className="w-full rounded-md border-2 border-[#2563eb] bg-[#eff6ff] px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-[#2563eb]/30 disabled:opacity-60"
         />
       </div>
 
@@ -160,7 +160,7 @@ export default function AnswerCell({
           type="button"
           onClick={() => void check()}
           disabled={disabled || isChecking || !input.trim()}
-          className="inline-flex shrink-0 items-center gap-2 rounded-md bg-[#C9A227] px-4 py-2 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#E0B84E] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex shrink-0 items-center gap-2 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isChecking ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null}
           Check Answer

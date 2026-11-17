@@ -1,5 +1,5 @@
 import { Download, Edit3, Eye, FileUp, RotateCcw, Rocket, Search, Send, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 
 import {
@@ -16,6 +16,7 @@ import {
 } from "../../api/bank"
 import { publishFacultyCase } from "../../api/faculty"
 import { getCurrentUser, isAdminRole } from "../../utils/auth"
+import { Pager } from "../common/ListControls"
 import AssignToClassDialog from "../faculty/AssignToClassDialog"
 import BulkUploadCaseDialog from "../faculty/BulkUploadCaseDialog"
 import PublishCaseDialog from "./PublishCaseDialog"
@@ -46,6 +47,15 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
   const [difficultyFilter, setDifficultyFilter] = useState("")
   const [sourceFilter, setSourceFilter] = useState("")
   const [creatorFilter, setCreatorFilter] = useState("")
+  // Subject and faculty lists can run into the dozens, so these are a
+  // type-to-filter search instead of a plain <select> — picking out one
+  // name from a long list by scrolling was effectively unusable.
+  const [subjectSearch, setSubjectSearch] = useState("")
+  const [subjectMenuOpen, setSubjectMenuOpen] = useState(false)
+  const subjectPickerRef = useRef<HTMLDivElement>(null)
+  const [facultySearch, setFacultySearch] = useState("")
+  const [facultyMenuOpen, setFacultyMenuOpen] = useState(false)
+  const facultyPickerRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
@@ -53,6 +63,8 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
   const [publishing, setPublishing] = useState<BankEntryDetail | null>(null)
   const [assigning, setAssigning] = useState<BankEntry | null>(null)
   const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
   const loadEntries = useCallback(async () => {
     try {
@@ -65,6 +77,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
         creator: creatorFilter || undefined,
       })
       setEntries(data.items)
+      setPage(1)
       setError("")
     } catch {
       setError("Could not load the case study bank.")
@@ -73,12 +86,40 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
     }
   }, [searchQuery, subjectFilter, semesterFilter, difficultyFilter, sourceFilter, creatorFilter])
 
+  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize))
+  const pagedEntries = entries.slice((page - 1) * pageSize, page * pageSize)
+
+  function changePageSize(value: number) {
+    setPageSize(value)
+    setPage(1)
+  }
+
   useEffect(() => {
     void loadEntries()
   }, [loadEntries])
 
   useEffect(() => {
     getBankMeta().then(setMeta).catch(() => undefined)
+  }, [])
+
+  const filteredSubjects = meta.subjects.filter((subject) =>
+    subject.toLowerCase().includes(subjectSearch.trim().toLowerCase()),
+  )
+  const filteredCreators = meta.creators.filter((creator) =>
+    creator.toLowerCase().includes(facultySearch.trim().toLowerCase()),
+  )
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (subjectPickerRef.current && !subjectPickerRef.current.contains(event.target as Node)) {
+        setSubjectMenuOpen(false)
+      }
+      if (facultyPickerRef.current && !facultyPickerRef.current.contains(event.target as Node)) {
+        setFacultyMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
   }, [])
 
   const isAdmin = isAdminRole(currentUser?.role)
@@ -244,12 +285,57 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
               onChange={(event) => setSearchQuery(event.target.value)}
             />
           </div>
-          <select className={inputClass} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
-            <option value="">All subjects</option>
-            {meta.subjects.map((subject) => (
-              <option key={subject} value={subject}>{subject}</option>
-            ))}
-          </select>
+          <div className="relative" ref={subjectPickerRef}>
+            <input
+              className={inputClass}
+              value={subjectSearch}
+              onChange={(event) => {
+                setSubjectSearch(event.target.value)
+                setSubjectFilter("")
+                setSubjectMenuOpen(true)
+              }}
+              onFocus={() => setSubjectMenuOpen(true)}
+              placeholder="All subjects"
+              autoComplete="off"
+            />
+            {subjectMenuOpen ? (
+              <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded-md border border-[#dde4ec] bg-white shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubjectFilter("")
+                    setSubjectSearch("")
+                    setSubjectMenuOpen(false)
+                  }}
+                  className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-[#f5f7fa] ${
+                    subjectFilter === "" ? "font-semibold text-[#1d4ed8]" : "text-[#17202a]"
+                  }`}
+                >
+                  All subjects
+                </button>
+                {filteredSubjects.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-[#667085]">No subject matches that search.</p>
+                ) : (
+                  filteredSubjects.map((subject) => (
+                    <button
+                      key={subject}
+                      type="button"
+                      onClick={() => {
+                        setSubjectFilter(subject)
+                        setSubjectSearch(subject)
+                        setSubjectMenuOpen(false)
+                      }}
+                      className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-[#f5f7fa] ${
+                        subject === subjectFilter ? "bg-[#eaf1fd] font-semibold text-[#1d4ed8]" : "text-[#17202a]"
+                      }`}
+                    >
+                      {subject}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+          </div>
           <select className={inputClass} value={semesterFilter} onChange={(e) => setSemesterFilter(e.target.value)}>
             <option value="">All semesters</option>
             {meta.semesters.map((semester) => (
@@ -268,12 +354,57 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
             <option value="uploaded">Uploaded</option>
             <option value="ai_generated">AI generated</option>
           </select>
-          <select className={inputClass} value={creatorFilter} onChange={(e) => setCreatorFilter(e.target.value)}>
-            <option value="">All faculty</option>
-            {meta.creators.map((creator) => (
-              <option key={creator} value={creator}>{creator}</option>
-            ))}
-          </select>
+          <div className="relative" ref={facultyPickerRef}>
+            <input
+              className={inputClass}
+              value={facultySearch}
+              onChange={(event) => {
+                setFacultySearch(event.target.value)
+                setCreatorFilter("")
+                setFacultyMenuOpen(true)
+              }}
+              onFocus={() => setFacultyMenuOpen(true)}
+              placeholder="All faculty"
+              autoComplete="off"
+            />
+            {facultyMenuOpen ? (
+              <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-y-auto rounded-md border border-[#dde4ec] bg-white shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatorFilter("")
+                    setFacultySearch("")
+                    setFacultyMenuOpen(false)
+                  }}
+                  className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-[#f5f7fa] ${
+                    creatorFilter === "" ? "font-semibold text-[#1d4ed8]" : "text-[#17202a]"
+                  }`}
+                >
+                  All faculty
+                </button>
+                {filteredCreators.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-[#667085]">No faculty matches that search.</p>
+                ) : (
+                  filteredCreators.map((creator) => (
+                    <button
+                      key={creator}
+                      type="button"
+                      onClick={() => {
+                        setCreatorFilter(creator)
+                        setFacultySearch(creator)
+                        setFacultyMenuOpen(false)
+                      }}
+                      className={`block w-full px-3 py-1.5 text-left text-xs transition hover:bg-[#f5f7fa] ${
+                        creator === creatorFilter ? "bg-[#eaf1fd] font-semibold text-[#1d4ed8]" : "text-[#17202a]"
+                      }`}
+                    >
+                      {creator}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -295,7 +426,7 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
           </p>
         ) : (
           <div className="divide-y divide-[#eef2f7]">
-            {entries.map((entry) => (
+            {pagedEntries.map((entry) => (
               <div key={entry.id}
                 className="grid gap-2 py-4 lg:grid-cols-[1.5fr_0.75fr_0.55fr_0.7fr_0.85fr_1fr_1.5fr] lg:items-center">
                 <div>
@@ -418,6 +549,23 @@ export default function CaseBankView({ variant }: { variant: BankVariant }) {
             ))}
           </div>
         )}
+        {entries.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-3 border-t border-[#eef2f7] pt-3">
+            <label className="flex items-center gap-2 text-xs font-semibold text-[#667085]">
+              Rows per page
+              <select
+                value={pageSize}
+                onChange={(e) => changePageSize(Number(e.target.value))}
+                className="h-9 rounded-md border border-[#dde4ec] bg-white px-2 text-sm font-medium text-[#17202a] outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
+        <Pager page={page} totalPages={totalPages} total={entries.length} pageSize={pageSize} onPageChange={setPage} />
       </section>
 
       {viewing ? (

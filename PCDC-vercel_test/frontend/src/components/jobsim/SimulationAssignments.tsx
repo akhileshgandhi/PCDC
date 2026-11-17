@@ -72,7 +72,7 @@ export default function SimulationAssignments({
           {items.some((item) => item.started > 0) ? (
             <Link
               to={`/faculty/simulations/${simulation.id}/results`}
-              className="inline-flex items-center justify-center rounded-md border border-[#0b1d3a] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#0b1d3a] hover:text-white"
+              className="inline-flex items-center justify-center rounded-md border border-[#0c1f3d] px-4 py-2.5 text-sm font-semibold text-[#0c1f3d] transition hover:bg-[#0c1f3d] hover:text-white"
             >
               View results
             </Link>
@@ -81,7 +81,7 @@ export default function SimulationAssignments({
             <button
               type="button"
               onClick={() => setIsAssigning(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#c9a227] px-4 py-2.5 text-sm font-semibold text-[#0b1d3a] transition hover:bg-[#e0b84e]"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3b82f6]"
             >
               <Send size={16} aria-hidden="true" /> Assign
             </button>
@@ -116,7 +116,7 @@ export default function SimulationAssignments({
               return (
                 <li key={item.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
-                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-[#f6f7fb] text-[#0b1d3a]">
+                    <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-md bg-[#f6f7fb] text-[#0c1f3d]">
                       {item.kind === "section" ? <Users size={16} aria-hidden="true" /> : <UserRound size={16} aria-hidden="true" />}
                     </span>
                     <div className="min-w-0">

@@ -16,13 +16,13 @@ export function PrestigeLogo({ size = "md", className = "" }: { size?: keyof typ
       <svg width={tile} height={tile} viewBox="0 0 46 46" aria-hidden="true">
         <defs>
           <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#E0B84E" />
-            <stop offset="1" stopColor="#0B1D3A" />
+            <stop offset="0" stopColor="#3b82f6" />
+            <stop offset="1" stopColor="#0c1f3d" />
           </linearGradient>
         </defs>
-        <circle cx="5" cy="9" r="2.5" fill="#E0B84E" />
-        <circle cx="11" cy="3.5" r="3" fill="#C9A227" />
-        <circle cx="3.5" cy="17" r="2" fill="#C9A227" opacity="0.7" />
+        <circle cx="5" cy="9" r="2.5" fill="#3b82f6" />
+        <circle cx="11" cy="3.5" r="3" fill="#2563eb" />
+        <circle cx="3.5" cy="17" r="2" fill="#2563eb" opacity="0.7" />
         <rect x="10" y="10" width="34" height="34" rx="8" fill={`url(#${gradient})`} />
         <text x="27" y="36" textAnchor="middle" fontSize="24" fontWeight="800" fill="#FFFFFF" fontFamily="inherit">
           P
@@ -42,8 +42,8 @@ export default function MemoLetterhead() {
       <div className="flex justify-end">
         <PrestigeLogo />
       </div>
-      <p className="mt-2 text-2xl font-bold tracking-wide text-[#0B1D3A]">MEMO</p>
-      <div className="mt-3 h-0.5 bg-[#C9A227]" />
+      <p className="mt-2 text-2xl font-bold tracking-wide text-[#0c1f3d]">MEMO</p>
+      <div className="mt-3 h-0.5 bg-[#2563eb]" />
     </div>
   )
 }

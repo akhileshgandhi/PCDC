@@ -26,7 +26,7 @@ const ACTION_LABEL: Record<PromotionAction, string> = {
 }
 
 const fieldClass =
-  "h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20 disabled:bg-[#f6f7fb] disabled:text-[#98a2b3]"
+  "h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20 disabled:bg-[#f6f7fb] disabled:text-[#98a2b3]"
 
 function detailOf(err: unknown, fallback: string) {
   const detail = isAxiosError(err) ? err.response?.data?.detail : undefined
@@ -67,8 +67,8 @@ export default function AdminPromotion() {
               onClick={() => setTab(value)}
               className={`rounded-md border px-4 py-2 text-sm font-semibold transition ${
                 tab === value
-                  ? "border-[#102033] bg-[#102033] text-white"
-                  : "border-[#dde4ec] bg-white text-[#17202a] hover:border-[#102033]"
+                  ? "border-[#2563eb] bg-[#2563eb] text-white"
+                  : "border-[#dde4ec] bg-white text-[#17202a] hover:border-[#2563eb]"
               }`}
             >
               {label}
@@ -283,7 +283,7 @@ function BySection() {
                   type="button"
                   onClick={applyToSelected}
                   disabled={selectedIds.length === 0}
-                  className="h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-semibold text-[#17202a] hover:border-[#102033] disabled:opacity-50"
+                  className="h-10 rounded-md border border-[#dde4ec] bg-white px-3 text-sm font-semibold text-[#17202a] hover:border-[#2563eb] disabled:opacity-50"
                 >
                   Set for selected
                 </button>
@@ -374,7 +374,7 @@ function BySection() {
                   type="button"
                   onClick={() => void runPreview()}
                   disabled={busy || selectedIds.length === 0}
-                  className="rounded-md bg-[#102033] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1b3452] disabled:opacity-50"
+                  className="rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#3b82f6] disabled:opacity-50"
                 >
                   {busy && !preview ? "Checking..." : `Review ${selectedIds.length || ""} change${selectedIds.length === 1 ? "" : "s"}`}
                 </button>
@@ -437,14 +437,14 @@ function ByCsv() {
         <button
           type="button"
           onClick={() => void downloadPromotionTemplate()}
-          className="inline-flex h-10 items-center gap-2 self-start rounded-md border border-[#dde4ec] px-3 text-sm font-semibold text-[#17202a] hover:border-[#102033]"
+          className="inline-flex h-10 items-center gap-2 self-start rounded-md border border-[#dde4ec] px-3 text-sm font-semibold text-[#17202a] hover:border-[#2563eb]"
         >
           <Download size={16} aria-hidden="true" /> Template
         </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-[#98a2b3] px-4 py-2.5 text-sm font-semibold text-[#17202a] hover:border-[#102033]">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-[#98a2b3] px-4 py-2.5 text-sm font-semibold text-[#17202a] hover:border-[#2563eb]">
           <FileUp size={16} aria-hidden="true" />
           {file ? file.name : "Choose CSV file"}
           <input
@@ -464,7 +464,7 @@ function ByCsv() {
           type="button"
           onClick={() => void run(true)}
           disabled={!file || busy}
-          className="rounded-md bg-[#102033] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1b3452] disabled:opacity-50"
+          className="rounded-md bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#3b82f6] disabled:opacity-50"
         >
           {busy && !preview ? "Checking..." : "Preview"}
         </button>
@@ -501,7 +501,7 @@ function ResultPanel({
     <div className="space-y-3 rounded-md border border-[#dde4ec] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <GraduationCap size={18} className="text-[#0f766e]" aria-hidden="true" />
+          <GraduationCap size={18} className="text-[#2563eb]" aria-hidden="true" />
           <p className="text-sm font-semibold text-[#17202a]">
             {result.dry_run ? "Preview: " : "Done: "}
             {result.ok_count} {result.dry_run ? "ready" : "applied"}
@@ -518,7 +518,7 @@ function ResultPanel({
               type="button"
               disabled={busy || result.ok_count === 0}
               onClick={() => setConfirming(true)}
-              className="rounded-md bg-[#0f766e] px-4 py-2 text-sm font-semibold text-white hover:bg-[#115e59] disabled:opacity-50"
+              className="rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#3b82f6] disabled:opacity-50"
             >
               {busy ? "Applying..." : `Apply ${result.ok_count} change${result.ok_count === 1 ? "" : "s"}`}
             </button>

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { getFacultyDashboardInsights, type FacultyDashboardInsights } from "../../api/faculty"
+import Reveal from "../common/Reveal"
 import { AlertTile, EmptyNote, Panel, ProgressBar, dueText, pctText, shortDate } from "./InsightBits"
 import { AssignmentStatusBar, SERIES_1, SimpleBarChart, WeeklyTrendChart } from "./InsightCharts"
 
@@ -44,80 +45,95 @@ export default function FacultyInsights() {
     <>
       <section>
         <h2 className="mb-3 text-xl font-semibold text-[#111827]">Needs Your Attention</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <AlertTile
-            accent="faculty"
-            label="Due in Next 7 Days"
-            value={attention?.due_next_7_days ?? 0}
-            hint="Student submissions due this week that aren't completed yet."
-            icon={CalendarClock}
-            isLoading={isLoading}
-          />
-          <AlertTile
-            accent="faculty"
-            label="Overdue Submissions"
-            value={attention?.overdue_submissions ?? 0}
-            hint="Assigned cases past their due date and not completed."
-            icon={CalendarX}
-            isLoading={isLoading}
-            urgent
-          />
-          <AlertTile
-            accent="faculty"
-            label="AI-Content Flags"
-            value={attention?.ai_flagged_attempts ?? 0}
-            hint="Attempts with an answer likely AI-written (from reports you've opened)."
-            icon={Sparkles}
-            isLoading={isLoading}
-            urgent
-          />
-          <AlertTile
-            accent="faculty"
-            label="Teaching Awaiting Approval"
-            value={attention?.teaching_pending_approval ?? 0}
-            hint="Your teaching selections an admin hasn't approved yet."
-            icon={Hourglass}
-            isLoading={isLoading}
-            to="/faculty/onboarding/my-teaching"
-          />
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <Reveal index={0}>
+            <AlertTile
+              accent="faculty"
+              label="Due in Next 7 Days"
+              value={attention?.due_next_7_days ?? 0}
+              hint="Student submissions due this week that aren't completed yet."
+              icon={CalendarClock}
+              isLoading={isLoading}
+            />
+          </Reveal>
+          <Reveal index={1}>
+            <AlertTile
+              accent="faculty"
+              label="Overdue Submissions"
+              value={attention?.overdue_submissions ?? 0}
+              hint="Assigned cases past their due date and not completed."
+              icon={CalendarX}
+              isLoading={isLoading}
+              urgent
+            />
+          </Reveal>
+          <Reveal index={2}>
+            <AlertTile
+              accent="faculty"
+              label="AI-Content Flags"
+              value={attention?.ai_flagged_attempts ?? 0}
+              hint="Attempts with an answer likely AI-written (from reports you've opened)."
+              icon={Sparkles}
+              isLoading={isLoading}
+              urgent
+            />
+          </Reveal>
+          <Reveal index={3}>
+            <AlertTile
+              accent="faculty"
+              label="Teaching Awaiting Approval"
+              value={attention?.teaching_pending_approval ?? 0}
+              hint="Your teaching selections an admin hasn't approved yet."
+              icon={Hourglass}
+              isLoading={isLoading}
+              to="/faculty/onboarding/my-teaching"
+            />
+          </Reveal>
         </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-3">
-        <Panel accent="faculty" title="Submissions" subtitle="Per week, last 8 weeks">
-          {isLoading ? (
-            <p className="text-sm text-[#6b7280]">Loading...</p>
-          ) : (
-            <WeeklyTrendChart
-              data={data.weekly_submissions}
-              series={[{ key: "submissions", label: "Submissions", color: SERIES_1 }]}
-            />
-          )}
-        </Panel>
-        <Panel accent="faculty" title="Score Distribution" subtitle="Evaluated attempts by score band">
-          {isLoading ? (
-            <p className="text-sm text-[#6b7280]">Loading...</p>
-          ) : data.score_distribution.every((band) => band.attempts === 0) ? (
-            <EmptyNote>No evaluated attempts yet.</EmptyNote>
-          ) : (
-            <SimpleBarChart
-              data={data.score_distribution}
-              categoryKey="band"
-              valueKey="attempts"
-              valueName="Attempts"
-            />
-          )}
-        </Panel>
-        <Panel accent="faculty" title="Assignment Status" subtitle="Cases you assigned or wrote">
-          {isLoading ? (
-            <p className="text-sm text-[#6b7280]">Loading...</p>
-          ) : (
-            <AssignmentStatusBar counts={data.assignment_status} />
-          )}
-        </Panel>
+      <section className="grid gap-6 xl:grid-cols-3">
+        <Reveal index={0}>
+          <Panel accent="faculty" title="Submissions" subtitle="Per week, last 8 weeks">
+            {isLoading ? (
+              <p className="text-sm text-[#6b7280]">Loading...</p>
+            ) : (
+              <WeeklyTrendChart
+                data={data.weekly_submissions}
+                series={[{ key: "submissions", label: "Submissions", color: SERIES_1 }]}
+              />
+            )}
+          </Panel>
+        </Reveal>
+        <Reveal index={1}>
+          <Panel accent="faculty" title="Score Distribution" subtitle="Evaluated attempts by score band">
+            {isLoading ? (
+              <p className="text-sm text-[#6b7280]">Loading...</p>
+            ) : data.score_distribution.every((band) => band.attempts === 0) ? (
+              <EmptyNote>No evaluated attempts yet.</EmptyNote>
+            ) : (
+              <SimpleBarChart
+                data={data.score_distribution}
+                categoryKey="band"
+                valueKey="attempts"
+                valueName="Attempts"
+              />
+            )}
+          </Panel>
+        </Reveal>
+        <Reveal index={2}>
+          <Panel accent="faculty" title="Assignment Status" subtitle="Cases you assigned or wrote">
+            {isLoading ? (
+              <p className="text-sm text-[#6b7280]">Loading...</p>
+            ) : (
+              <AssignmentStatusBar counts={data.assignment_status} />
+            )}
+          </Panel>
+        </Reveal>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-2">
+      <section className="grid gap-6 xl:grid-cols-2">
+        <Reveal index={0}>
         <Panel accent="faculty" title="Upcoming Deadlines" subtitle="Your assigned cases with work still open">
           {isLoading ? (
             <p className="text-sm text-[#6b7280]">Loading...</p>
@@ -137,7 +153,7 @@ export default function FacultyInsights() {
                       >
                         {item.title}
                       </Link>
-                      <span className={`shrink-0 text-xs font-semibold ${due.overdue ? "text-[#b42318]" : "text-[#92702a]"}`}>
+                      <span className={`shrink-0 text-xs font-semibold ${due.overdue ? "text-[#b42318]" : "text-[#1d4ed8]"}`}>
                         {due.text}
                       </span>
                     </div>
@@ -153,7 +169,9 @@ export default function FacultyInsights() {
             </ul>
           )}
         </Panel>
+        </Reveal>
 
+        <Reveal index={1}>
         <Panel accent="faculty" title="Section Performance" subtitle="Average score and completion of assigned cases">
           {isLoading ? (
             <p className="text-sm text-[#6b7280]">Loading...</p>
@@ -172,7 +190,7 @@ export default function FacultyInsights() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-[#0b1d3a]">{pctText(section.avg_score_pct)}</p>
+                      <p className="text-sm font-semibold text-[#0c1f3d]">{pctText(section.avg_score_pct)}</p>
                       <p className="text-[11px] text-[#9ca3af]">avg. score</p>
                     </div>
                   </div>
@@ -187,9 +205,11 @@ export default function FacultyInsights() {
             </ul>
           )}
         </Panel>
+        </Reveal>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+      <section className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+        <Reveal index={0}>
         <Panel
           accent="faculty"
           title="Latest Submissions"
@@ -221,7 +241,7 @@ export default function FacultyInsights() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-[#0b1d3a]">{pctText(item.score_pct)}</p>
+                      <p className="text-sm font-semibold text-[#0c1f3d]">{pctText(item.score_pct)}</p>
                       <p className="text-[11px] text-[#9ca3af]">{STATUS_LABELS[item.status] ?? item.status}</p>
                     </div>
                   </Link>
@@ -230,7 +250,9 @@ export default function FacultyInsights() {
             </ul>
           )}
         </Panel>
+        </Reveal>
 
+        <Reveal index={1}>
         <Panel accent="faculty" title="Students Needing Support" subtitle="Average score below 50% on evaluated cases">
           {isLoading ? (
             <p className="text-sm text-[#6b7280]">Loading...</p>
@@ -257,6 +279,7 @@ export default function FacultyInsights() {
             </ul>
           )}
         </Panel>
+        </Reveal>
       </section>
     </>
   )

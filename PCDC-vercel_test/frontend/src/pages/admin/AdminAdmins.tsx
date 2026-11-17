@@ -17,12 +17,12 @@ import { useAdminScope } from "../../hooks/useAdminScope"
 import AdminLayout from "../../layouts/AdminLayout"
 
 const field =
-  "h-11 w-full rounded-md border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#34c6a3] focus:ring-2 focus:ring-[#34c6a3]/20"
+  "h-11 w-full rounded-lg border border-[#dde4ec] bg-white px-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
 const label = "grid gap-1.5 text-sm font-semibold text-[#17202a]"
 const primaryButton =
-  "inline-flex items-center justify-center gap-2 rounded-md bg-[#102033] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1b3452] disabled:opacity-60"
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#3b82f6] disabled:opacity-60"
 const secondaryButton =
-  "inline-flex items-center justify-center gap-2 rounded-md border border-[#dde4ec] bg-white px-4 py-2.5 text-sm font-semibold text-[#17202a] transition hover:border-[#34c6a3]"
+  "inline-flex items-center justify-center gap-2 rounded-lg border border-[#dde4ec] bg-white px-4 py-2.5 text-sm font-semibold text-[#17202a] transition hover:border-[#2563eb]"
 
 function errorText(err: unknown, fallback: string) {
   const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -103,7 +103,7 @@ export default function AdminAdmins() {
             </div>
           </div>
           {notice ? (
-            <p className="mt-4 rounded-md bg-[#ecfaf6] px-3 py-2 text-sm font-medium text-[#0b6b52]">{notice}</p>
+            <p className="mt-4 rounded-md bg-[#ecfaf6] px-3 py-2 text-sm font-medium text-[#067647]">{notice}</p>
           ) : null}
           {error ? (
             <p className="mt-4 rounded-md bg-[#fff5f5] px-3 py-2 text-sm font-medium text-[#b42318]">{error}</p>
@@ -161,7 +161,7 @@ export default function AdminAdmins() {
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        <span className={admin.status === "active" ? "text-[#0b6b52]" : "text-[#b42318]"}>
+                        <span className={admin.status === "active" ? "text-[#067647]" : "text-[#b42318]"}>
                           {admin.status === "active" ? "Active" : "Inactive"}
                         </span>
                       </td>
@@ -170,7 +170,7 @@ export default function AdminAdmins() {
                           {admin.role === "admin" && !admin.admin_unrestricted ? (
                             <button
                               type="button"
-                              className="rounded-md border border-[#dde4ec] px-3 py-1.5 text-xs font-semibold text-[#17202a] hover:border-[#34c6a3]"
+                              className="rounded-md border border-[#dde4ec] px-3 py-1.5 text-xs font-semibold text-[#17202a] hover:border-[#2563eb]"
                               onClick={() => setDrawer({ kind: "edit-institutes", admin })}
                             >
                               Institutes
@@ -178,7 +178,7 @@ export default function AdminAdmins() {
                           ) : null}
                           <button
                             type="button"
-                            className="rounded-md border border-[#dde4ec] px-3 py-1.5 text-xs font-semibold text-[#17202a] hover:border-[#34c6a3]"
+                            className="rounded-md border border-[#dde4ec] px-3 py-1.5 text-xs font-semibold text-[#17202a] hover:border-[#2563eb]"
                             onClick={() => toggleStatus(admin)}
                           >
                             {admin.status === "active" ? "Deactivate" : "Activate"}
@@ -227,8 +227,8 @@ export default function AdminAdmins() {
 
 function Badge({ tone, children }: { tone: "dark" | "green" | "neutral"; children: ReactNode }) {
   const tones = {
-    dark: "bg-[#102033] text-white",
-    green: "bg-[#ecfaf6] text-[#0b6b52]",
+    dark: "bg-[#0c1f3d] text-white",
+    green: "bg-[#ecfaf6] text-[#067647]",
     neutral: "bg-[#f2f4f7] text-[#344054]",
   }
   return (
@@ -252,19 +252,29 @@ function Drawer({
   const [shown, setShown] = useState(false)
   useEffect(() => setShown(true), [])
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-[#102033]/45" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-[#0c1f3d]/50 backdrop-blur-[2px]">
       <div
-        className={`flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-200 ${
+        className={`flex h-full w-full max-w-md flex-col overflow-y-auto rounded-l-2xl bg-white shadow-2xl transition-transform duration-300 ease-out ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#eef2f7] px-6 py-5">
-          <div>
-            <h2 className="text-lg font-semibold text-[#17202a]">{title}</h2>
-            <p className="mt-1 text-sm text-[#667085]">{description}</p>
+        <div className="flex items-start justify-between gap-4 rounded-tl-2xl border-b border-[#eef2f7] bg-gradient-to-r from-[#eff6ff] to-white px-6 py-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#2563eb]/10 text-[#2563eb]">
+              <UserPlus size={19} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-lg font-semibold text-[#17202a]">{title}</h2>
+              <p className="mt-1 text-sm text-[#667085]">{description}</p>
+            </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-[#667085] hover:text-[#17202a]">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid size-8 shrink-0 place-items-center rounded-lg text-[#667085] transition hover:bg-[#eef2f7] hover:text-[#17202a]"
+          >
             <X size={20} aria-hidden="true" />
           </button>
         </div>
@@ -299,14 +309,14 @@ function InstitutionPicker({
             }
             className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-sm transition ${
               active
-                ? "border-[#34c6a3] bg-[#eafaf5] font-semibold text-[#0b6b52]"
+                ? "border-[#2563eb] bg-[#eaf1fd] font-semibold text-[#1d4ed8]"
                 : "border-[#dde4ec] bg-white font-normal text-[#344054] hover:border-[#b7c2d0]"
             }`}
           >
             <span className="truncate">{institution.name}</span>
             <span
               className={`grid size-4 shrink-0 place-items-center rounded-full border ${
-                active ? "border-[#34c6a3] bg-[#34c6a3] text-white" : "border-[#cdd5df]"
+                active ? "border-[#2563eb] bg-[#2563eb] text-white" : "border-[#cdd5df]"
               }`}
             >
               {active ? <Check size={11} strokeWidth={3} aria-hidden="true" /> : null}

@@ -13,12 +13,12 @@ interface DomainTagProps {
 }
 
 const domainClasses: Record<CaseDomain, string> = {
-  Geopolitics: "bg-[#0B1D3A] text-white",
+  Geopolitics: "bg-[#0c1f3d] text-white",
   Sports: "bg-[#16A34A] text-white",
-  Business: "bg-[#C9A227] text-[#111827]",
+  Business: "bg-[#0891B2] text-white",
   Social: "bg-[#7C3AED] text-white",
   Science: "bg-[#2563EB] text-white",
-  Technology: "bg-[#0F766E] text-white",
+  Technology: "bg-[#4F46E5] text-white",
   Environment: "bg-[#059669] text-white",
   Healthcare: "bg-[#EF4444] text-white",
 }

@@ -23,6 +23,8 @@ import {
 } from "lucide-react"
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom"
 
+import PageTransition from "../components/common/PageTransition"
+
 import { getAdminNotifications, type AdminNotification } from "../api/admin"
 import ChangePasswordModal from "../components/ChangePasswordModal"
 import { clearAdminScope, useAdminScope } from "../hooks/useAdminScope"
@@ -256,20 +258,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const navLinkClass = (compact = false) =>
     ({ isActive }: { isActive: boolean }) =>
-      `flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-medium transition ${
+      `flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-medium transition ${
         compact ? "pl-11" : ""
       } ${
         isActive
-          ? "bg-[#34c6a3] text-[#102033] shadow-md"
-          : "text-white/85 hover:bg-[#1b3452]"
+          ? "bg-[#2563eb] text-white shadow-md"
+          : "text-white/85 hover:bg-[#16305a]"
       }`
 
   return (
     <div className="min-h-screen bg-[#f5f7fa] text-[#17202a]">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#102033] p-5 text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#0c1f3d] p-6 text-white lg:flex">
         <div className="border-b border-white/10 pb-6">
           <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-md bg-[#34c6a3] text-[#102033]">
+            <div className="grid size-10 place-items-center rounded-lg bg-[#2563eb] text-white">
               <ShieldCheck size={21} aria-hidden="true" />
             </div>
             <div>
@@ -295,7 +297,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(group.label)}
-                  className="flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm font-semibold text-white/90 transition hover:bg-[#1b3452]"
+                  className="flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-left text-sm font-semibold text-white/90 transition hover:bg-[#16305a]"
                 >
                   <GroupIcon size={18} aria-hidden="true" />
                   <span className="flex-1">{group.label}</span>
@@ -343,7 +345,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-[#dde4ec] bg-white">
+        <header className="sticky top-0 z-10 border-b border-[#dde4ec] bg-white shadow-sm shadow-slate-900/[0.02]">
           <div className="mx-auto flex min-h-20 max-w-[1280px] items-center gap-4 px-4 py-3 sm:px-6">
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold text-[#17202a] sm:text-2xl">Admin Portal</h1>
@@ -361,7 +363,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             {hasOwnSearch ? null : (
               <form
                 onSubmit={handleTopSearch}
-                className="hidden w-full max-w-xs items-center gap-3 rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 py-2 text-sm text-[#667085] md:flex"
+                className="hidden w-full max-w-xs items-center gap-3 rounded-lg border border-[#dde4ec] bg-[#f5f7fa] px-3 py-2 text-sm text-[#667085] md:flex"
               >
                 <button type="submit" aria-label="Search users" className="text-[#667085]">
                   <Search size={17} aria-hidden="true" />
@@ -380,7 +382,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <button
                 type="button"
                 onClick={toggleNotifications}
-                className="relative grid size-9 place-items-center rounded-md text-[#17202a] transition hover:bg-[#f5f7fa]"
+                className="relative grid size-9 place-items-center rounded-lg text-[#17202a] transition hover:bg-[#f5f7fa]"
                 aria-label="Notifications"
                 aria-expanded={notifOpen}
               >
@@ -393,7 +395,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               </button>
 
               {notifOpen ? (
-                <div className="absolute right-0 top-full z-30 mt-2 w-96 max-w-[90vw] overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-lg">
+                <div className="absolute right-0 top-full z-30 mt-2 w-96 max-w-[90vw] overflow-hidden rounded-xl border border-[#dde4ec] bg-white shadow-xl shadow-slate-900/10">
                   <div className="border-b border-[#eef2f7] px-4 py-3">
                     <h3 className="text-sm font-semibold text-[#17202a]">Notifications</h3>
                   </div>
@@ -443,9 +445,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 onClick={() => setProfileOpen((v) => !v)}
                 aria-expanded={profileOpen}
                 aria-label="Profile menu"
-                className="flex items-center gap-3 rounded-md border border-[#dde4ec] bg-white px-2 py-2 transition hover:border-[#34c6a3]"
+                className="flex items-center gap-3 rounded-lg border border-[#dde4ec] bg-white px-2 py-2 transition hover:border-[#2563eb]"
               >
-                <div className="grid size-10 place-items-center rounded-md bg-[#102033] text-sm font-semibold text-white">
+                <div className="grid size-10 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
                   {initials || <UserCircle size={24} aria-hidden="true" />}
                 </div>
                 <div className="hidden min-w-32 text-left sm:block">
@@ -455,7 +457,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               </button>
 
               {profileOpen ? (
-                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-lg border border-[#dde4ec] bg-white shadow-lg">
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-xl border border-[#dde4ec] bg-white shadow-xl shadow-slate-900/10">
                   <div className="border-b border-[#eef2f7] px-4 py-3">
                     <p className="truncate text-sm font-semibold text-[#17202a]">{displayName}</p>
                     <p className="truncate text-xs text-[#667085]">{currentUser?.email ?? "Admin"}</p>
@@ -498,9 +500,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1280px] px-4 py-5 sm:px-6">
+        <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-4 grid gap-2 lg:hidden">
-            <div className="flex items-center justify-between rounded-md bg-[#102033] px-4 py-3 text-white">
+            <div className="flex items-center justify-between rounded-lg bg-[#0c1f3d] px-4 py-3 text-white">
               <span className="font-semibold">Admin Portal</span>
               <Database size={18} aria-hidden="true" />
             </div>
@@ -511,9 +513,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   to={item.to}
                   end={(item as { end?: boolean }).end}
                   className={({ isActive }) =>
-                    `shrink-0 rounded-md px-3 py-2 text-sm font-semibold ${
+                    `shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${
                       isActive
-                        ? "bg-[#102033] text-white"
+                        ? "bg-[#0c1f3d] text-white"
                         : "border border-[#dde4ec] bg-white text-[#17202a]"
                     }`
                   }
@@ -524,22 +526,22 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </div>
           {needsInstitute ? (
-            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#34c6a3]/40 bg-[#ecfaf6] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-[#2563eb]/40 bg-[#eaf1fd] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-[#102033]">Create your institute to get started</p>
+                <p className="text-sm font-semibold text-[#0c1f3d]">Create your institute to get started</p>
                 <p className="mt-1 text-sm text-[#475467]">
                   Everything you add — programs, sections, faculty and students — lives inside your institute.
                 </p>
               </div>
               <Link
                 to="/admin/academic/institutions"
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-md bg-[#102033] px-4 text-sm font-semibold text-white transition hover:bg-[#1b3452]"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-[#0c1f3d] px-4 text-sm font-semibold text-white transition hover:bg-[#16305a]"
               >
                 Create institute
               </Link>
             </div>
           ) : null}
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
 

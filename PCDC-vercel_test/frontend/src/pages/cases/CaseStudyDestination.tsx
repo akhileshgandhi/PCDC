@@ -19,13 +19,13 @@ export default function CaseStudyDestination() {
       <section className="rounded-xl border border-[#E6EBEB] bg-white p-6 shadow-sm">
         <Link
           to="/student/case-studies"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1D3A]"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#0c1f3d]"
         >
           <ArrowLeft size={16} aria-hidden="true" />
           Back to My Case Studies
         </Link>
         <div className="mt-8 max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#C9A227]">
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#2563eb]">
             {label}
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-[#111827]">

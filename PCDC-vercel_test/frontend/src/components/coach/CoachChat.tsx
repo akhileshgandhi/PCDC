@@ -67,7 +67,7 @@ export default function CoachChat({
           <button
             type="button"
             onClick={onNewSession}
-            className="rounded-lg border border-[#0B1D3A] px-4 py-2 text-sm font-semibold text-[#0B1D3A] transition hover:bg-[#0B1D3A] hover:text-white"
+            className="rounded-lg border border-[#0c1f3d] px-4 py-2 text-sm font-semibold text-[#0c1f3d] transition hover:bg-[#0c1f3d] hover:text-white"
           >
             Start New Session
           </button>
@@ -91,7 +91,7 @@ export default function CoachChat({
             <div
               className={`max-w-[82%] whitespace-pre-line rounded-xl px-4 py-3 text-sm leading-6 ${
                 message.role === "student"
-                  ? "bg-[#0B1D3A] text-white"
+                  ? "bg-[#0c1f3d] text-white"
                   : message.isError
                     ? "border border-[#F3C4C4] bg-[#FFF5F5] text-[#B42318]"
                     : "border border-[#E6EBEB] bg-white text-[#374151]"
@@ -123,13 +123,13 @@ export default function CoachChat({
             if (event.key === "Enter") handleSend()
           }}
           placeholder="Type your message..."
-          className="min-w-0 flex-1 rounded-lg border border-[#E6EBEB] px-4 py-3 text-sm outline-none transition focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+          className="min-w-0 flex-1 rounded-lg border border-[#E6EBEB] px-4 py-3 text-sm outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
         />
         <button
           type="button"
           onClick={handleSend}
           disabled={isSending || !draft.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#C9A227] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#B08D20] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3b82f6] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Send
           <Send size={16} aria-hidden="true" />
@@ -150,7 +150,7 @@ export default function CoachChat({
               <button
                 type="button"
                 onClick={() => window.alert("Coming soon")}
-                className="text-left font-semibold text-[#92702A] sm:text-right"
+                className="text-left font-semibold text-[#1d4ed8] sm:text-right"
               >
                 View
               </button>

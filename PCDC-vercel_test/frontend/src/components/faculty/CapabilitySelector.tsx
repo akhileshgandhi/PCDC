@@ -115,7 +115,7 @@ export default function CapabilitySelector({ selected, onToggle, disabled = fals
                 <span>
                   <span aria-hidden="true">{category.icon}</span> {category.label}
                   {selectedCount > 0 ? (
-                    <span className="ml-2 rounded-full bg-[#fff7df] px-2 py-0.5 text-xs font-semibold text-[#92702a]">
+                    <span className="ml-2 rounded-full bg-[#dbeafe] px-2 py-0.5 text-xs font-semibold text-[#1d4ed8]">
                       {selectedCount} selected
                     </span>
                   ) : null}
@@ -139,8 +139,8 @@ export default function CapabilitySelector({ selected, onToggle, disabled = fals
                         disabled={disabled}
                         className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
                           isSelected
-                            ? "border-[#c9a227] bg-[#fff7df] text-[#92702a]"
-                            : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#c9a227]"
+                            ? "border-[#2563eb] bg-[#2563eb] text-white"
+                            : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
                         } ${disabled ? "cursor-not-allowed opacity-70 hover:border-[#e6e8eb]" : ""}`}
                       >
                         {capability}

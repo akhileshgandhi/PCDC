@@ -173,7 +173,7 @@ export default function MyCaseStudies() {
                 id="domain-filter"
                 value={domainFilter}
                 onChange={(event) => setDomainFilter(event.target.value as DomainFilter)}
-                className="h-11 rounded-lg border border-[#E6EBEB] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+                className="h-11 rounded-lg border border-[#E6EBEB] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 {domains.map((domain) => (
                   <option key={domain} value={domain}>
@@ -189,7 +189,7 @@ export default function MyCaseStudies() {
                 id="difficulty-filter"
                 value={difficultyFilter}
                 onChange={(event) => setDifficultyFilter(event.target.value as DifficultyFilter)}
-                className="h-11 rounded-lg border border-[#E6EBEB] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#C9A227] focus:ring-2 focus:ring-[#C9A227]/20"
+                className="h-11 rounded-lg border border-[#E6EBEB] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
               >
                 {difficulties.map((difficulty) => (
                   <option key={difficulty} value={difficulty}>
@@ -206,7 +206,7 @@ export default function MyCaseStudies() {
                     onClick={() => setStatusFilter(tab.value)}
                     className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${
                       statusFilter === tab.value
-                        ? "bg-[#0B1D3A] text-white shadow-sm"
+                        ? "bg-[#2563eb] text-white shadow-sm"
                         : "text-[#6B7280] hover:text-[#111827]"
                     }`}
                   >
@@ -216,7 +216,7 @@ export default function MyCaseStudies() {
               </div>
             </div>
 
-            <label className="flex h-11 w-full items-center gap-3 rounded-lg border border-[#E6EBEB] bg-white px-3 text-[#6B7280] transition focus-within:border-[#C9A227] focus-within:ring-2 focus-within:ring-[#C9A227]/20 xl:max-w-xs">
+            <label className="flex h-11 w-full items-center gap-3 rounded-lg border border-[#E6EBEB] bg-white px-3 text-[#6B7280] transition focus-within:border-[#2563eb] focus-within:ring-2 focus-within:ring-[#2563eb]/20 xl:max-w-xs">
               <Search size={17} aria-hidden="true" />
               <span className="sr-only">Search case studies</span>
               <input
@@ -270,7 +270,7 @@ function StatPill({ label, value }: StatPillProps) {
   return (
     <div className="rounded-full border border-[#E6EBEB] bg-[#F6F7F9] px-4 py-2 text-sm">
       <span className="font-semibold text-[#111827]">{label}:</span>{" "}
-      <span className="font-semibold text-[#0B1D3A]">{value}</span>
+      <span className="font-semibold text-[#2563eb]">{value}</span>
     </div>
   )
 }
