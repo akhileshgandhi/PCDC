@@ -8,6 +8,7 @@ import {
   finishJobsimAttempt,
   getJobsimAttempt,
   getJobsimHint,
+  recordJobsimFullscreen,
   saveJobsimState,
   startJobsimAttempt,
   submitJobsimMemo,
@@ -20,10 +21,12 @@ import {
   type Slide,
 } from "../../api/jobsim"
 import ConfirmDialog from "../../components/ConfirmDialog"
+import ExamGuard from "../../components/ExamGuard"
 import AnswerCell from "../../components/jobsim/AnswerCell"
 import DatasetGrid from "../../components/jobsim/DatasetGrid"
 import MemoEditor from "../../components/jobsim/MemoEditor"
 import SlideEditor, { slideForPlan, startingDeck } from "../../components/jobsim/SlideEditor"
+import ProtectedText from "../../components/ProtectedText"
 
 const AUTOSAVE_MS = 15_000
 const MIN_WIDTH = 1024
@@ -375,6 +378,25 @@ export default function SimulationWorkspace() {
 
   return (
     <div className="flex h-screen flex-col bg-[#F6F7F9]">
+      {/* Exam rules (no extensions, full screen) apply while the attempt is open. */}
+      <ExamGuard
+        active={!locked}
+        report={async (event) => {
+          // Save open work first: the third exit submits what the server has.
+          if (event === "exit") await flush()
+          return recordJobsimFullscreen(attempt.attempt_id, event)
+        }}
+        onEnded={() => {
+          setAttempt((current) => (current ? { ...current, status: "submitted" } : current))
+          getJobsimAttempt(attempt.attempt_id)
+            .then((data) => setAttempt((current) => (current ? { ...current, status: data.status, total_score: data.total_score } : current)))
+            .catch(() => undefined)
+        }}
+        noun="simulation"
+        endsWith="be submitted with the work saved so far"
+        exitTo={`/student/simulations/${simulationId}`}
+        exitLabel="See my simulation"
+      />
       <header className="flex items-center gap-4 bg-[#0C1F3D] px-5 py-3 text-white">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{attempt.simulation.title}</p>
@@ -582,7 +604,7 @@ export default function SimulationWorkspace() {
               <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">
                 {task.type === "memo" ? "Memo brief" : task.type === "presentation" ? "Slides brief" : "Question"}
               </p>
-              <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#111827]">{task.prompt}</p>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#111827]"><ProtectedText text={task.prompt} /></p>
               {task.config.must_use_formula ? (
                 <p className="mt-2 text-xs font-medium text-[#1D4ED8]">Answer with a formula (start with =).</p>
               ) : null}

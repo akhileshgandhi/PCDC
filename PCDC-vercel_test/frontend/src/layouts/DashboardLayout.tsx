@@ -1,23 +1,21 @@
 import type { ReactNode } from "react"
 import { useEffect, useRef, useState } from "react"
 import {
-  Bell,
   BookOpen,
   BriefcaseBusiness,
   CalendarDays,
-  CircleHelp,
   Compass,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MessageSquare,
-  Search,
-  Settings,
   TrendingUp,
   Trophy,
   UserCircle,
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
 
+import ChangePasswordModal from "../components/ChangePasswordModal"
 import PageTransition from "../components/common/PageTransition"
 import { useNewAssignmentsCount } from "../hooks/useNewAssignmentsCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
@@ -62,6 +60,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate()
   const currentUser = getCurrentUser()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   const navigationItems = [
@@ -133,14 +132,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         <div className="absolute bottom-6 left-6 right-6 space-y-5">
           <div className="space-y-3 border-t border-white/10 pt-5">
-            <button type="button" className="flex items-center gap-3 text-sm text-white/80">
-              <Settings size={17} aria-hidden="true" />
-              <span>Settings</span>
-            </button>
-            <button type="button" className="flex items-center gap-3 text-sm text-white/80">
-              <MessageSquare size={17} aria-hidden="true" />
-              <span>Support</span>
-            </button>
             <button
               type="button"
               onClick={handleLogout}
@@ -162,46 +153,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </h1>
             </div>
 
-            <label className="hidden w-full max-w-xs items-center gap-3 rounded-lg border border-[#e6e8eb] bg-[#f6f7fb] px-3 py-2 text-sm text-[#6b7280] md:flex">
-              <Search size={17} aria-hidden="true" />
-              <span className="sr-only">Search insights</span>
-              <input
-                type="search"
-                placeholder="Search insights..."
-                className="w-full bg-transparent text-sm outline-none placeholder:text-[#6b7280]"
-              />
-            </label>
-
-            <div className="hidden items-center gap-2 sm:flex">
-              <button
-                type="button"
-                className="relative grid size-9 place-items-center rounded-lg border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
-                aria-label={
-                  newAssignments.total > 0
-                    ? `Notifications (${newAssignments.total} new)`
-                    : "Notifications"
-                }
-              >
-                <Bell size={18} aria-hidden="true" />
-                {newAssignments.total > 0 ? (
-                  <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-[#d92d20]" />
-                ) : null}
-              </button>
-              <button
-                type="button"
-                className="grid size-9 place-items-center rounded-lg border border-transparent text-[#111827] transition hover:border-[#e6e8eb] hover:bg-[#f6f7fb]"
-                aria-label="Help"
-              >
-                <CircleHelp size={18} aria-hidden="true" />
-              </button>
-            </div>
-
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
                 onClick={() => setIsMenuOpen((open) => !open)}
                 aria-expanded={isMenuOpen}
                 aria-haspopup="true"
+                aria-label="Profile menu"
                 className="flex items-center gap-3 rounded-lg border border-[#e6e8eb] bg-white px-2 py-2 transition hover:border-[#2563eb]"
               >
                 <div className="grid size-10 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
@@ -216,49 +174,50 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </button>
 
               {isMenuOpen ? (
-                <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-[#e6e8eb] bg-white py-2 shadow-xl shadow-slate-900/10">
-                  <div className="flex items-center gap-3 px-4 pb-2">
-                    <div className="grid size-9 place-items-center rounded-lg bg-[#0c1f3d] text-xs font-semibold text-white">
-                      {userInitials(currentUser?.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#111827]">
-                        {currentUser?.name ?? "PCDC User"}
-                      </p>
-                      <p className="truncate text-xs text-[#6b7280]">{roleLabel(currentUser?.role)}</p>
-                    </div>
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-xl border border-[#e6e8eb] bg-white shadow-xl shadow-slate-900/10">
+                  <div className="border-b border-[#eef2f7] px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-[#111827]">
+                      {currentUser?.name ?? "PCDC User"}
+                    </p>
+                    <p className="truncate text-xs text-[#6b7280]">
+                      {currentUser?.email ?? roleLabel(currentUser?.role)}
+                    </p>
                   </div>
-                  <div className="my-2 border-t border-[#e6e8eb]" />
-                  <NavLink
-                    to="/student/profile"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2 text-sm font-medium text-[#111827] hover:bg-[#f6f7fb]"
-                  >
-                    <UserCircle size={17} aria-hidden="true" />
-                    My Profile
-                  </NavLink>
-                  <NavLink
-                    to="/student/career-pathway"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2 text-sm font-medium text-[#111827] hover:bg-[#f6f7fb]"
-                  >
-                    <Compass size={17} aria-hidden="true" />
-                    Career Pathway
-                  </NavLink>
-                  <div className="my-2 border-t border-[#e6e8eb]" />
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm font-medium text-[#111827] hover:bg-[#f6f7fb]"
-                  >
-                    <LogOut size={17} aria-hidden="true" />
-                    Logout
-                  </button>
+                  <div className="py-1">
+                    <NavLink
+                      to="/student/profile"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#111827] transition hover:bg-[#f6f7fb]"
+                    >
+                      <UserCircle size={16} aria-hidden="true" />
+                      My profile
+                    </NavLink>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false)
+                        setIsChangingPassword(true)
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#111827] transition hover:bg-[#f6f7fb]"
+                    >
+                      <KeyRound size={16} aria-hidden="true" />
+                      Change password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#b42318] transition hover:bg-[#fff5f5]"
+                    >
+                      <LogOut size={16} aria-hidden="true" />
+                      Log out
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
           </div>
         </header>
+        {isChangingPassword ? <ChangePasswordModal onClose={() => setIsChangingPassword(false)} /> : null}
 
         <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
           <div className="lg:hidden">

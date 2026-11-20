@@ -15,6 +15,7 @@ from .models import (
     DefenseQuestionsResponse,
     EvaluationResult,
     FinalEvaluation,
+    FullscreenEventRequest,
     PhaseStartRequest,
     SaveDraftRequest,
     StartAttemptRequest,
@@ -33,6 +34,7 @@ from .service import (
     get_student_attempts_for_mentor,
     get_thinking_path_for_mentor,
     list_case_studies,
+    record_fullscreen_event,
     save_analysis_draft,
     send_ai_message,
     start_attempt_phase,
@@ -155,6 +157,16 @@ def save_draft(
     except Exception as error:
         print(f"SAVE DRAFT ERROR: {error}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@simulation_router.post("/attempt/fullscreen")
+def fullscreen_event(
+    data: FullscreenEventRequest,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The student entered or left full screen. The third exit closes the attempt."""
+    return record_fullscreen_event(db, data.attempt_id, data.event, current_user)
 
 
 @simulation_router.post("/attempt/ai-message", response_model=AIMessageResponse)

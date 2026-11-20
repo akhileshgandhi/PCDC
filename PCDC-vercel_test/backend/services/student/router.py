@@ -1,7 +1,8 @@
 from datetime import date, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -588,6 +589,85 @@ def student_achievements(
     }
 
 
+# The simulation capabilities each career track relies on most. Drives the
+# Career Pathway page: readiness, focus areas and recommended cases follow the
+# chosen track. Names must match the capabilities table (engagement_type
+# 'simulation') and the career_tracks names seeded in migration 0044.
+TRACK_KEY_CAPABILITIES: Dict[str, tuple] = {
+    "Consulting": ("Analytical Thinking", "Problem Solving", "Strategic Thinking",
+                   "Communication", "Business Acumen", "Decision Making"),
+    "Finance": ("Analytical Thinking", "Business Acumen", "Decision Making",
+                "Professional Ethics", "Accountability", "Problem Solving"),
+    "Marketing": ("Communication", "Innovation", "Business Acumen",
+                  "Strategic Thinking", "Analytical Thinking", "Adaptability"),
+    "Human Resources": ("Emotional Intelligence", "Communication", "Teamwork",
+                        "Professional Ethics", "Negotiation", "Leadership"),
+    "Operations": ("Planning & Execution", "Project Management", "Time Management",
+                   "Problem Solving", "Result Orientation", "Accountability"),
+    "Entrepreneurship": ("Innovation", "Adaptability", "Decision Making",
+                         "Business Acumen", "Result Orientation", "Learning Agility"),
+    "Family Business": ("Business Acumen", "Leadership", "Strategic Thinking",
+                        "Professional Ethics", "Negotiation", "Decision Making"),
+    "Analytics": ("Analytical Thinking", "AI & Digital Literacy", "Problem Solving",
+                  "Decision Making", "Communication", "Learning Agility"),
+    "Sales Leadership": ("Negotiation", "Communication", "Result Orientation",
+                         "Emotional Intelligence", "Leadership", "Adaptability"),
+    "General Management": ("Leadership", "Strategic Thinking", "Decision Making",
+                           "Business Acumen", "Teamwork", "Planning & Execution"),
+}
+
+
+class CareerTrackChoice(BaseModel):
+    career_track_id: int
+
+
+@student_router.get("/career-tracks")
+def student_career_tracks(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> List[Dict[str, Any]]:
+    """Tracks a student can choose on the Career Pathway page."""
+    require_student(current_user)
+    rows = db.execute(text("SELECT id, name, description FROM career_tracks ORDER BY name")).fetchall()
+    return [{"id": row.id, "name": row.name, "description": row.description} for row in rows]
+
+
+@student_router.put("/career-track")
+def choose_career_track(
+    data: CareerTrackChoice,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The student sets (or changes) their own career track."""
+    require_student(current_user)
+    track = db.execute(
+        text("SELECT id, name FROM career_tracks WHERE id = :tid"),
+        {"tid": data.career_track_id},
+    ).fetchone()
+    if not track:
+        raise HTTPException(status_code=404, detail="Career track not found")
+    student = db.execute(
+        text("SELECT id, career_track_id FROM students WHERE user_id = :uid"),
+        {"uid": current_user["id"]},
+    ).fetchone()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    if student.career_track_id != track.id:
+        db.execute(
+            text("UPDATE students SET career_track_id = :tid WHERE id = :sid"),
+            {"tid": track.id, "sid": student.id},
+        )
+        db.execute(
+            text("""
+                INSERT INTO system_events (actor_user_id, event_type, message)
+                VALUES (:uid, 'career_track_changed', :message)
+            """),
+            {"uid": current_user["id"], "message": f"Student chose the {track.name} career track"},
+        )
+        db.commit()
+    return {"career_track_id": track.id, "career_track_name": track.name}
+
+
 @student_router.get("/career-pathway")
 def student_career_pathway(
     db: Session = Depends(get_db),
@@ -620,10 +700,27 @@ def student_career_pathway(
         {"sid": student_id},
     ).fetchone()
 
+    # With a track: readiness and focus come from that track's key capabilities.
+    key_names = TRACK_KEY_CAPABILITIES.get(track_name or "")
+    key_rows = []
+    if key_names:
+        key_rows = db.execute(
+            text("""
+                SELECT c.name, COALESCE(MAX(sc.current_score), 0) AS current_score
+                FROM capabilities c
+                LEFT JOIN student_capabilities sc
+                    ON sc.capability_id = c.id AND sc.student_id = :sid
+                WHERE c.engagement_type = 'simulation' AND c.name = ANY(:names)
+                GROUP BY c.name
+                ORDER BY current_score ASC, c.name ASC
+            """),
+            {"sid": student_id, "names": list(key_names)},
+        ).fetchall()
+
     # Focus = the weakest capability from each capability group (think/lead/
     # execute/grow), so the 3 areas are spread across skill areas rather than
     # three alphabetically-adjacent items when many scores are tied.
-    focus = db.execute(
+    focus = key_rows[:3] if key_rows else db.execute(
         text("""
             WITH ranked AS (
                 SELECT c.name, sc.current_score,
@@ -684,6 +781,16 @@ def student_career_pathway(
         "focus_areas": [
             {"capability": row.name, "score": int(row.current_score or 0)} for row in focus
         ],
+        # Only when a track is set: its key capabilities (weakest first) and
+        # the average score across them, which is the track readiness.
+        "key_capabilities": [
+            {"capability": row.name, "score": int(row.current_score or 0)} for row in key_rows
+        ],
+        "track_readiness": (
+            round(sum(int(row.current_score or 0) for row in key_rows) / len(key_rows))
+            if key_rows
+            else None
+        ),
         "recommended_cases": [
             {
                 "case_id": row.id,

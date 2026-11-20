@@ -23,6 +23,8 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from shared.fullscreen import MAX_FULLSCREEN_EXITS, fullscreen_status, next_fullscreen_state
+
 from . import publishing
 from .capability import apply_attempt_to_profile
 from .dataset import generate_rows
@@ -1390,6 +1392,33 @@ def finish_attempt(db: Session, current_user: Dict[str, Any], attempt_id: int) -
         _submit_attempt(db, attempt, None)
     db.commit()
     return {"attempt_id": attempt_id, "status": "submitted"}
+
+
+def record_fullscreen_event(
+    db: Session, current_user: Dict[str, Any], attempt_id: int, event: str
+) -> Dict[str, Any]:
+    """The student entered or left full screen (see shared/fullscreen.py). On
+    the last allowed exit the attempt is submitted, the same as Finish."""
+    finalize_expired_attempts(db, current_user["id"])
+    attempt = db.execute(
+        text("SELECT * FROM jobsim_attempts WHERE id = :aid AND student_id = :uid FOR UPDATE"),
+        {"aid": attempt_id, "uid": current_user["id"]},
+    ).fetchone()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    if attempt.status != "in_progress":
+        db.commit()
+        return fullscreen_status(attempt.fullscreen_exits, False, True)
+    exits, active, counted = next_fullscreen_state(attempt.fullscreen_exits, attempt.fullscreen_active, event)
+    db.execute(
+        text("UPDATE jobsim_attempts SET fullscreen_exits = :exits, fullscreen_active = :active WHERE id = :aid"),
+        {"aid": attempt.id, "exits": exits, "active": active},
+    )
+    ended = exits >= MAX_FULLSCREEN_EXITS
+    if ended:
+        _submit_attempt(db, attempt, None)
+    db.commit()
+    return fullscreen_status(exits, counted, ended)
 
 
 def sweep_expired_attempts(db: Session) -> int:

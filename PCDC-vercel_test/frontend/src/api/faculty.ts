@@ -117,6 +117,9 @@ export interface FacultyCourseOption {
   name: string
   code: string
   total_semesters: number
+  department_id?: number | null
+  /** The program the specialization belongs to. */
+  department_name?: string | null
 }
 
 export interface FacultyCaseInstructions {
@@ -471,6 +474,7 @@ export interface FacultyTeachingSelection {
   subject: string
   status: "active" | "pending"
   section_name: string
+  course_id?: number
   course_name: string
   semester_name: string
   batch_name: string

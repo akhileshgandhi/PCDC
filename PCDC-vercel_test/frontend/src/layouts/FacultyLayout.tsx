@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FolderKanban,
   GraduationCap,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Search,
@@ -19,12 +20,14 @@ import {
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getFacultyNotifications, type FacultyNotification } from "../api/faculty"
+import ChangePasswordModal from "../components/ChangePasswordModal"
 import PageTransition from "../components/common/PageTransition"
 import { useSentBackSimulationCount } from "../hooks/useSentBackSimulationCount"
 import { clearToken, getCurrentUser } from "../utils/auth"
 
 const NOTIF_SEEN_KEY = "pcdc_faculty_notif_last_seen_id"
 const MY_SIMULATIONS_PATH = "/faculty/simulations"
+const SETTINGS_PATH = "/faculty/settings"
 
 // Red count of simulations an admin sent back (same look as the admin badges).
 function SentBackBadge({ count }: { count: number }) {
@@ -164,6 +167,9 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
     return stored ? Number(stored) : 0
   })
   const notifRef = useRef<HTMLDivElement>(null)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const profileRef = useRef<HTMLDivElement>(null)
   const unreadCount = notifications.filter((n) => n.id > lastSeenId).length
 
   // Red badge: simulations an admin sent back that this faculty hasn't opened yet.
@@ -176,6 +182,9 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
     function handleClickOutside(event: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setNotifOpen(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setProfileOpen(false)
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
@@ -266,10 +275,15 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
         </nav>
 
         <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-          <button type="button" className="flex items-center gap-3 text-sm text-white/80">
+          <NavLink
+            to={SETTINGS_PATH}
+            className={({ isActive }) =>
+              `flex items-center gap-3 text-sm transition hover:text-white ${isActive ? "font-semibold text-white" : "text-white/80"}`
+            }
+          >
             <Settings size={17} aria-hidden="true" />
             <span>Settings</span>
-          </button>
+          </NavLink>
           <button
             type="button"
             onClick={handleLogout}
@@ -347,17 +361,68 @@ export default function FacultyLayout({ children }: FacultyLayoutProps) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-3 rounded-lg border border-[#e6e8eb] bg-white px-2 py-2">
-              <div className="grid size-10 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
-                {initials || <UserCircle size={24} aria-hidden="true" />}
-              </div>
-              <div className="hidden min-w-32 sm:block">
-                <p className="truncate text-sm font-semibold text-[#111827]">{displayName}</p>
-                <p className="truncate text-xs text-[#6b7280]">{roleLabel}</p>
-              </div>
+            <div className="relative" ref={profileRef}>
+              <button
+                type="button"
+                onClick={() => setProfileOpen((open) => !open)}
+                aria-expanded={profileOpen}
+                aria-haspopup="true"
+                aria-label="Profile menu"
+                className="flex items-center gap-3 rounded-lg border border-[#e6e8eb] bg-white px-2 py-2 transition hover:border-[#2563eb]"
+              >
+                <div className="grid size-10 place-items-center rounded-lg bg-[#0c1f3d] text-sm font-semibold text-white">
+                  {initials || <UserCircle size={24} aria-hidden="true" />}
+                </div>
+                <div className="hidden min-w-32 text-left sm:block">
+                  <p className="truncate text-sm font-semibold text-[#111827]">{displayName}</p>
+                  <p className="truncate text-xs text-[#6b7280]">{roleLabel}</p>
+                </div>
+              </button>
+
+              {profileOpen ? (
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-xl border border-[#e6e8eb] bg-white shadow-xl shadow-slate-900/10">
+                  <div className="border-b border-[#eef2f7] px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-[#111827]">{displayName}</p>
+                    <p className="truncate text-xs text-[#6b7280]">{currentUser?.email ?? roleLabel}</p>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false)
+                        navigate(SETTINGS_PATH)
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#111827] transition hover:bg-[#f6f7fb]"
+                    >
+                      <Settings size={16} aria-hidden="true" />
+                      Account settings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileOpen(false)
+                        setIsChangingPassword(true)
+                      }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#111827] transition hover:bg-[#f6f7fb]"
+                    >
+                      <KeyRound size={16} aria-hidden="true" />
+                      Change password
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-[#b42318] transition hover:bg-[#fff5f5]"
+                    >
+                      <LogOut size={16} aria-hidden="true" />
+                      Log out
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </header>
+        {isChangingPassword ? <ChangePasswordModal onClose={() => setIsChangingPassword(false)} /> : null}
 
         <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 sm:py-8">
           <div className="mb-4 grid gap-2 lg:hidden">

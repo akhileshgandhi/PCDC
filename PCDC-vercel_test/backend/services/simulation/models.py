@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -66,6 +66,11 @@ class SubmitAnalysisRequest(BaseModel):
     # each question's own word_limit_min/word_limit_max server-side. Optional
     # for backward compatibility with the single-textarea fallback path.
     answers: Optional[List[Dict[str, Any]]] = None
+
+
+class FullscreenEventRequest(BaseModel):
+    attempt_id: int
+    event: Literal["enter", "exit"]
 
 
 class SaveDraftRequest(BaseModel):

@@ -26,6 +26,7 @@ import {
   type AdminSemester,
   type AdminUser,
 } from "../../api/admin"
+import { specializationLabel } from "../../utils/specialization"
 import { ListToolbar, Pager } from "../../components/common/ListControls"
 import { useListControls } from "../../hooks/useListControls"
 import AdminLayout from "../../layouts/AdminLayout"
@@ -136,7 +137,7 @@ export default function AdminSections() {
               <option value="">All Specializations</option>
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>
-                  {course.name}
+                  {specializationLabel(course)}
                 </option>
               ))}
             </select>
@@ -439,7 +440,7 @@ function NewSectionDialog({ courses, defaultCourseId, onClose, onCreated }: NewS
         <DialogField label="Specialization">
           {fixedCourse ? (
             <p className="flex h-11 w-full items-center rounded-md border border-[#dde4ec] bg-[#f5f7fa] px-3 text-sm font-semibold text-[#17202a]">
-              {fixedCourse.name}
+              {specializationLabel(fixedCourse)}
             </p>
           ) : (
             <select
@@ -450,7 +451,7 @@ function NewSectionDialog({ courses, defaultCourseId, onClose, onCreated }: NewS
             >
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>
-                  {course.name}
+                  {specializationLabel(course)}
                 </option>
               ))}
             </select>

@@ -1,5 +1,6 @@
 import type { CaseDomain } from "../components/cases/DomainTag"
 import type { CaseStatus } from "../components/cases/StatusBadge"
+import type { FullscreenEvent, FullscreenStatus } from "../utils/studentGuard"
 import api from "./axios"
 
 export interface CaseStudyResponse {
@@ -127,6 +128,8 @@ export interface CaseAttemptState {
   grade_label: string | null
   marks_scored: number | null
   marks_total: number | null
+  /** Closed because the student left full screen too many times. */
+  ended_by_fullscreen: boolean
 }
 
 export interface CaseAssignmentInfo {
@@ -311,6 +314,12 @@ export async function saveAnalysisDraft(attemptId: number, draft: AnalysisDraft)
     attempt_id: attemptId,
     draft: JSON.stringify(draft),
   })
+  return response.data
+}
+
+/** The student entered or left full screen. The third exit closes the attempt. */
+export async function recordCaseFullscreen(attemptId: number, event: FullscreenEvent) {
+  const response = await api.post<FullscreenStatus>("/cases/attempt/fullscreen", { attempt_id: attemptId, event })
   return response.data
 }
 

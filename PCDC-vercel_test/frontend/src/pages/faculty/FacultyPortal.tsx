@@ -9,6 +9,7 @@ import FacultyCaseLibrary from "./FacultyCaseLibrary"
 import FacultyDashboard from "./FacultyDashboard"
 import FacultyMyTeaching from "./FacultyMyTeaching"
 import FacultyReports from "./FacultyReports"
+import FacultySettings from "./FacultySettings"
 import FacultySimulationAttempt from "./FacultySimulationAttempt"
 import FacultySimulationEditor from "./FacultySimulationEditor"
 import FacultySimulationNew from "./FacultySimulationNew"
@@ -50,6 +51,7 @@ export default function FacultyPortal() {
       <Route path="/attempts/:attemptId" element={<FacultyAttemptReport />} />
       <Route path="/analytics" element={<FacultyAnalytics />} />
       <Route path="/reports" element={<FacultyReports />} />
+      <Route path="/settings" element={<FacultySettings />} />
       <Route path="/simulations" element={<FacultySimulations />} />
       <Route path="/simulations/new" element={<FacultySimulationNew />} />
       <Route path="/simulations/new/manual" element={<FacultySimulationEditorRoute />} />

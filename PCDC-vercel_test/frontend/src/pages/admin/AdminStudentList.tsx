@@ -16,6 +16,7 @@ import {
   type AdminSectionListItem,
   type AdminUser,
 } from "../../api/admin"
+import { specializationLabel } from "../../utils/specialization"
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]
 
@@ -260,7 +261,7 @@ export default function AdminStudentList({
         >
           <option value="">All specializations</option>
           {courseOptions.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>{specializationLabel(c)}</option>
           ))}
         </select>
         <select

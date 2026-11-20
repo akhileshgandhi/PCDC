@@ -1,7 +1,12 @@
 import { isAxiosError } from "axios"
-import { useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
-import { sendCoachMessage } from "../../api/coach"
+import {
+  getCoachSession,
+  getCoachSessions,
+  sendCoachMessage,
+  type CoachSessionSummary,
+} from "../../api/coach"
 
 import { AISH_GREETING, AISH_NAME, AishIntro } from "../../components/aish/Aish"
 import CoachCard, { type Coach } from "../../components/coach/CoachCard"
@@ -97,30 +102,72 @@ const openingMessages: Record<string, string> = {
   reflection: `${AISH_GREETING} As your Reflection Coach, I guide you to extract learning from your case studies. Which of your recent case studies felt most challenging, and why?`,
 }
 
-const sessionHistory: SessionHistoryItem[] = [
-  { date: "Jun 20, 2025", coach: `${AISH_NAME} · Capability Coach`, messages: 12 },
-  { date: "Jun 15, 2025", coach: `${AISH_NAME} · Career Coach`, messages: 8 },
-  { date: "Jun 10, 2025", coach: `${AISH_NAME} · Reflection Coach`, messages: 15 },
-]
-
 function messagesForCoach(coach: Coach): CoachMessage[] {
   return [{ role: "ai", text: openingMessages[coach.id] }]
+}
+
+// Server timestamps are UTC without a zone marker.
+function formatSessionDate(iso: string): string {
+  const date = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`)
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+}
+
+function toHistoryItem(session: CoachSessionSummary): SessionHistoryItem {
+  const coach = coaches.find((c) => c.id === session.coach_id)
+  return {
+    id: session.id,
+    date: formatSessionDate(session.updated_at),
+    coach: `${AISH_NAME} · ${coach?.name ?? "Coach"}`,
+    messages: session.message_count,
+  }
 }
 
 export default function AICoach() {
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null)
   const [messages, setMessages] = useState<CoachMessage[]>([])
+  // The saved session the chat belongs to; null until the first reply saves it.
+  const [sessionId, setSessionId] = useState<number | null>(null)
+  const [sessionHistory, setSessionHistory] = useState<SessionHistoryItem[]>([])
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true)
 
   const [isSending, setIsSending] = useState(false)
   // Bumped on every new session / coach switch so a late reply never lands
   // in a different conversation.
   const sessionRef = useRef(0)
 
+  const loadHistory = useCallback(() => {
+    getCoachSessions()
+      .then((sessions) => setSessionHistory(sessions.map(toHistoryItem)))
+      .catch(() => undefined)
+      .finally(() => setIsHistoryLoading(false))
+  }, [])
+
+  useEffect(() => {
+    loadHistory()
+  }, [loadHistory])
+
   function handleSelectCoach(coach: Coach) {
     sessionRef.current += 1
     setIsSending(false)
     setSelectedCoach(coach)
     setMessages(messagesForCoach(coach))
+    setSessionId(null)
+  }
+
+  async function handleViewSession(id: number) {
+    const session = ++sessionRef.current
+    setIsSending(false)
+    try {
+      const detail = await getCoachSession(id)
+      if (session !== sessionRef.current) return
+      const coach = coaches.find((c) => c.id === detail.coach_id)
+      if (!coach) return
+      setSelectedCoach(coach)
+      setMessages(detail.messages.map(({ role, text }) => ({ role, text })))
+      setSessionId(detail.id)
+    } catch {
+      // Leave the current chat as it is if the session can't be opened.
+    }
   }
 
   async function handleSendMessage(message: string) {
@@ -133,9 +180,11 @@ export default function AICoach() {
     setMessages((current) => [...current, { role: "student", text: message }])
     setIsSending(true)
     try {
-      const { reply } = await sendCoachMessage(coachId, message, history)
+      const { reply, session_id } = await sendCoachMessage(coachId, message, history, sessionId)
       if (session !== sessionRef.current) return
       setMessages((current) => [...current, { role: "ai", text: reply }])
+      if (session_id != null) setSessionId(session_id)
+      loadHistory()
     } catch (error) {
       if (session !== sessionRef.current) return
       const detail = isAxiosError(error) ? error.response?.data?.detail : undefined
@@ -157,6 +206,7 @@ export default function AICoach() {
     sessionRef.current += 1
     setIsSending(false)
     setMessages(messagesForCoach(selectedCoach))
+    setSessionId(null)
   }
 
   return (
@@ -186,9 +236,12 @@ export default function AICoach() {
             coach={selectedCoach}
             messages={messages}
             sessionHistory={sessionHistory}
+            isHistoryLoading={isHistoryLoading}
+            activeSessionId={sessionId}
             onSendMessage={handleSendMessage}
             isSending={isSending}
             onNewSession={handleNewSession}
+            onViewSession={handleViewSession}
           />
         ) : (
           <section className="rounded-xl border border-dashed border-[#E6EBEB] bg-white px-5 py-12 text-center shadow-sm">

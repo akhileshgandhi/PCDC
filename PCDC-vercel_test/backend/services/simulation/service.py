@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from shared.cache import cache_delete_prefix
+from shared.fullscreen import MAX_FULLSCREEN_EXITS, fullscreen_status, next_fullscreen_state
 from shared.llm import create_with_retry, get_llm_client, get_llm_model, is_gemini
 from .models import CaseStudyCreate
 
@@ -642,7 +643,7 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
 
     attempt_row = db.execute(
         text("""
-            SELECT id, status
+            SELECT id, status, fullscreen_exits
             FROM case_study_attempts
             WHERE case_study_id = :case_id AND student_id = :user_id
         """),
@@ -652,7 +653,7 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
     if not attempt_row:
         attempt = {"exists": False, "attempt_id": None, "status": None, "stage": None,
                    "stage_label": None, "total_score": None, "grade_label": None,
-                   "marks_scored": None, "marks_total": None}
+                   "marks_scored": None, "marks_total": None, "ended_by_fullscreen": False}
         return {"case": case, "attempt": attempt, "assignment": assignment_info}
 
     stage = ATTEMPT_STATUS_STAGE.get(attempt_row.status, 1)
@@ -677,6 +678,9 @@ def get_case_detail(db: Session, case_id: int, current_user: Dict[str, Any]) -> 
         "marks_scored": marks_scored,
         "marks_total": marks_total,
         "grade_label": grade_label(total_score),
+        # Closed because the student left full screen too often, not by the clock.
+        "ended_by_fullscreen": attempt_row.status == "expired"
+        and attempt_row.fullscreen_exits >= MAX_FULLSCREEN_EXITS,
     }
     return {"case": case, "attempt": attempt, "assignment": assignment_info}
 
@@ -911,6 +915,45 @@ def save_analysis_draft(
     )
     db.commit()
     return {"saved": True}
+
+
+# Statuses where the attempt is over, or past the timed phases (the results
+# and reflection screen), so full screen no longer applies.
+_FULLSCREEN_DONE_STATUSES = ("expired", "evaluated", "completed", "defense_complete")
+
+
+def record_fullscreen_event(
+    db: Session, attempt_id: int, event: str, current_user: Dict[str, Any]
+) -> Dict[str, Any]:
+    """The student entered or left full screen (see shared/fullscreen.py). On
+    the last allowed exit the attempt closes the same way as when time runs
+    out: expired, and it can't be resumed."""
+    require_role(current_user, ["student"], "Only students can take an attempt")
+    finalize_expired_case_attempts(db, current_user["id"], attempt_id)
+    attempt = db.execute(
+        text("""
+            SELECT id, status, fullscreen_exits, fullscreen_active
+            FROM case_study_attempts
+            WHERE id = :attempt_id AND student_id = :student_id
+            FOR UPDATE
+        """),
+        {"attempt_id": attempt_id, "student_id": current_user["id"]},
+    ).fetchone()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    if attempt.status in _FULLSCREEN_DONE_STATUSES:
+        db.commit()
+        return fullscreen_status(attempt.fullscreen_exits, False, attempt.status == "expired")
+    exits, active, counted = next_fullscreen_state(attempt.fullscreen_exits, attempt.fullscreen_active, event)
+    db.execute(
+        text("UPDATE case_study_attempts SET fullscreen_exits = :exits, fullscreen_active = :active WHERE id = :attempt_id"),
+        {"attempt_id": attempt.id, "exits": exits, "active": active},
+    )
+    ended = exits >= MAX_FULLSCREEN_EXITS
+    if ended:
+        mark_attempt_expired(db, attempt.id)
+    db.commit()
+    return fullscreen_status(exits, counted, ended)
 
 
 def get_student_attempt(db: Session, attempt_id: int, student_id: int) -> Any:

@@ -39,6 +39,7 @@ import {
   type AdminSemester,
   type AdminSubject,
 } from "../../api/admin"
+import { specializationLabel } from "../../utils/specialization"
 import ConfirmDialog from "../../components/ConfirmDialog"
 import { ListToolbar, Pager } from "../../components/common/ListControls"
 import { refreshAdminScope, useAdminScope } from "../../hooks/useAdminScope"
@@ -1084,7 +1085,7 @@ function SubjectForm({
           <select className={fieldClass} value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             <option value="">Select specialization</option>
             {courses.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>{specializationLabel(c)}</option>
             ))}
           </select>
         </label>
@@ -1165,7 +1166,10 @@ function CoursesTab({
 
   const list = useListControls(
     visible,
-    (course, q) => course.name.toLowerCase().includes(q) || course.code.toLowerCase().includes(q),
+    (course, q) =>
+      course.name.toLowerCase().includes(q) ||
+      course.code.toLowerCase().includes(q) ||
+      (course.department_name ?? "").toLowerCase().includes(q),
   )
 
   return (
@@ -1791,7 +1795,7 @@ function BatchForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
           >
             <option value="">{coursesLoading ? "Loading…" : "Select specialization"}</option>
             {courses.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>{specializationLabel(c)}</option>
             ))}
           </select>
         </label>
@@ -2088,7 +2092,7 @@ function SectionForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
           <select className={fieldClass} value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             <option value="">Select specialization</option>
             {courses.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>{specializationLabel(c)}</option>
             ))}
           </select>
         </label>

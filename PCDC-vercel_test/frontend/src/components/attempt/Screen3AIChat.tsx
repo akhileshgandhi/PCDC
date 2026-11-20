@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import type { RapidFireQuestion } from "../../api/cases"
 import { AISH_NAME, AishAvatar, AishIntro } from "../aish/Aish"
 import CountdownTimer from "./CountdownTimer"
+import ProtectedText from "../ProtectedText"
 
 function marksLabel(marks: number | null | undefined): string {
   if (marks == null) return ""
@@ -150,7 +151,7 @@ export default function Screen3AIChat({
                     Q{q.sequence}
                     {marksLabel(q.marks)}
                   </p>
-                  <p className="mt-1 text-sm font-medium text-[#111827]">{q.question_text}</p>
+                  <p className="mt-1 text-sm font-medium text-[#111827]"><ProtectedText text={q.question_text} /></p>
                   <p className="mt-1 text-sm text-[#6B7280]">{answers[i] || "No answer"}</p>
                 </div>
               ))}
@@ -179,7 +180,7 @@ export default function Screen3AIChat({
               <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm bg-[#F6F7F9] p-5">
                 <p className="text-xs font-semibold text-[#1d4ed8]">{AISH_NAME} asks</p>
                 <p className="mt-1 text-base font-semibold text-[#0c1f3d]">
-                  {rapidFireQuestions[currentQ].question_text}
+                  <ProtectedText text={rapidFireQuestions[currentQ].question_text} />
                 </p>
               </div>
             </div>

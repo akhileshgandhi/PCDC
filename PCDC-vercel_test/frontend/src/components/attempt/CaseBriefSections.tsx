@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 
 import ExpandableText from "../ExpandableText"
+import ProtectedText from "../ProtectedText"
 
 export interface CaseBriefSectionValues {
   description: string
@@ -41,7 +42,7 @@ export default function CaseBriefSections({ sections }: CaseBriefSectionsProps) 
 
       {outcome_statement && (
         <Card eyebrow="The Expected Outcome">
-          <p className="whitespace-pre-line text-sm leading-7 text-[#374151]">{outcome_statement}</p>
+          <p className="whitespace-pre-line text-sm leading-7 text-[#374151]"><ProtectedText text={outcome_statement} /></p>
         </Card>
       )}
 
@@ -49,7 +50,7 @@ export default function CaseBriefSections({ sections }: CaseBriefSectionsProps) 
         <Card eyebrow="Decision / Action Options">
           <ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-[#374151]">
             {decision_options.map((option, index) => (
-              <li key={index}>{option}</li>
+              <li key={index}><ProtectedText text={option} /></li>
             ))}
           </ul>
         </Card>
@@ -59,7 +60,7 @@ export default function CaseBriefSections({ sections }: CaseBriefSectionsProps) 
         <Card eyebrow="Learning Takeaway">
           <ul className="list-disc space-y-2 pl-5 text-sm leading-7 text-[#374151]">
             {learning_takeaways.map((point, index) => (
-              <li key={index}>{point}</li>
+              <li key={index}><ProtectedText text={point} /></li>
             ))}
           </ul>
         </Card>

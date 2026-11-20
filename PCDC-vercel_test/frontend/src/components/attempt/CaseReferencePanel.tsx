@@ -1,4 +1,5 @@
 import CaseBriefSections, { Card, type CaseBriefSectionValues } from "./CaseBriefSections"
+import ProtectedText from "../ProtectedText"
 
 export interface AnsweredQuestion {
   question_text: string
@@ -48,7 +49,7 @@ export default function CaseReferencePanel({
               <div className="space-y-4">
                 {answeredQuestions.map((qa, index) => (
                   <div key={index} className={index > 0 ? "border-t border-[#E6EBEB] pt-4" : undefined}>
-                    <p className="text-sm font-semibold text-[#111827]">{qa.question_text}</p>
+                    <p className="text-sm font-semibold text-[#111827]"><ProtectedText text={qa.question_text} /></p>
                     <p className="mt-1.5 whitespace-pre-line text-sm leading-6 text-[#6B7280]">
                       {qa.answer_text || "(no answer given)"}
                     </p>

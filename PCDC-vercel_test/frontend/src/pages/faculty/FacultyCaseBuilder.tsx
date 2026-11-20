@@ -53,6 +53,7 @@ import TeachingNotesPanel from "../../components/faculty/TeachingNotesPanel"
 import AdminLayout from "../../layouts/AdminLayout"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { getCurrentUser, isAdminRole } from "../../utils/auth"
+import { groupByProgram, specializationLabel } from "../../utils/specialization"
 
 type BuilderMode = "scratch" | "ai"
 
@@ -298,7 +299,9 @@ export default function FacultyCaseBuilder() {
   const [aiFillIntent, setAiFillIntent] = useState<"create" | "regenerate" | null>(null)
   const [courses, setCourses] = useState<FacultyCourseOption[]>([])
   const [teachingSubjects, setTeachingSubjects] = useState<string[]>([])
-  const [teachingCourseNames, setTeachingCourseNames] = useState<string[]>([])
+  // Specialization ids the faculty teaches. Matched by id, not name: names
+  // repeat across programs (e.g. "Business Administration" in PGDM and BBA).
+  const [teachingCourseIds, setTeachingCourseIds] = useState<number[]>([])
   // Every subject configured under each course (course id -> subjects). Admin
   // has no My Teachings of their own, so they pick from this full catalog.
   const [catalogSubjectsByCourse, setCatalogSubjectsByCourse] = useState<Record<number, string[]>>({})
@@ -313,22 +316,30 @@ export default function FacultyCaseBuilder() {
         setTeachingSubjects(
           Array.from(new Set(data.selections.map((selection) => selection.subject))).sort(),
         )
-        setTeachingCourseNames(
-          Array.from(new Set(data.selections.map((selection) => selection.course_name))),
-        )
         const byCourse: Record<number, string[]> = {}
+        const courseBySection = new Map<number, number>()
         for (const institution of data.options) {
           for (const department of institution.departments) {
             for (const course of department.courses) {
               const subjects = new Set(byCourse[course.id] ?? [])
               for (const semester of course.semesters) {
                 for (const subject of semester.subjects) subjects.add(subject)
+                for (const section of semester.sections) courseBySection.set(section.id, course.id)
               }
               byCourse[course.id] = Array.from(subjects)
             }
           }
         }
         setCatalogSubjectsByCourse(byCourse)
+        setTeachingCourseIds(
+          Array.from(
+            new Set(
+              data.selections
+                .map((selection) => selection.course_id ?? courseBySection.get(selection.section_id))
+                .filter((id): id is number => id !== undefined),
+            ),
+          ),
+        )
       })
       .catch(() => undefined)
   }, [])
@@ -501,9 +512,9 @@ export default function FacultyCaseBuilder() {
         ? courses
         : courses.filter(
             (course) =>
-              teachingCourseNames.includes(course.name) || coreForm.programIds.includes(course.id),
+              teachingCourseIds.includes(course.id) || coreForm.programIds.includes(course.id),
           ),
-    [isAdminUser, courses, teachingCourseNames, coreForm.programIds],
+    [isAdminUser, courses, teachingCourseIds, coreForm.programIds],
   )
 
   function updateCoreField(field: keyof CoreFormState, value: string) {
@@ -2086,25 +2097,40 @@ function TaxonomyFields({
                 : "No specializations found in My Teachings yet — add your teaching assignments first."}
             </span>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {courses.map((course) => {
-                const isSelected = form.programIds.includes(course.id)
-                return (
-                  <button
-                    key={course.id}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => onProgramToggle(course.id)}
-                    className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                      isSelected
-                        ? "border-[#2563eb] bg-[#2563eb] text-white"
-                        : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
-                    }`}
-                  >
-                    {course.name}
-                  </button>
-                )
-              })}
+            <div className="grid gap-2.5">
+              {groupByProgram(courses).map((group) => (
+                <div key={group.program} className="grid gap-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-[#6b7280]">
+                    {group.program}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.items.map((course) => {
+                      const isSelected = form.programIds.includes(course.id)
+                      return (
+                        <button
+                          key={course.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => onProgramToggle(course.id)}
+                          title={specializationLabel(course)}
+                          className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                            isSelected
+                              ? "border-[#2563eb] bg-[#2563eb] text-white"
+                              : "border-[#e6e8eb] bg-white text-[#374151] hover:border-[#2563eb]"
+                          }`}
+                        >
+                          {course.name}
+                          {course.code ? (
+                            <span className={`ml-1 text-xs font-medium ${isSelected ? "text-white/80" : "text-[#6b7280]"}`}>
+                              ({course.code})
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

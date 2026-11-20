@@ -1,4 +1,5 @@
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react"
+import { Plugin } from "@tiptap/pm/state"
+import { EditorContent, Extension, useEditor, useEditorState } from "@tiptap/react"
 import type { Editor, JSONContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import { Bold, CheckCircle2, Circle, Heading2, Heading3, Italic, List, ListOrdered, Send } from "lucide-react"
@@ -6,6 +7,7 @@ import { useEffect } from "react"
 import type { ReactNode } from "react"
 
 import type { JobsimTask } from "../../api/jobsim"
+import { ALLOW_STUDENT_CLIPBOARD, MAX_INSERT_CHARS, notifyBlocked } from "../../utils/studentGuard"
 import MemoLetterhead from "./MemoLetterhead"
 
 const sectionKey = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase()
@@ -21,12 +23,31 @@ function memoStats(editor: Editor) {
 
 // ProseMirror handles these itself before the portal's page-wide block runs,
 // so the editor needs its own block. It honours the same local testing switch.
-const allowClipboard = import.meta.env.VITE_ALLOW_STUDENT_CLIPBOARD === "true"
 const blockEvent = (_view: unknown, event: Event) => {
-  if (allowClipboard) return false
+  if (ALLOW_STUDENT_CLIPBOARD) return false
   event.preventDefault()
   return true
 }
+
+/** Rejects any single change that adds more text than typing can, which is
+ * how extensions insert text without a paste event. Undo and redo may still
+ * bring back earlier text. */
+const BlockBulkInsert = Extension.create({
+  name: "blockBulkInsert",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        filterTransaction: (tr, state) => {
+          if (ALLOW_STUDENT_CLIPBOARD || !tr.docChanged || tr.getMeta("history$")) return true
+          const added = tr.doc.textContent.length - state.doc.textContent.length
+          if (added <= MAX_INSERT_CHARS) return true
+          notifyBlocked()
+          return false
+        },
+      }),
+    ]
+  },
+})
 
 /** A new memo starts with the required section headings, like a memo template.
  * Nothing is saved until the student types, so an untouched memo stays blank. */
@@ -72,6 +93,7 @@ export default function MemoEditor({ task, initialDoc, disabled, isSubmitted, on
         strike: false,
         underline: false,
       }),
+      BlockBulkInsert,
     ],
     content: initialDoc ?? memoTemplate(task),
     editable: !disabled,

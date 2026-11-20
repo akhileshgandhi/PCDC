@@ -1,3 +1,4 @@
+import type { FullscreenEvent, FullscreenStatus } from "../utils/studentGuard"
 import api from "./axios"
 
 // Job simulations (handover section 9.3). Student calls never return answer
@@ -530,6 +531,12 @@ export interface JobsimResults {
 
 export async function finishJobsimAttempt(attemptId: number) {
   const response = await api.post<{ attempt_id: number; status: string }>(`/jobsim/attempts/${attemptId}/finish`)
+  return response.data
+}
+
+/** The student entered or left full screen. The third exit submits the attempt. */
+export async function recordJobsimFullscreen(attemptId: number, event: FullscreenEvent) {
+  const response = await api.post<FullscreenStatus>(`/jobsim/attempts/${attemptId}/fullscreen`, { event })
   return response.data
 }
 

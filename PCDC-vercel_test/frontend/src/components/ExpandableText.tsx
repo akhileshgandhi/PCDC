@@ -2,6 +2,8 @@ import { Maximize2, X } from "lucide-react"
 import { useState } from "react"
 import { createPortal } from "react-dom"
 
+import ProtectedText from "./ProtectedText"
+
 interface ExpandableTextProps {
   label: string
   text: string
@@ -17,7 +19,7 @@ export default function ExpandableText({ label, text, className }: ExpandableTex
   return (
     <>
       <div className={className}>
-        <p className="whitespace-pre-line">{text}</p>
+        <p className="whitespace-pre-line"><ProtectedText text={text} /></p>
         <button
           type="button"
           onClick={() => setIsOpen(true)}
@@ -58,7 +60,7 @@ export default function ExpandableText({ label, text, className }: ExpandableTex
                   </button>
                 </div>
                 <div className="overflow-y-auto px-6 py-5">
-                  <p className="whitespace-pre-line text-sm leading-7 text-[#374151]">{text}</p>
+                  <p className="whitespace-pre-line text-sm leading-7 text-[#374151]"><ProtectedText text={text} /></p>
                 </div>
               </div>
             </div>,

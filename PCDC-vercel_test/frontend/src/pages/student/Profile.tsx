@@ -108,10 +108,10 @@ export default function Profile() {
               </h4>
             </div>
             <Link
-              to="/student/career-pathway"
+              to="/student/career-pathway#choose-track"
               className="inline-flex items-center gap-1 text-sm font-semibold text-[#1d4ed8]"
             >
-              Change Pathway →
+              {profile?.career_track_name ? "Change Pathway →" : "Choose Pathway →"}
             </Link>
           </div>
         </div>

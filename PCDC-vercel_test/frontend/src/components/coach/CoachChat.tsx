@@ -12,6 +12,7 @@ export interface CoachMessage {
 }
 
 export interface SessionHistoryItem {
+  id: number
   date: string
   coach: string
   messages: number
@@ -21,8 +22,13 @@ interface CoachChatProps {
   coach: Coach
   messages: CoachMessage[]
   sessionHistory: SessionHistoryItem[]
+  /** True while the saved sessions are loading. */
+  isHistoryLoading?: boolean
+  /** The saved session shown in the chat, if any (highlighted in the list). */
+  activeSessionId?: number | null
   onSendMessage: (message: string) => void
   onNewSession: () => void
+  onViewSession: (sessionId: number) => void
   /** True while Aish is writing a reply. */
   isSending?: boolean
 }
@@ -31,12 +37,16 @@ export default function CoachChat({
   coach,
   messages,
   sessionHistory,
+  isHistoryLoading = false,
+  activeSessionId = null,
   onSendMessage,
   onNewSession,
+  onViewSession,
   isSending = false,
 }: CoachChatProps) {
   const [draft, setDraft] = useState("")
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const historyRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
@@ -73,7 +83,7 @@ export default function CoachChat({
           </button>
           <button
             type="button"
-            onClick={() => window.alert("Coming soon")}
+            onClick={() => historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
             className="rounded-lg bg-[#F6F7F9] px-4 py-2 text-sm font-semibold text-[#111827] transition hover:bg-[#E6EBEB]"
           >
             View Session History
@@ -136,27 +146,48 @@ export default function CoachChat({
         </button>
       </div>
 
-      <div className="border-t border-[#E6EBEB] p-5">
+      <div ref={historyRef} className="scroll-mt-24 border-t border-[#E6EBEB] p-5">
         <h3 className="text-lg font-semibold text-[#111827]">Previous Sessions</h3>
-        <div className="mt-4 divide-y divide-[#E6EBEB] rounded-lg border border-[#E6EBEB]">
-          {sessionHistory.map((session) => (
-            <div
-              key={`${session.date}-${session.coach}`}
-              className="grid gap-2 px-4 py-3 text-sm text-[#6B7280] sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center"
-            >
-              <span className="font-medium text-[#111827]">{session.date}</span>
-              <span>{session.coach}</span>
-              <span>{session.messages} messages</span>
-              <button
-                type="button"
-                onClick={() => window.alert("Coming soon")}
-                className="text-left font-semibold text-[#1d4ed8] sm:text-right"
-              >
-                View
-              </button>
-            </div>
-          ))}
-        </div>
+        {isHistoryLoading && sessionHistory.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-[#E6EBEB] px-4 py-6 text-center text-sm text-[#6B7280]">
+            Loading your sessions...
+          </p>
+        ) : sessionHistory.length === 0 ? (
+          <p className="mt-4 rounded-lg border border-[#E6EBEB] px-4 py-6 text-center text-sm text-[#6B7280]">
+            No previous sessions yet. Your conversations with {AISH_NAME} will appear here.
+          </p>
+        ) : (
+          <div className="mt-4 max-h-80 divide-y divide-[#E6EBEB] overflow-y-auto rounded-lg border border-[#E6EBEB]">
+            {sessionHistory.map((session) => {
+              const isActive = session.id === activeSessionId
+              return (
+                <div
+                  key={session.id}
+                  className={`grid gap-2 px-4 py-3 text-sm text-[#6B7280] sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center ${
+                    isActive ? "bg-[#EEF4FF]" : ""
+                  }`}
+                >
+                  <span className="font-medium text-[#111827]">{session.date}</span>
+                  <span>{session.coach}</span>
+                  <span>
+                    {session.messages} {session.messages === 1 ? "message" : "messages"}
+                  </span>
+                  {isActive ? (
+                    <span className="text-left font-semibold text-[#111827] sm:text-right">Open</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onViewSession(session.id)}
+                      className="text-left font-semibold text-[#1d4ed8] hover:underline sm:text-right"
+                    >
+                      View
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </section>
   )

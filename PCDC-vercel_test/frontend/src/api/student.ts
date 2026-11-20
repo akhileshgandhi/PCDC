@@ -207,11 +207,34 @@ export interface StudentCareerPathway {
   has_track: boolean
   progress: { developed: number; total: number }
   focus_areas: StudentPathwayFocus[]
+  /** The chosen track's key capabilities, weakest first (empty without a track). */
+  key_capabilities?: StudentPathwayFocus[]
+  /** Average score across the track's key capabilities (null without a track). */
+  track_readiness?: number | null
   recommended_cases: StudentPathwayCase[]
 }
 
 export async function getStudentCareerPathway() {
   const response = await api.get<StudentCareerPathway>("/student/career-pathway")
+  return response.data
+}
+
+export interface CareerTrack {
+  id: number
+  name: string
+  description: string | null
+}
+
+export async function getCareerTracks() {
+  const response = await api.get<CareerTrack[]>("/student/career-tracks")
+  return response.data
+}
+
+export async function chooseCareerTrack(careerTrackId: number) {
+  const response = await api.put<{ career_track_id: number; career_track_name: string }>(
+    "/student/career-track",
+    { career_track_id: careerTrackId },
+  )
   return response.data
 }
 

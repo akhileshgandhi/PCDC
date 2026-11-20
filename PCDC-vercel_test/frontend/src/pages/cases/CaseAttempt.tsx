@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import {
   getAttemptDetail,
   getCaseDetail,
+  recordCaseFullscreen,
   saveAnalysisDraft,
   submitInitialAnalysis,
   submitRapidFireAnswers,
@@ -17,6 +18,7 @@ import {
   type RapidFireQuestion,
   type WrittenQuestion,
 } from "../../api/cases"
+import ExamGuard from "../../components/ExamGuard"
 import { AISH_NAME, AishAvatar } from "../../components/aish/Aish"
 import CaseReferencePanel from "../../components/attempt/CaseReferencePanel"
 import ProgressBar from "../../components/attempt/ProgressBar"
@@ -138,6 +140,7 @@ export default function CaseAttempt() {
   const [evaluation, setEvaluation] = useState<EvaluationData | null>(null)
   const [rapidFireAnswerPairs, setRapidFireAnswerPairs] = useState<RapidFireAnswerPair[]>([])
   const [expired, setExpired] = useState(false)
+  const [endedByFullscreen, setEndedByFullscreen] = useState(false)
   const [dueDate, setDueDate] = useState<string | null>(null)
   const [facultyNote, setFacultyNote] = useState<string | null>(null)
 
@@ -210,6 +213,7 @@ export default function CaseAttempt() {
         }
         setRapidFireAnswerPairs(parseRapidFireTranscript(attemptDetail.defense_responses))
         if (status === "expired") {
+          setEndedByFullscreen(Boolean(detail.attempt.ended_by_fullscreen))
           setExpired(true)
         }
         setNeedsReflection(status === "defense_complete")
@@ -428,11 +432,23 @@ export default function CaseAttempt() {
       <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
         <main className="mx-auto max-w-[720px] px-4 py-12 sm:px-6">
           <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-6 py-12 text-center">
-            <h2 className="text-2xl font-semibold text-[#B91C1C]">Time&apos;s up</h2>
-            <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-6 text-[#7F1D1D]">
-              This attempt has expired because a timed phase ran out. You get one
-              attempt per case study, and it cannot be resumed from where you left off.
-            </p>
+            {endedByFullscreen ? (
+              <>
+                <h2 className="text-2xl font-semibold text-[#B91C1C]">Attempt ended</h2>
+                <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-6 text-[#7F1D1D]">
+                  This attempt has ended because you left full screen 3 times. You get one
+                  attempt per case study, and it cannot be resumed from where you left off.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-semibold text-[#B91C1C]">Time&apos;s up</h2>
+                <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-6 text-[#7F1D1D]">
+                  This attempt has expired because a timed phase ran out. You get one
+                  attempt per case study, and it cannot be resumed from where you left off.
+                </p>
+              </>
+            )}
             <button
               type="button"
               onClick={() => navigate("/student/case-studies")}
@@ -462,6 +478,19 @@ export default function CaseAttempt() {
 
   return (
     <div className="min-h-screen bg-[#F6F7F9] text-[#111827]">
+      {/* Exam rules (no extensions, full screen) apply until the results screen. */}
+      <ExamGuard
+        active={currentScreen < 4}
+        report={attemptId ? (event) => recordCaseFullscreen(attemptId, event) : undefined}
+        onEnded={() => {
+          setEndedByFullscreen(true)
+          setExpired(true)
+        }}
+        noun="case study"
+        endsWith="be closed and can't be resumed"
+        exitTo="/student/case-studies"
+        exitLabel="Back to My Case Studies"
+      />
       <ProgressBar currentScreen={currentScreen} title={caseTitle} timer={headerTimer} />
       <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
         <button

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from services.auth.service import get_current_user
 from shared.database import get_db
 from shared.email import request_base_url
+from shared.fullscreen import FullscreenEvent
 
 from . import designer, publishing, questions, review, scoring, service
 from .formula import FORMAT_LABELS, SUPPORTED_FUNCTIONS
@@ -617,6 +618,22 @@ def finish_attempt(
     result = service.finish_attempt(db, current_user, attempt_id)
     # Memos left open at Finish go for scoring; start on them straight away.
     background_tasks.add_task(scoring.kick)
+    return result
+
+
+@jobsim_router.post("/jobsim/attempts/{attempt_id}/fullscreen")
+def fullscreen_event(
+    attempt_id: int,
+    body: FullscreenEvent,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The student entered or left full screen. The third exit submits the attempt."""
+    require_student(current_user)
+    result = service.record_fullscreen_event(db, current_user, attempt_id, body.event)
+    if result["ended"]:
+        background_tasks.add_task(scoring.kick)
     return result
 
 

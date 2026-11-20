@@ -1802,10 +1802,12 @@ def faculty_courses(
     scope_sql = "" if scope is None else f"AND {course_in_scope_sql('c')}"
     rows = db.execute(
         text(f"""
-            SELECT c.id, c.name, c.code, c.total_semesters
+            SELECT c.id, c.name, c.code, c.total_semesters,
+                   c.department_id, dept.name AS department_name
             FROM courses c
+            LEFT JOIN departments dept ON dept.id = c.department_id
             WHERE c.status = 'active' {scope_sql}
-            ORDER BY c.name
+            ORDER BY dept.name NULLS LAST, c.name
         """),
         {} if scope is None else {"scope_ids": scope},
     ).fetchall()
@@ -1816,6 +1818,10 @@ def faculty_courses(
                 "name": row.name,
                 "code": row.code,
                 "total_semesters": row.total_semesters,
+                # The program (department) the specialization belongs to, so
+                # same-named specializations can be told apart.
+                "department_id": row.department_id,
+                "department_name": row.department_name,
             }
             for row in rows
         ]
@@ -4302,7 +4308,7 @@ def get_faculty_teaching(
     sel_rows = db.execute(
         text("""
             SELECT fs.id, fs.section_id, fs.subject, fs.status,
-                   cs.name AS section_name, c.name AS course_name,
+                   cs.name AS section_name, c.id AS course_id, c.name AS course_name,
                    sem.name AS semester_name, b.name AS batch_name
             FROM faculty_sections fs
             JOIN class_sections cs ON cs.id = fs.section_id
@@ -4321,6 +4327,7 @@ def get_faculty_teaching(
             "subject": r.subject,
             "status": r.status,
             "section_name": r.section_name,
+            "course_id": r.course_id,
             "course_name": r.course_name,
             "semester_name": r.semester_name,
             "batch_name": r.batch_name,
