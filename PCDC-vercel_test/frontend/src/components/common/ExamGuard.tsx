@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { getUserRole } from "../utils/auth"
-import type { FullscreenEvent, FullscreenStatus } from "../utils/studentGuard"
-import { ALLOW_STUDENT_CLIPBOARD, hasExtensionTraces } from "../utils/studentGuard"
+import { getUserRole } from "../../utils/auth"
+import type { FullscreenEvent, FullscreenStatus } from "../../utils/studentGuard"
+import { ALLOW_STUDENT_CLIPBOARD, hasExtensionTraces } from "../../utils/studentGuard"
 
 const SCAN_DELAY_MS = 300
 const NOTICE_MS = 8000

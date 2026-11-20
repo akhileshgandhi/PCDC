@@ -16,7 +16,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { getCaseDetail, startCaseAttempt, toCaseDomain, type CaseDetail as CaseDetailData } from "../../api/cases"
 import DifficultyBadge from "../../components/cases/DifficultyBadge"
 import DomainTag from "../../components/cases/DomainTag"
-import ExpandableText from "../../components/ExpandableText"
+import ExpandableText from "../../components/common/ExpandableText"
 import DashboardLayout from "../../layouts/DashboardLayout"
 
 function formatDate(value: string) {
@@ -153,7 +153,7 @@ export default function CaseDetail() {
     )
   }
 
-  const { case: caseContent, attempt, assignment } = data
+  const { case: caseContent, assignment } = data
   const action = attemptAction(id!, data)
   const ActionIcon = action.icon
 

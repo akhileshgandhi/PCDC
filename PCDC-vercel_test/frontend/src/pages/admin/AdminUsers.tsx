@@ -32,12 +32,13 @@ import {
   type AdminUserRole,
   type AdminUserStatus,
 } from "../../api/admin"
-import ConfirmDialog from "../../components/ConfirmDialog"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
 import { useAdminScope } from "../../hooks/useAdminScope"
 import AdminLayout from "../../layouts/AdminLayout"
 import { DESIGNATION_OPTIONS, TITLE_OPTIONS } from "../../constants/designations"
 import { DepartmentPicker } from "./AdminFaculty"
-import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "./StudentPlacementFields"
+import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "../../components/admin/StudentPlacementFields"
+import { formatDateTime, titleCase } from "../../utils/format"
 
 const roles: Array<{ label: string; value: "" | AdminUserRole }> = [
   { label: "All Roles", value: "" },
@@ -262,7 +263,7 @@ export default function AdminUsers() {
     label: "Last Login",
     render: (user) => (
       <span className="text-sm text-[#667085]">
-        {user.last_login_at ? formatDate(user.last_login_at) : "Never"}
+        {user.last_login_at ? formatDateTime(user.last_login_at) : "Never"}
       </span>
     ),
   }
@@ -995,20 +996,4 @@ function StatPill({ label, value }: StatPillProps) {
       <span className="font-semibold text-[#1d4ed8]">{value}</span>
     </div>
   )
-}
-
-export function titleCase(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")
-}
-
-export function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value))
 }

@@ -24,13 +24,6 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def email_configured() -> bool:
-    return bool(
-        os.getenv("RESEND_API_KEY")
-        or (os.getenv("SMTP_USER") and os.getenv("SMTP_PASSWORD"))
-    )
-
-
 def send_email(to: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
     """Send a single email via the configured provider.
 
@@ -410,10 +403,3 @@ def jobsim_assigned_email(name: str, sim_title: str, due_date: Optional[str], si
     due_text = f"It's due by {due_date}." if due_date else "No due date has been set."
     return _assignment_email(name, "simulation", sim_title, due_text, sim_url, "Open simulation")
 
-
-def make_temp_password() -> str:
-    """Human-typable temporary password, e.g. 'Pcdc-7f3k9q2x'."""
-    import secrets
-
-    alphabet = "abcdefghijkmnpqrstuvwxyz23456789"  # no ambiguous chars
-    return "Pcdc-" + "".join(secrets.choice(alphabet) for _ in range(8))

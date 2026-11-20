@@ -40,7 +40,7 @@ import {
   type AdminSubject,
 } from "../../api/admin"
 import { specializationLabel } from "../../utils/specialization"
-import ConfirmDialog from "../../components/ConfirmDialog"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
 import { ListToolbar, Pager } from "../../components/common/ListControls"
 import { refreshAdminScope, useAdminScope } from "../../hooks/useAdminScope"
 import { useListControls } from "../../hooks/useListControls"

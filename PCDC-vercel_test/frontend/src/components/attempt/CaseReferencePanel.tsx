@@ -1,5 +1,5 @@
 import CaseBriefSections, { Card, type CaseBriefSectionValues } from "./CaseBriefSections"
-import ProtectedText from "../ProtectedText"
+import ProtectedText from "../common/ProtectedText"
 
 export interface AnsweredQuestion {
   question_text: string

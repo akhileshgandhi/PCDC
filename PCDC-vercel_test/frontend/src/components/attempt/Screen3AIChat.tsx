@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import type { RapidFireQuestion } from "../../api/cases"
 import { AISH_NAME, AishAvatar, AishIntro } from "../aish/Aish"
 import CountdownTimer from "./CountdownTimer"
-import ProtectedText from "../ProtectedText"
+import ProtectedText from "../common/ProtectedText"
 
 function marksLabel(marks: number | null | undefined): string {
   if (marks == null) return ""

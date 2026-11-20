@@ -9,7 +9,7 @@ import {
   setTeachingApprovalSetting,
   type TeachingApprovalPending,
 } from "../../api/admin"
-import ConfirmDialog from "../../components/ConfirmDialog"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
 import { ListToolbar, Pager } from "../../components/common/ListControls"
 import { useAdminScope } from "../../hooks/useAdminScope"
 import { useListControls } from "../../hooks/useListControls"

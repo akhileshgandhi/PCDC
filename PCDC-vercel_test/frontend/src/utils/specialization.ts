@@ -16,12 +16,6 @@ export function specializationLabel(course: SpecializationLike): string {
   return `${course.name}${code ? ` (${code})` : ""}${program ? ` – ${program}` : ""}`
 }
 
-/** "Business Administration (BBA_BA)" — for places already grouped by program. */
-export function specializationShortLabel(course: SpecializationLike): string {
-  const code = course.code?.trim()
-  return code ? `${course.name} (${code})` : course.name
-}
-
 const NO_PROGRAM = "Other"
 
 /** Group specializations under their program, programs and names sorted. */

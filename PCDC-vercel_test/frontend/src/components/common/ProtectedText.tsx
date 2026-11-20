@@ -1,8 +1,8 @@
 import { Fragment, useMemo } from "react"
 import type { CSSProperties, ReactNode } from "react"
 
-import { getUserRole } from "../utils/auth"
-import { ALLOW_STUDENT_CLIPBOARD } from "../utils/studentGuard"
+import { getUserRole } from "../../utils/auth"
+import { ALLOW_STUDENT_CLIPBOARD } from "../../utils/studentGuard"
 
 // Invisible and zero-width, but still part of the page text, so a copy, a
 // page read by an extension or an AI sidebar picks it up. No user-select

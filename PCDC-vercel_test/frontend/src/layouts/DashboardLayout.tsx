@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 import { NavLink, useNavigate } from "react-router-dom"
 
-import ChangePasswordModal from "../components/ChangePasswordModal"
+import ChangePasswordModal from "../components/common/ChangePasswordModal"
 import PageTransition from "../components/common/PageTransition"
 import { useNewAssignmentsCount } from "../hooks/useNewAssignmentsCount"
 import { clearToken, getCurrentUser } from "../utils/auth"

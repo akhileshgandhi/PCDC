@@ -1,9 +1,9 @@
 import { ArrowRight, Loader2 } from "lucide-react"
 import { useState } from "react"
 import type { WrittenQuestion } from "../../api/cases"
-import ConfirmDialog from "../ConfirmDialog"
+import ConfirmDialog from "../common/ConfirmDialog"
 import CountdownTimer from "./CountdownTimer"
-import ProtectedText from "../ProtectedText"
+import ProtectedText from "../common/ProtectedText"
 
 function countWords(text: string): number {
   return text.trim() === "" ? 0 : text.trim().split(/\s+/).length

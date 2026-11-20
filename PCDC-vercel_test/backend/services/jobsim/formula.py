@@ -25,7 +25,7 @@ import math
 import re
 from dataclasses import dataclass
 from decimal import ROUND_DOWN, ROUND_HALF_UP, ROUND_UP, Decimal
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 SHEET_NAME = "Data"
 MAX_FORMULA_LENGTH = 1000
@@ -81,9 +81,6 @@ class Range:
 
     def flat(self) -> List[Any]:
         return [value for row in self.rows for value in row]
-
-
-Value = Union[float, str, bool, None, Range]
 
 
 # ---------------------------------------------------------------------------

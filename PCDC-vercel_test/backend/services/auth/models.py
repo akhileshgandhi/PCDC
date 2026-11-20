@@ -14,10 +14,6 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
-# Pydantic schema for Google sign-in (login-only: matches an existing user)
-class GoogleAuthRequest(BaseModel):
-    credential: str  # Google ID token returned by the "Sign in with Google" button
-
 # Pydantic schema for user response
 class UserResponse(BaseModel):
     id: int

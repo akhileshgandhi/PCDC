@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_ROWS = 200
 MAX_TASKS = 50
-LEVELS = ("Beginner", "Intermediate", "Advanced")
 
 SYSTEM_PROMPT = f"""
 You design spreadsheet job simulations for MBA/PGDM business students in India.

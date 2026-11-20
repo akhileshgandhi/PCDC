@@ -2,7 +2,7 @@ import { KeyRound, LogOut } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import ChangePasswordModal from "../../components/ChangePasswordModal"
+import ChangePasswordModal from "../../components/common/ChangePasswordModal"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { clearToken, getCurrentUser } from "../../utils/auth"
 

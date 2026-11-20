@@ -6,7 +6,6 @@ import {
   FileBarChart,
   FolderKanban,
   PenTool,
-  SlidersHorizontal,
   Table2,
   Users,
   type LucideIcon,

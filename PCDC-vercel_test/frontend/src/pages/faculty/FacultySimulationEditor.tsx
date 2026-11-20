@@ -42,7 +42,7 @@ import {
 import DatasetGrid from "../../components/jobsim/DatasetGrid"
 import SimulationAssignments from "../../components/jobsim/SimulationAssignments"
 import { parseDatasetCsv } from "../../components/jobsim/csv"
-import { showToast } from "../../components/Toast"
+import { showToast } from "../../components/common/Toast"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { AUTHOR_STATUS, AuthorStatusBadge } from "./FacultySimulations"
 

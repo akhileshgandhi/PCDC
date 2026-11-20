@@ -70,9 +70,8 @@ places.
 
 ## 5. Director Portal (`/director/*`)
 
-Login and role-based routing work; the portal itself is a single
-placeholder screen (`PortalPlaceholder`). No director-specific backend
-endpoints exist.
+Not built: there is no `/director` route and no director-specific
+backend endpoint. (The unused `PortalPlaceholder` screen was removed.)
 
 ---
 

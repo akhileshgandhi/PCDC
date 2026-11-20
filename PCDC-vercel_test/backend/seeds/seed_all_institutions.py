@@ -5,8 +5,13 @@ sections -> subjects for PIMR UG, PIMR LAW, and PIBM.
 - Idempotent: skips any course whose code already exists, and any department
   whose (institution, code) already exists.
 """
+import os
+import sys
+
 from dotenv import load_dotenv
 
+# Run from backend/:  python seeds/seed_all_institutions.py
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv()
 from shared.database import SessionLocal  # noqa: E402
 from sqlalchemy import text  # noqa: E402

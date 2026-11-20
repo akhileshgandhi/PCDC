@@ -6,7 +6,7 @@ import { Link, useNavigate } from "react-router-dom"
 
 import { getFacultyTeaching } from "../../api/faculty"
 import { getCapabilityOptions, getSimulationDraft, startSimulationDraft } from "../../api/jobsim"
-import { showToast } from "../../components/Toast"
+import { showToast } from "../../components/common/Toast"
 import ToggleSwitch from "../../components/common/ToggleSwitch"
 import FacultyLayout from "../../layouts/FacultyLayout"
 

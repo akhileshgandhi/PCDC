@@ -39,6 +39,7 @@ import StudentInsights from "../../components/dashboard/StudentInsights"
 import CapabilityMatrix, { type MatrixFilter } from "../../components/student/CapabilityMatrix"
 import DashboardLayout from "../../layouts/DashboardLayout"
 import { getCurrentUser } from "../../utils/auth"
+import { titleCase } from "../../utils/format"
 
 interface CoachItem {
   name: string
@@ -93,13 +94,6 @@ function formatSessionTime(scheduledAt: string) {
     hour: "numeric",
     minute: "2-digit",
   })
-}
-
-function titleCase(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")
 }
 
 const coaches: CoachItem[] = [

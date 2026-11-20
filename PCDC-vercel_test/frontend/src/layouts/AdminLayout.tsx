@@ -26,7 +26,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom"
 import PageTransition from "../components/common/PageTransition"
 
 import { getAdminNotifications, type AdminNotification } from "../api/admin"
-import ChangePasswordModal from "../components/ChangePasswordModal"
+import ChangePasswordModal from "../components/common/ChangePasswordModal"
 import { clearAdminScope, useAdminScope } from "../hooks/useAdminScope"
 import { useAdminAlertRefresh, usePendingTeachingCount } from "../hooks/usePendingTeachingCount"
 import { clearToken, getCurrentUser } from "../utils/auth"

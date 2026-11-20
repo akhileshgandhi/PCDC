@@ -20,7 +20,7 @@ import {
   type FacultyActivity,
   type FacultyTimelineItem,
 } from "../../api/admin"
-import { formatDate, titleCase } from "./AdminUsers"
+import { formatDateTime, titleCase } from "../../utils/format"
 
 type Tab = "timeline" | "cases" | "assignments" | "bank"
 
@@ -47,7 +47,7 @@ const TIMELINE_ICONS: Record<string, typeof LogIn> = {
 }
 
 function when(value: string | null | undefined) {
-  return value ? formatDate(value) : "—"
+  return value ? formatDateTime(value) : "—"
 }
 
 export default function FacultyActivitySection({ facultyId }: { facultyId: number }) {
@@ -209,7 +209,7 @@ export default function FacultyActivitySection({ facultyId }: { facultyId: numbe
                         )
                       ) : null}
                     </div>
-                    <span className="shrink-0 text-xs font-medium text-[#98a2b3]">{formatDate(item.occurred_at)}</span>
+                    <span className="shrink-0 text-xs font-medium text-[#98a2b3]">{formatDateTime(item.occurred_at)}</span>
                   </li>
                 )
               })}

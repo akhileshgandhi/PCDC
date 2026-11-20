@@ -323,42 +323,10 @@ export async function recordCaseFullscreen(attemptId: number, event: FullscreenE
   return response.data
 }
 
-export async function sendAttemptAiMessage(attemptId: number, message: string) {
-  const response = await api.post<{ response: string }>("/cases/attempt/ai-message", {
-    attempt_id: attemptId,
-    message,
-  })
-  return response.data
-}
-
-export async function submitAttemptSolution(attemptId: number, finalSolution: string) {
-  const response = await api.post<{ defense_questions: string[] }>(
-    "/cases/attempt/submit-solution",
-    { attempt_id: attemptId, final_solution: finalSolution },
-  )
-  return response.data
-}
-
-export async function submitAttemptDefense(attemptId: number, defenseResponses: string) {
-  const response = await api.post<AttemptEvaluation>("/cases/attempt/submit-defense", {
-    attempt_id: attemptId,
-    defense_responses: defenseResponses,
-  })
-  return response.data
-}
-
 export async function submitRapidFireAnswers(attemptId: number, rapidFireAnswers: string) {
   const response = await api.post<AttemptEvaluation>("/cases/attempt/submit-rapid-fire", {
     attempt_id: attemptId,
     defense_responses: rapidFireAnswers,
   })
-  return response.data
-}
-
-export async function submitAttemptReflection(attemptId: number, reflectionText: string) {
-  const response = await api.post<AttemptEvaluation & { status: string }>(
-    "/cases/attempt/submit-reflection",
-    { attempt_id: attemptId, reflection_text: reflectionText },
-  )
   return response.data
 }

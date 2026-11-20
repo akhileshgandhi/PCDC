@@ -113,28 +113,39 @@ pcdc/
 │   ├── main.py                      ← FastAPI app, CORS, router mounting
 │   ├── requirements.txt
 │   ├── .env                         ← never commit
-│   ├── alembic/versions/            ← migrations, 0001–0011
-│   ├── seeds/seed_users.py          ← the only seed script
+│   ├── alembic/versions/            ← migrations
+│   ├── seeds/                       ← all seed / demo-data scripts; run from backend/, e.g. `python seeds/seed_users.py`
+│   ├── tests/                       ← script-style tests, e.g. `python tests/test_fullscreen.py`
 │   ├── shared/
 │   │   ├── database.py              ← engine, SessionLocal, get_db()
-│   │   └── cache.py                 ← in-process TTL cache
+│   │   ├── cache.py                 ← in-process TTL cache
+│   │   ├── email.py                 ← email sending + templates
+│   │   ├── llm.py                   ← LLM client
+│   │   └── fullscreen.py            ← full-screen exit rules shared by cases and simulations
 │   └── services/
-│       ├── auth/                    ← register, login, JWT
+│       ├── auth/                    ← login, JWT, set/change/forgot password
 │       ├── simulation/              ← Case Studies + attempt flow (misleadingly named)
-│       ├── student/                 ← student dashboard/profile/capability engine
-│       ├── faculty/                 ← Case Builder, rubric builder, sections
-│       ├── mentor/                  ← mentor roster, sessions, interventions
-│       ├── admin/                   ← users, courses/batches/sections, CSV import
-│       ├── capability/ ai/ notification/  ← dead stubs, health-check only
-│       └── director/                ← does not exist (no backend built yet)
+│       ├── jobsim/                  ← spreadsheet job simulations
+│       ├── student/                 ← student dashboard/profile/career pathway/capability engine
+│       ├── faculty/                 ← Case Builder, rubric builder, teaching, sections
+│       ├── bank/                    ← case bank
+│       ├── coach/                   ← Aish AI coach + saved sessions
+│       ├── admin/                   ← users, academic setup, promotion, teaching approvals
+│       ├── dashboard_insights.py    ← dashboard numbers shared by admin/faculty/student
+│       └── capability/ ai/ notification/  ← stubs, health-check route only
 ├── frontend/src/
-│   ├── App.tsx                      ← top-level routes
+│   ├── App.tsx                      ← top-level routes (pages are lazy-loaded)
 │   ├── api/                         ← one axios wrapper file per domain
-│   ├── pages/                       ← one folder per portal + shared pages
-│   ├── components/                  ← one folder per portal + shared UI
+│   ├── pages/                       ← one folder per portal/feature; route screens only
+│   ├── components/
+│   │   ├── common/                  ← shared UI: dialogs, toast, exam guard, page loader…
+│   │   ├── admin/ faculty/ student/ ← portal-specific building blocks
+│   │   └── attempt/ jobsim/ bank/ … ← feature-specific building blocks
 │   ├── layouts/                     ← DashboardLayout (student), portal layouts
+│   ├── hooks/                       ← shared React hooks
 │   ├── context/AuthContext.tsx
-│   └── utils/auth.ts                ← JWT storage/decoding
+│   └── utils/                       ← auth (JWT), format, specialization labels, student guard
+├── docs/                            ← guides and reports; docs/samples/ holds import templates + demo CSVs
 └── context/
     ├── project-overview.md          ← original aspirational design doc (partially stale — see TECH_ARCHITECTURE.md's drift note)
     ├── current-feature.md           ← running log of what's in progress/done, with detailed implementation history

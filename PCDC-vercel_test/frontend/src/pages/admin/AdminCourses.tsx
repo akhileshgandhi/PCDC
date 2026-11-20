@@ -40,7 +40,7 @@ import {
   type AdminSemester,
   type AdminUser,
 } from "../../api/admin"
-import ConfirmDialog from "../../components/ConfirmDialog"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 
 export default function AdminCourses() {

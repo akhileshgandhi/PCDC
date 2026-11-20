@@ -1,5 +1,5 @@
 import { isAxiosError } from "axios"
-import { AlertTriangle, Download, GraduationCap, KeyRound, Upload, UserPlus } from "lucide-react"
+import { AlertTriangle, Download, KeyRound, Upload, UserPlus } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 
@@ -12,7 +12,7 @@ import {
 } from "../../api/admin"
 import AdminLayout from "../../layouts/AdminLayout"
 import AdminStudentList from "./AdminStudentList"
-import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "./StudentPlacementFields"
+import StudentPlacementFields, { emptyPlacement, type StudentPlacement } from "../../components/admin/StudentPlacementFields"
 
 export default function AdminStudents() {
   // The dashboard's "Import Users" quick action links here with

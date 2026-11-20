@@ -10,10 +10,11 @@ import {
   type AdminUser,
   type AdminUserDetail as AdminUserDetailData,
 } from "../../api/admin"
-import ConfirmDialog from "../../components/ConfirmDialog"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
-import { EditUserDialog, StatusBadge, formatDate, titleCase } from "./AdminUsers"
-import FacultyActivitySection from "./FacultyActivitySection"
+import { EditUserDialog, StatusBadge } from "./AdminUsers"
+import { formatDateTime, titleCase } from "../../utils/format"
+import FacultyActivitySection from "../../components/admin/FacultyActivitySection"
 
 export default function AdminUserDetail() {
   const { id } = useParams()
@@ -224,9 +225,9 @@ export default function AdminUserDetail() {
                 ) : null}
                 <DetailField
                   label="Last login"
-                  value={user.last_login_at ? formatDate(user.last_login_at) : "Never"}
+                  value={user.last_login_at ? formatDateTime(user.last_login_at) : "Never"}
                 />
-                <DetailField label="Joined" value={formatDate(user.created_at)} />
+                <DetailField label="Joined" value={formatDateTime(user.created_at)} />
               </div>
             </section>
 
@@ -249,7 +250,7 @@ export default function AdminUserDetail() {
                     <tbody className="divide-y divide-[#eef2f7]">
                       {user.login_history.map((event) => (
                         <tr key={event.id}>
-                          <td className="py-2.5 pr-4 text-[#17202a]">{formatDate(event.created_at)}</td>
+                          <td className="py-2.5 pr-4 text-[#17202a]">{formatDateTime(event.created_at)}</td>
                           <td className="py-2.5 pr-4 text-[#667085]">{event.ip_address || "—"}</td>
                           <td className="max-w-[320px] truncate py-2.5 text-[#667085]" title={event.user_agent || undefined}>
                             {event.user_agent || "—"}

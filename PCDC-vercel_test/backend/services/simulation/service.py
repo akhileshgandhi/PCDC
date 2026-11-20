@@ -192,17 +192,6 @@ VALID_DOMAINS = {
 VALID_SOURCES = {"faculty", "mentor", "ai_generated", "admin_import"}
 VALID_TAG_TYPES = {"domain", "career_track", "capability"}
 
-CAPABILITY_MAP = {
-    "analytical_thinking": 1,
-    "critical_thinking": 2,
-    "strategic_thinking": 3,
-    "decision_making": 4,
-    "communication": 5,
-    "leadership": 6,
-    "innovation": 7,
-    "risk_assessment": 8,
-}
-
 DEFAULT_RECENCY_WEIGHT = 0.3
 DEFAULT_SCORE_DROP_THRESHOLD = 10
 

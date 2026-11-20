@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
-import ExpandableText from "../ExpandableText"
-import ProtectedText from "../ProtectedText"
+import ExpandableText from "../common/ExpandableText"
+import ProtectedText from "../common/ProtectedText"
 
 export interface CaseBriefSectionValues {
   description: string

@@ -20,13 +20,13 @@ import {
   type SavedCell,
   type Slide,
 } from "../../api/jobsim"
-import ConfirmDialog from "../../components/ConfirmDialog"
-import ExamGuard from "../../components/ExamGuard"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
+import ExamGuard from "../../components/common/ExamGuard"
 import AnswerCell from "../../components/jobsim/AnswerCell"
 import DatasetGrid from "../../components/jobsim/DatasetGrid"
 import MemoEditor from "../../components/jobsim/MemoEditor"
 import SlideEditor, { slideForPlan, startingDeck } from "../../components/jobsim/SlideEditor"
-import ProtectedText from "../../components/ProtectedText"
+import ProtectedText from "../../components/common/ProtectedText"
 
 const AUTOSAVE_MS = 15_000
 const MIN_WIDTH = 1024

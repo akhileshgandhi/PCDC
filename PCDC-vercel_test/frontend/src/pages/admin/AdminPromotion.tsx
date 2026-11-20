@@ -14,7 +14,7 @@ import {
   type PromotionSection,
   type PromotionSectionDetail,
 } from "../../api/promotion"
-import ConfirmDialog from "../../components/ConfirmDialog"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
 import AdminLayout from "../../layouts/AdminLayout"
 import { StatusBadge } from "./AdminUsers"
 

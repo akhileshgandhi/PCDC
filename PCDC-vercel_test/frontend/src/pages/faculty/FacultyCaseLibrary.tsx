@@ -15,6 +15,7 @@ import AssignToClassDialog from "../../components/faculty/AssignToClassDialog"
 import BulkUploadCaseDialog from "../../components/faculty/BulkUploadCaseDialog"
 import FacultyLayout from "../../layouts/FacultyLayout"
 import { getCurrentUser, isAdminRole } from "../../utils/auth"
+import { titleCase } from "../../utils/format"
 
 const domains = [
   "All Domains",
@@ -592,13 +593,6 @@ function StatPill({ label, value }: StatPillProps) {
       <span className="font-semibold text-[#2563eb]">{value}</span>
     </div>
   )
-}
-
-function titleCase(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")
 }
 
 const MONTH_ABBR = [

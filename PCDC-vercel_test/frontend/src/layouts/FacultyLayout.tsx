@@ -20,7 +20,7 @@ import {
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 
 import { getFacultyNotifications, type FacultyNotification } from "../api/faculty"
-import ChangePasswordModal from "../components/ChangePasswordModal"
+import ChangePasswordModal from "../components/common/ChangePasswordModal"
 import PageTransition from "../components/common/PageTransition"
 import { useSentBackSimulationCount } from "../hooks/useSentBackSimulationCount"
 import { clearToken, getCurrentUser } from "../utils/auth"

@@ -2,8 +2,8 @@ import axios from "axios"
 import { CheckCircle2, Eye, EyeOff, KeyRound, LoaderCircle, X } from "lucide-react"
 import { useState } from "react"
 
-import api from "../api/axios"
-import { setToken } from "../utils/auth"
+import api from "../../api/axios"
+import { setToken } from "../../utils/auth"
 
 /** Self-service "change my own password" modal — works for any logged-in
  * role (student/faculty/admin/superadmin), since the backend endpoint it

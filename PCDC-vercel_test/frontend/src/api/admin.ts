@@ -497,24 +497,6 @@ export async function resetAdminUserPassword(userId: number) {
   return response.data
 }
 
-export async function downloadImportTemplate(role?: string) {
-  const params = role ? `?role=${encodeURIComponent(role)}` : ""
-  const response = await api.get(`/admin/users/import/template${params}`, {
-    responseType: "blob",
-  })
-  const disposition = response.headers["content-disposition"] || ""
-  const match = disposition.match(/filename=(.+)/)
-  const filename = match ? match[1] : "pcdc-user-import-template.csv"
-  const url = window.URL.createObjectURL(response.data as Blob)
-  const link = document.createElement("a")
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.URL.revokeObjectURL(url)
-}
-
 export async function getAdminAcademicSummary() {
   const response = await api.get<AcademicSummary>("/admin/academic/summary")
   return response.data
@@ -950,28 +932,6 @@ export async function enrollAdminSectionStudents(sectionId: number, studentUserI
 export async function advanceBatchSemester(batchId: number) {
   const response = await api.post<AdvanceSemesterResult>(
     `/admin/batches/${batchId}/advance-semester`,
-  )
-  return response.data
-}
-
-export interface AdminUserImportResult {
-  created: Array<{ row: number; name: string; email: string; user_id: number }>
-  created_count: number
-  errors: Array<{ row: number; email: string; error: string }>
-  error_count: number
-}
-
-export async function importAdminUsers(file: File, role?: string, institutionId?: number) {
-  const formData = new FormData()
-  formData.append("file", file)
-  const query = new URLSearchParams()
-  if (role) query.set("role", role)
-  if (institutionId) query.set("institution_id", String(institutionId))
-  const params = query.toString() ? `?${query.toString()}` : ""
-  const response = await api.post<AdminUserImportResult>(
-    `/admin/users/import${params}`,
-    formData,
-    { headers: { "Content-Type": "multipart/form-data" } },
   )
   return response.data
 }

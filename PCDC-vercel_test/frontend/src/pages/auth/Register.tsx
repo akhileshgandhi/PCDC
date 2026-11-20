@@ -9,7 +9,6 @@ export default function Register() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState("")
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -84,10 +83,6 @@ export default function Register() {
           <UserPlus size={18} aria-hidden="true" />
           {isLoading ? "Registering..." : "Register"}
         </button>
-
-        {error ? (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        ) : null}
 
         <p className="text-center text-sm text-slate-600">
           Already registered?{" "}

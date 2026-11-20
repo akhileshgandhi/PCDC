@@ -9,7 +9,6 @@ import {
   saveAnalysisDraft,
   submitInitialAnalysis,
   submitRapidFireAnswers,
-  submitAttemptReflection,
   startAttemptPhase,
   startRapidFireRound,
   startCaseAttempt,
@@ -18,11 +17,10 @@ import {
   type RapidFireQuestion,
   type WrittenQuestion,
 } from "../../api/cases"
-import ExamGuard from "../../components/ExamGuard"
+import ExamGuard from "../../components/common/ExamGuard"
 import { AISH_NAME, AishAvatar } from "../../components/aish/Aish"
 import CaseReferencePanel from "../../components/attempt/CaseReferencePanel"
 import ProgressBar from "../../components/attempt/ProgressBar"
-import ReflectionStep from "../../components/attempt/ReflectionStep"
 import Screen1Briefing from "../../components/attempt/Screen1Briefing"
 import Screen2Analysis from "../../components/attempt/Screen2Analysis"
 import Screen3AIChat from "../../components/attempt/Screen3AIChat"
@@ -44,11 +42,6 @@ function formatDueDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date)
-}
-
-function countWords(value: string) {
-  const words = value.trim().match(/\S+/g)
-  return words ? words.length : 0
 }
 
 function isExpiredError(error: unknown): boolean {
@@ -131,7 +124,6 @@ export default function CaseAttempt() {
   const [rapidFireSeconds, setRapidFireSeconds] = useState<number | null>(null)
   const [attemptId, setAttemptId] = useState<number | null>(null)
   const [currentScreen, setCurrentScreen] = useState(1)
-  const [needsReflection, setNeedsReflection] = useState(false)
 
   // Per-question answers for Stage 2
   const [writtenAnswers, setWrittenAnswers] = useState<string[]>([])
@@ -216,7 +208,6 @@ export default function CaseAttempt() {
           setEndedByFullscreen(Boolean(detail.attempt.ended_by_fullscreen))
           setExpired(true)
         }
-        setNeedsReflection(status === "defense_complete")
         // "analysis_submitted" is the pre-submit status (oddly named — it means
         // the analysis step is still pending) and has no entry in STATUS_STAGE,
         // so it always falls through to fallbackScreen. writing_started_at is
@@ -379,21 +370,6 @@ export default function CaseAttempt() {
       } else {
         setActionError("Unable to submit your answers right now. Please try again.")
       }
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handleReflectionSubmit(reflectionText: string) {
-    if (!attemptId) return
-    setIsSubmitting(true)
-    try {
-      const result = await submitAttemptReflection(attemptId, reflectionText)
-      setEvaluation(toEvaluationData(result))
-      setNeedsReflection(false)
-      setActionError("")
-    } catch {
-      setActionError("Unable to submit your reflection right now. Please try again.")
     } finally {
       setIsSubmitting(false)
     }

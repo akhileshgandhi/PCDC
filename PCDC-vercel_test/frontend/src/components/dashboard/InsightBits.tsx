@@ -33,10 +33,6 @@ const ACCENTS: Record<InsightAccent, { icon: string; bar: string; link: string; 
   },
 }
 
-export function accentClasses(accent: InsightAccent) {
-  return ACCENTS[accent]
-}
-
 interface AlertTileProps {
   accent: InsightAccent
   label: string

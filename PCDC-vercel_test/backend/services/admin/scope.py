@@ -51,10 +51,6 @@ def admin_scope(current_user: Dict[str, Any]) -> Optional[List[int]]:
     return list(current_user.get("institution_ids") or [])
 
 
-def is_scoped(current_user: Dict[str, Any]) -> bool:
-    return admin_scope(current_user) is not None
-
-
 def can_manage_platform(current_user: Dict[str, Any]) -> bool:
     """Platform-wide settings and creating admins: superadmin and
     unrestricted (pre-existing) admins only."""

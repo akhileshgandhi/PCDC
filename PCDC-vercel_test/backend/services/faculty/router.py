@@ -205,17 +205,6 @@ ANSWER_WORD_RANGE_BY_DIFFICULTY: Dict[int, tuple] = {
     5: (180, 250),
 }
 
-# The primary capability "families" each difficulty level is meant to
-# exercise, per the client's spec — used to steer the AI's own capability
-# suggestion toward a complementary triad rather than a random pick.
-PRIMARY_CAPABILITIES_BY_DIFFICULTY: Dict[int, List[str]] = {
-    1: ["Observation", "Questioning", "Reasoning"],
-    2: ["Diagnosis", "Problem Solving", "Analytical Thinking"],
-    3: ["Judgment", "Trade-off Analysis", "Decision Making"],
-    4: ["Influence", "Communication", "Empathy", "Conflict Management", "Leadership"],
-    5: ["Systems Thinking", "Long-term Planning", "Strategic Thinking", "Business Acumen", "Decision Making"],
-}
-
 # Semester progression, per the client's spec — complexity must increase
 # through BOTH the Difficulty Level AND the Semester, so a case fed the same
 # difficulty but a later semester should still read as more senior/complex.
@@ -309,15 +298,6 @@ class GenerateCaseRequest(BaseModel):
     scope: str
     sections: Optional[List[str]] = None
     overwrite_manual: bool = False
-
-
-class GenerateCaseJobResponse(BaseModel):
-    job_id: str
-    case_id: int
-    status: str
-    scope: str
-    sections: List[str]
-    message: str
 
 
 class RubricRequest(BaseModel):
@@ -415,12 +395,6 @@ def section_has_content(value: Any) -> bool:
     if isinstance(value, list):
         return any(str(item).strip() for item in value)
     return bool(str(value or "").strip())
-
-
-def section_to_text(value: Any) -> str:
-    if isinstance(value, list):
-        return "\n".join(str(item).strip() for item in value if str(item).strip())
-    return str(value or "")
 
 
 def safe_mapping(row: Any) -> Dict[str, Any]:

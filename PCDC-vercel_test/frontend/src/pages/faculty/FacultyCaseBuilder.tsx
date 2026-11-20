@@ -1,14 +1,11 @@
 import {
   AlertTriangle,
   ArrowLeft,
-  Bot,
   CheckCircle2,
   FileText,
   Loader2,
-  Pencil,
   PenLine,
   Plus,
-  RefreshCw,
   RotateCcw,
   Send,
   Sparkles,
@@ -22,7 +19,6 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
 import {
   aiFillFacultyCase,
   createFacultyCase,
-  generateFacultyCase,
   generateFacultyCaseQuestions,
   getFacultyCaseGenerationJob,
   getFacultyCase,
@@ -30,8 +26,6 @@ import {
   getFacultyTeaching,
   publishFacultyCase,
   updateFacultyCase,
-  type CaseSectionKey,
-  type CaseSectionMeta,
   type FacultyCaseGenerationJob,
   type FacultyCaseEditor,
   type FacultyCaseInstructions,
@@ -43,8 +37,8 @@ import {
   type FacultyCourseOption,
   type FacultyRapidFireQuestion,
 } from "../../api/faculty"
-import ConfirmDialog from "../../components/ConfirmDialog"
-import ExpandableTextarea from "../../components/ExpandableTextarea"
+import ConfirmDialog from "../../components/common/ConfirmDialog"
+import ExpandableTextarea from "../../components/common/ExpandableTextarea"
 import { apiErrorDetail } from "../../components/bank/shared"
 import AssignToClassDialog from "../../components/faculty/AssignToClassDialog"
 import CapabilitySelector from "../../components/faculty/CapabilitySelector"
@@ -75,13 +69,6 @@ interface CoreFormState {
   semesters: number[]
   totalMarks: string
 }
-
-const sectionDefinitions: Array<{ key: CaseSectionKey; label: string; required?: boolean }> = [
-  { key: "data", label: "Data" },
-  { key: "objectives", label: "Objectives", required: true },
-]
-
-const arraySections = new Set<CaseSectionKey>([])
 
 // Mirrors backend BLOOM_LEVELS.
 const BLOOM_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]
@@ -256,7 +243,6 @@ export default function FacultyCaseBuilder() {
   // "Start from Scratch" fills the ENTIRE case — sections and questions
   // included — before the case exists. These are local until Create Draft
   // submits them; faculty can keep editing the draft afterward.
-  const [scratchSections, setScratchSections] = useState({ data: "", objectives: "" })
   const [scratchQuestions, setScratchQuestions] = useState<FacultyCaseQuestion[]>(() => padQuestions([]))
   const [scratchTotalMarks, setScratchTotalMarks] = useState<number | null>(10)
   const [scratchInstructions, setScratchInstructions] = useState<FacultyCaseInstructions>({
@@ -281,7 +267,6 @@ export default function FacultyCaseBuilder() {
   const [notice, setNotice] = useState("")
   const [isLoading, setIsLoading] = useState(Boolean(caseId))
   const [isSaving, setIsSaving] = useState(false)
-  const [generatingSection, setGeneratingSection] = useState<CaseSectionKey | null>(null)
   const [generationJob, setGenerationJob] = useState<FacultyCaseGenerationJob | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
   const [confirmingPublish, setConfirmingPublish] = useState(false)
@@ -422,7 +407,6 @@ export default function FacultyCaseBuilder() {
         if (job.status === "succeeded" && job.case) {
           setCaseData(normalizeCaseData(job.case))
           setCoreForm(caseToCoreForm(job.case))
-          setGeneratingSection(null)
           setIsAiCreating(false)
           setIsRegenerating(false)
           setNotice(
@@ -438,7 +422,6 @@ export default function FacultyCaseBuilder() {
           setErrors([])
         }
         if (job.status === "failed") {
-          setGeneratingSection(null)
           setIsAiCreating(false)
           setIsRegenerating(false)
           setAiFillIntent(null)
@@ -446,7 +429,6 @@ export default function FacultyCaseBuilder() {
         }
       } catch {
         if (isMounted) {
-          setGeneratingSection(null)
           setIsAiCreating(false)
           setIsRegenerating(false)
           setAiFillIntent(null)
@@ -588,10 +570,6 @@ export default function FacultyCaseBuilder() {
     }))
   }
 
-  function updateScratchSection(section: "data" | "objectives", value: string) {
-    setScratchSections((current) => ({ ...current, [section]: value }))
-  }
-
   function updateScratchQuestion<K extends keyof FacultyCaseQuestion>(
     index: number,
     field: K,
@@ -685,7 +663,7 @@ export default function FacultyCaseBuilder() {
           recommended_course_ids: coreForm.programIds,
           recommended_semesters: coreForm.semesters,
         },
-        sections: scratchSections,
+        sections: { data: "", objectives: "" },
         questions: scratchQuestions,
         instructions: scratchInstructions,
         rubric: scratchRubric,
@@ -701,20 +679,6 @@ export default function FacultyCaseBuilder() {
     } finally {
       setIsSaving(false)
     }
-  }
-
-  function updateSection(section: CaseSectionKey, value: string) {
-    setCaseData((current) => {
-      if (!current) return current
-      const previousMeta = current.section_meta[section]
-      const nextMeta: CaseSectionMeta = previousMeta === "ai_generated" ? "edited" : "manual"
-      const nextValue = textToSectionValue(section, value)
-      return {
-        ...current,
-        sections: { ...current.sections, [section]: nextValue },
-        section_meta: { ...current.section_meta, [section]: value ? nextMeta : "manual" },
-      }
-    })
   }
 
   function updateTiming<K extends keyof FacultyCaseTiming>(field: K, value: number | null) {
@@ -759,34 +723,6 @@ export default function FacultyCaseBuilder() {
       questions[index] = { ...questions[index], [field]: value }
       return { ...current, questions }
     })
-  }
-
-  async function handleGenerate(section: CaseSectionKey) {
-    if (!caseData) {
-      return
-    }
-    if (
-      caseData.section_meta[section] === "manual" &&
-      sectionValueToText(caseData.sections[section]).trim() &&
-      !window.confirm("This will overwrite your edits to this section. Continue?")
-    ) {
-      return
-    }
-    setGeneratingSection(section)
-    setNotice("")
-    try {
-      const job = await generateFacultyCase(caseData.id, {
-        scope: "section",
-        sections: [section],
-        overwrite_manual: true,
-      })
-      setGenerationJob(job)
-      setErrors([])
-      setNotice(job.message || "Generation queued.")
-    } catch (error) {
-      setErrors([describeApiError(error, "AI generation failed. Existing content was preserved.")])
-      setGeneratingSection(null)
-    }
   }
 
   async function handleGenerateQuestions() {
@@ -1051,7 +987,6 @@ export default function FacultyCaseBuilder() {
               form={coreForm}
               courses={programOptions}
               subjectOptions={subjectOptions}
-              scratchSections={scratchSections}
               scratchQuestions={scratchQuestions}
               scratchTotalMarks={scratchTotalMarks}
               scratchInstructions={scratchInstructions}
@@ -1069,7 +1004,6 @@ export default function FacultyCaseBuilder() {
               onListItemChange={updateListItem}
               onListItemAdd={addListItem}
               onListItemRemove={removeListItem}
-              onScratchSectionChange={updateScratchSection}
               onScratchQuestionChange={updateScratchQuestion}
               onScratchTotalMarksChange={handleScratchTotalMarksChange}
               onScratchInstructionsChange={updateScratchInstructions}
@@ -1091,7 +1025,6 @@ export default function FacultyCaseBuilder() {
             courses={programOptions}
             subjectOptions={subjectOptions}
             publishBlockers={publishBlockers}
-            generatingSection={generatingSection}
             generationJob={generationJob}
             onFieldChange={updateCoreField}
             onCapabilityToggle={toggleCapability}
@@ -1102,8 +1035,6 @@ export default function FacultyCaseBuilder() {
             onListItemChange={updateListItem}
             onListItemAdd={addListItem}
             onListItemRemove={removeListItem}
-            onSectionChange={updateSection}
-            onGenerate={handleGenerate}
             onTimingChange={updateTiming}
             onInstructionsChange={updateInstructions}
             onQuestionChange={updateQuestion}
@@ -1307,7 +1238,6 @@ interface CoreFieldsStepProps {
   form: CoreFormState
   courses: FacultyCourseOption[]
   subjectOptions: string[]
-  scratchSections: { data: string; objectives: string }
   scratchQuestions: FacultyCaseQuestion[]
   scratchTotalMarks: number | null
   scratchInstructions: FacultyCaseInstructions
@@ -1325,7 +1255,6 @@ interface CoreFieldsStepProps {
   onListItemChange: (field: ListFieldKey, index: number, value: string) => void
   onListItemAdd: (field: ListFieldKey) => void
   onListItemRemove: (field: ListFieldKey, index: number) => void
-  onScratchSectionChange: (section: "data" | "objectives", value: string) => void
   onScratchQuestionChange: <K extends keyof FacultyCaseQuestion>(
     index: number,
     field: K,
@@ -1350,7 +1279,6 @@ function CoreFieldsStep({
   form,
   courses,
   subjectOptions,
-  scratchSections,
   scratchQuestions,
   scratchTotalMarks,
   scratchInstructions,
@@ -1368,7 +1296,6 @@ function CoreFieldsStep({
   onListItemChange,
   onListItemAdd,
   onListItemRemove,
-  onScratchSectionChange,
   onScratchQuestionChange,
   onScratchTotalMarksChange,
   onScratchInstructionsChange,
@@ -1604,7 +1531,6 @@ interface EditorStepProps {
   courses: FacultyCourseOption[]
   subjectOptions: string[]
   publishBlockers: string[]
-  generatingSection: CaseSectionKey | null
   generationJob: FacultyCaseGenerationJob | null
   onFieldChange: (field: keyof CoreFormState, value: string) => void
   onCapabilityToggle: (capabilityName: string) => void
@@ -1615,8 +1541,6 @@ interface EditorStepProps {
   onListItemChange: (field: ListFieldKey, index: number, value: string) => void
   onListItemAdd: (field: ListFieldKey) => void
   onListItemRemove: (field: ListFieldKey, index: number) => void
-  onSectionChange: (section: CaseSectionKey, value: string) => void
-  onGenerate: (section: CaseSectionKey) => void
   onTimingChange: <K extends keyof FacultyCaseTiming>(field: K, value: number | null) => void
   onInstructionsChange: <K extends keyof FacultyCaseInstructions>(
     field: K,
@@ -1649,7 +1573,6 @@ function EditorStep({
   courses,
   subjectOptions,
   publishBlockers,
-  generatingSection,
   generationJob,
   onFieldChange,
   onCapabilityToggle,
@@ -1660,8 +1583,6 @@ function EditorStep({
   onListItemChange,
   onListItemAdd,
   onListItemRemove,
-  onSectionChange,
-  onGenerate,
   onTimingChange,
   onInstructionsChange,
   onQuestionChange,
@@ -2365,33 +2286,6 @@ function TextAreaField({ label, value, rows = 3, placeholder, onChange, readOnly
   )
 }
 
-interface SelectFieldProps {
-  label: string
-  value: string
-  options: string[]
-  onChange: (value: string) => void
-}
-
-function SelectField({ label, value, options, onChange }: SelectFieldProps) {
-  return (
-    <label className="grid gap-2 text-sm font-semibold text-[#111827]">
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-md border border-[#e6e8eb] bg-white px-3 text-sm font-medium outline-none transition focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
-      >
-        <option value="">Select...</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
 interface TimingPanelProps {
   timing: FacultyCaseTiming
   durationMinutes: string
@@ -2724,84 +2618,6 @@ function GenerateQuestionsModal({
   )
 }
 
-interface SectionEditorProps {
-  sectionKey: CaseSectionKey
-  label: string
-  required?: boolean
-  value: string
-  meta: CaseSectionMeta
-  isGenerating: boolean
-  generationDisabled: boolean
-  onChange: (value: string) => void
-  onGenerate: () => void
-}
-
-const SECTION_HINTS: Record<CaseSectionKey, string> = {
-  data: "Key facts and figures students should use — numbers, prices, percentages, dates.",
-  objectives: "What the student is expected to analyse, achieve, or decide. State the task clearly.",
-}
-
-function SectionEditor({
-  sectionKey,
-  label,
-  required,
-  value,
-  meta,
-  isGenerating,
-  generationDisabled,
-  onChange,
-  onGenerate,
-}: SectionEditorProps) {
-  return (
-    <article className="rounded-lg border border-[#e6e8eb] bg-white p-5 shadow-sm">
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-lg font-semibold text-[#111827]">{label}</h3>
-          {required ? (
-            <span className="rounded-full bg-[#dbeafe] px-2 py-1 text-xs font-semibold text-[#1d4ed8]">
-              Required
-            </span>
-          ) : null}
-          <MetaBadge meta={meta} />
-        </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={generationDisabled}
-          className="inline-flex items-center gap-1.5 rounded-md border border-[#e6e8eb] px-3 py-1.5 text-xs font-semibold text-[#2563eb] transition hover:border-[#2563eb] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isGenerating ? <Loader2 className="animate-spin" size={14} /> : <Bot size={14} />}
-          {isGenerating ? "Generating…" : "Generate with AI"}
-        </button>
-      </div>
-      <textarea
-        value={value}
-        placeholder={SECTION_HINTS[sectionKey]}
-        onChange={(event) => onChange(event.target.value)}
-        rows={7}
-        className="w-full rounded-md border border-[#e6e8eb] bg-white px-3 py-3 text-sm font-medium leading-6 outline-none transition placeholder:font-normal placeholder:text-[#9ca3af] focus:border-[#2563eb] focus:ring-2 focus:ring-[#2563eb]/20"
-      />
-    </article>
-  )
-}
-
-interface MetaBadgeProps {
-  meta: CaseSectionMeta
-}
-
-function MetaBadge({ meta }: MetaBadgeProps) {
-  const label =
-    meta === "ai_generated" ? "AI-generated" : meta === "edited" ? "Edited" : "Manual"
-  const className =
-    meta === "ai_generated"
-      ? "bg-[#eef4ff] text-[#3538cd]"
-      : meta === "edited"
-        ? "bg-[#ecfdf3] text-[#027a48]"
-        : "bg-[#f2f4f7] text-[#475467]"
-
-  return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${className}`}>{label}</span>
-}
-
 interface FeedbackProps {
   errors: string[]
   notice: string
@@ -2857,23 +2673,3 @@ function caseToCoreForm(caseData: FacultyCaseEditor): CoreFormState {
   }
 }
 
-function sectionValueToText(value: string | string[]) {
-  return Array.isArray(value) ? value.join("\n") : value
-}
-
-function textToSectionValue(section: CaseSectionKey, value: string) {
-  if (!arraySections.has(section)) {
-    return value
-  }
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-}
-
-function titleCase(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")
-}

@@ -21,6 +21,7 @@ import AdminInsights from "../../components/dashboard/AdminInsights"
 import { usePendingTeachingCount } from "../../hooks/usePendingTeachingCount"
 import AdminLayout from "../../layouts/AdminLayout"
 import { getCurrentUser } from "../../utils/auth"
+import { formatDateTime } from "../../utils/format"
 
 const defaultSummary: AdminDashboardSummary = {
   total_users: 0,
@@ -248,7 +249,7 @@ export default function AdminDashboard() {
                     <p className="text-sm font-semibold text-[#17202a]">{event.message}</p>
                     <p className="mt-1 text-xs text-[#667085]">
                       {titleCase(event.event_type.replace(/_/g, " "))} -{" "}
-                      {formatDate(event.created_at)}
+                      {formatDateTime(event.created_at)}
                     </p>
                   </div>
                 ))
@@ -333,13 +334,4 @@ function titleCase(value: string) {
     .split(" ")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ")
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value))
 }
